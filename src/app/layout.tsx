@@ -1,9 +1,8 @@
-import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "Zordrax Analytica Onboarding",
-  description: "AI + Manual Onboarding Wizard",
+export const metadata = {
+  title: "Zordrax Analytica Onboarding Wizard",
+  description: "AI + Manual onboarding UI",
 };
 
 export default function RootLayout({
