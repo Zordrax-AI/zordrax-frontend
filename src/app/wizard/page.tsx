@@ -1,20 +1,33 @@
-"use client";
+"use client";  // ← must be first line
+
 import { useEffect, useState } from "react";
-import { fetchAiFlow } from "../../lib/api";
+import { fetchAiFlow, triggerDeployment } from "../../lib/api";
 
 export default function Wizard() {
   const [data, setData] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     fetchAiFlow()
       .then(setData)
-      .catch(() => setError("Failed to load AI recommendations."));
+      .catch(() => setStatus("❌ Failed to load AI recommendations."));
   }, []);
 
-  if (error) return <div className="p-8 text-red-500">{error}</div>;
-  if (!data) return <div className="p-8">Loading AI recommendations...</div>;
+  const handleDeploy = async () => {
+    setLoading(true);
+    setStatus("Triggering pipeline…");
+    try {
+      const res = await triggerDeployment("ai");
+      setStatus(`✅ ${res.message}`);
+    } catch (err) {
+      setStatus("❌ Failed to trigger pipeline");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  if (!data) return <div className="p-8">Loading AI recommendations…</div>;
   const r = data.recommendation;
 
   return (
@@ -34,6 +47,20 @@ export default function Wizard() {
           <b>Reporting:</b> {r.reporting}
         </div>
       </div>
+
+      <button
+        onClick={handleDeploy}
+        disabled={loading}
+        className="bg-blue-600 text-white px-5 py-2 rounded-xl hover:bg-blue-700 disabled:opacity-50"
+      >
+        {loading ? "Deploying…" : "Deploy Architecture"}
+      </button>
+
+      {status && (
+        <div className="mt-4 text-sm text-gray-700 bg-gray-100 p-3 rounded">
+          {status}
+        </div>
+      )}
     </main>
   );
 }
