@@ -8,22 +8,33 @@ const api = axios.create({
 export const fetchAiFlow = async () => (await api.get("/mock/ai_flow")).data;
 export const fetchManualFlow = async () => (await api.get("/mock/manual_flow")).data;
 
-
 export const triggerDeployment = async (mode: "ai" | "manual") => {
   const endpoint =
-    mode === "ai" ? "/onboarding/ai-and-deploy" : "/onboarding/manual";
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}${endpoint}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        project: "Zordrax Analytica",
-        environment: "dev",
-        trigger_pipeline: true,
-      }),
-    }
-  );
-  if (!res.ok) throw new Error("Pipeline trigger failed");
+    mode === "ai" ? "/onboarding/ai-and-deploy" : "/onboarding/manual_flow";
+
+  const payload =
+    mode === "ai"
+      ? {
+          project: "Zordrax Analytica",
+          environment: "dev",
+          business_context: "Automate data onboarding with AI orchestration",
+        }
+      : {
+          project_name: "Zordrax Manual",
+          environment: "dev",
+          trigger_pipeline: true,
+        };
+
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Pipeline trigger failed: ${err}`);
+  }
+
   return await res.json();
 };
