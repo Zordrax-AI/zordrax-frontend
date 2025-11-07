@@ -1,5 +1,6 @@
 # =============================================================
 # Zordrax-Analytica | Frontend CI/CD Pipeline (Next.js)
+# Phase 2 Final – Build → Package → Deploy (Self-Provisioning)
 # =============================================================
 
 trigger:
@@ -16,12 +17,18 @@ variables:
   value: "zordrax-frontend"
 - name: environment
   value: "dev"
-- group: zordrax-analytica-dev-secrets
 - name: SERVICE_CONNECTION
-  value: 'zordrax-analytica-dev-conn'   # exact name from Service connections
+  value: "zordrax-analytica-dev-conn"   # must match Azure DevOps connection
+- name: RESOURCE_GROUP
+  value: "zordrax-analytica-dev-rg"
+- name: PLAN_NAME
+  value: "zordrax-linux-plan"
+- name: LOCATION
+  value: "westeurope"
 
-
-
+# -------------------------------------------------------------
+# Stage 1 – Build Frontend
+# -------------------------------------------------------------
 stages:
 - stage: Build
   displayName: "Build Frontend"
@@ -39,6 +46,7 @@ stages:
       displayName: "Install Node.js"
 
     - script: |
+        set -ex
         npm ci
         npm run build
       displayName: "Install dependencies and build"
@@ -55,6 +63,9 @@ stages:
     - publish: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
       artifact: "drop"
 
+# -------------------------------------------------------------
+# Stage 2 – Deploy to Azure Web App (Self-Provisioning)
+# -------------------------------------------------------------
 - stage: Deploy
   displayName: "Deploy Frontend (App Service)"
   dependsOn: Build
@@ -66,6 +77,45 @@ stages:
     - download: current
       artifact: drop
 
+    # Ensure Web App exists (idempotent)
+    - task: AzureCLI@2
+      displayName: "Ensure Frontend App Service exists"
+      inputs:
+        azureSubscription: "$(SERVICE_CONNECTION)"
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+          set -ex
+          resource_group="$(RESOURCE_GROUP)"
+          plan_name="$(PLAN_NAME)"
+          app_name="$(appName)-$(environment)"
+          location="$(LOCATION)"
+          runtime="NODE|20-lts"
+
+          echo "Ensuring resource group..."
+          az group create --name "$resource_group" --location "$location" >/dev/null
+
+          echo "Ensuring App Service plan..."
+          az appservice plan create \
+            --name "$plan_name" \
+            --resource-group "$resource_group" \
+            --is-linux \
+            --sku B1 >/dev/null || true
+
+          echo "Ensuring Web App..."
+          az webapp create \
+            --name "$app_name" \
+            --resource-group "$resource_group" \
+            --plan "$plan_name" \
+            --runtime "$runtime" >/dev/null || true
+
+          echo "Configuring Node runtime & startup..."
+          az webapp config appsettings set \
+            --name "$app_name" \
+            --resource-group "$resource_group" \
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false NODE_ENV=production >/dev/null
+
+    # Deploy the built ZIP package
     - task: AzureWebApp@1
       displayName: "Deploy Next.js Frontend"
       inputs:
@@ -73,3 +123,21 @@ stages:
         appType: webAppLinux
         appName: "$(appName)-$(environment)"
         package: "$(Pipeline.Workspace)/drop/$(appName).zip"
+
+    # Health Check after deploy
+    - bash: |
+        set -ex
+        uri="https://$(appName)-$(environment).azurewebsites.net"
+        echo "Pinging ${uri} ..."
+        for i in {1..10}; do
+          status=$(curl -s -o /dev/null -w "%{http_code}" "$uri")
+          if [ "$status" = "200" ]; then
+            echo "✅ Health check passed."
+            exit 0
+          fi
+          echo "Attempt $i failed (status: $status). Retrying..."
+          sleep 10
+        done
+        echo "❌ Health check failed after 10 attempts."
+        exit 1
+      displayName: "Health Check Frontend"
