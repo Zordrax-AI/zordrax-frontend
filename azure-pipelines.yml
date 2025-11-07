@@ -50,21 +50,38 @@ stages:
         npm ci
         npm run build
 
-        rm -rf out
-        mkdir -p out/.next
+        # Prefer standalone Node bundle when available; otherwise fall back to static export in out/
+        if [ -d ".next/standalone" ]; then
+          rm -rf out
+          mkdir -p out/.next
 
-        app_root=$(dirname "$(find .next/standalone -type f -name server.js | head -n 1)")
-        if [ -z "$app_root" ]; then
-          echo "Unable to locate standalone server build."
-          exit 1
+          app_root=$(dirname "$(find .next/standalone -type f -name server.js | head -n 1)")
+          if [ -z "$app_root" ]; then
+            echo "Standalone folder detected but server.js missing."
+            exit 1
+          fi
+
+          cp -R "$app_root/." out/
+          cp -R .next/static out/.next/static
+          if [ -d public ]; then
+            cp -R public out/public
+          fi
+        else
+          echo "Standalone bundle not found; assuming static export already created ./out."
+          if [ ! -d "out" ]; then
+            echo "No standalone build and ./out missing. Cannot stage artifact."
+            exit 1
+          fi
+        fi
+        if [ -f "out/server.js" ]; then
+          startup_cmd="pm2 start /home/site/wwwroot/server.js --no-daemon"
+        else
+          startup_cmd="pm2 serve /home/site/wwwroot --no-daemon --spa"
         fi
 
-        cp -R "$app_root/." out/
-        cp -R .next/static out/.next/static
-        if [ -d public ]; then
-          cp -R public out/public
-        fi
+        echo "##vso[task.setvariable variable=appStartupCommand;isOutput=true]$startup_cmd"
       displayName: "Install dependencies, build, and stage artifact"
+      name: BuildAndStage
 
     - task: ArchiveFiles@2
       displayName: "Package site"
@@ -88,6 +105,8 @@ stages:
   - job: Deploy
     pool:
       vmImage: "ubuntu-latest"
+    variables:
+      app_startup: $[ stageDependencies.Build.Build.outputs['BuildAndStage.appStartupCommand'] ]
     steps:
     - download: current
       artifact: drop
@@ -130,11 +149,11 @@ stages:
             --resource-group "$resource_group" \
             --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false NODE_ENV=production PORT=8080 >/dev/null
 
-          echo "Setting Node startup command..."
+          echo "Setting startup command to: $(app_startup)"
           az webapp config set \
             --name "$app_name" \
             --resource-group "$resource_group" \
-            --startup-file "pm2 start /home/site/wwwroot/server.js --no-daemon" >/dev/null
+            --startup-file "$(app_startup)" >/dev/null
 
     # Deploy the built ZIP package
     - task: AzureWebApp@1
