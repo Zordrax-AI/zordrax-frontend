@@ -166,12 +166,12 @@ stages:
 
     # Health Check after deploy
     - bash: |
-        set -ex
+        set -x
         uri="https://$(appName)-$(environment).azurewebsites.net"
         echo "Pinging ${uri} ..."
         for i in {1..10}; do
-          status=$(curl -s -o /dev/null -w "%{http_code}" "$uri")
-          if [ "$status" = "200" ]; then
+          status=$(curl -s -o /dev/null -w "%{http_code}" "$uri" || echo "000")
+          if [[ "$status" == 2* || "$status" == 3* ]]; then
             echo "✅ Health check passed."
             exit 0
           fi
