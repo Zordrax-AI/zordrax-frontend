@@ -16,6 +16,11 @@ variables:
   value: "zordrax-frontend"
 - name: environment
   value: "dev"
+- group: zordrax-analytica-dev-secrets
+- name: SERVICE_CONNECTION
+  value: 'zordrax-analytica-dev-conn'   # exact name from Service connections
+
+
 
 stages:
 - stage: Build
