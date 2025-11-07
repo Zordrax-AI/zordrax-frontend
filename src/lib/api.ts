@@ -12,7 +12,7 @@ const api = axios.create({
 });
 
 /**
- * Types
+ * Type definitions
  */
 export type RecommendationStack = {
   infrastructure: string;
@@ -25,6 +25,7 @@ export type RequirementsPayload = {
   description: string;
   [key: string]: unknown;
 };
+
 export type OnboardingPayload = Record<string, unknown>;
 
 export type AiFlowResponse = {
@@ -37,13 +38,28 @@ export type AiFlowResponse = {
 
 export type ManualFlowResponse = Record<string, unknown>;
 
-type DeploymentResponse = { message: string };
+/**
+ * Updated DeploymentResponse to match backend output
+ */
+export type DeploymentResponse = {
+  recommendation?: string;
+  manifest?: Record<string, unknown>;
+  deploy?: {
+    success?: boolean;
+    status?: string;
+  };
+  onboarding?: Record<string, unknown>;
+  message?: string; // optional fallback for legacy responses
+};
 
 type TriggerDeploymentExtras = {
   requirements?: RequirementsPayload;
   onboarding?: OnboardingPayload;
 };
 
+/**
+ * Default payload templates
+ */
 const defaultAiRequirements: RequirementsPayload = {
   description:
     "AI-generated infrastructure, ETL, governance, and reporting stack requirements.",
@@ -119,17 +135,23 @@ export const triggerDeployment = async (
           onboarding: extras.onboarding ?? defaultManualOnboarding,
         };
 
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}${endpoint}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }
-  );
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
 
   if (!res.ok) {
     throw new Error(`Pipeline trigger failed: ${await res.text()}`);
   }
-  return (await res.json()) as DeploymentResponse;
+
+  const data = (await res.json()) as DeploymentResponse;
+
+  // ✅ Normalized return message for UI display
+  data.message =
+    data.message ??
+    data.deploy?.status ??
+    (data.deploy?.success ? "success" : "completed");
+
+  return data;
 };
