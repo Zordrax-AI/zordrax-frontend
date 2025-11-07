@@ -49,7 +49,22 @@ stages:
         set -ex
         npm ci
         npm run build
-      displayName: "Install dependencies and build"
+
+        rm -rf out
+        mkdir -p out/.next
+
+        app_root=$(dirname "$(find .next/standalone -type f -name server.js | head -n 1)")
+        if [ -z "$app_root" ]; then
+          echo "Unable to locate standalone server build."
+          exit 1
+        fi
+
+        cp -R "$app_root/." out/
+        cp -R .next/static out/.next/static
+        if [ -d public ]; then
+          cp -R public out/public
+        fi
+      displayName: "Install dependencies, build, and stage artifact"
 
     - task: ArchiveFiles@2
       displayName: "Package site"
@@ -113,13 +128,13 @@ stages:
           az webapp config appsettings set \
             --name "$app_name" \
             --resource-group "$resource_group" \
-            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false NODE_ENV=production >/dev/null
+            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false NODE_ENV=production PORT=8080 >/dev/null
 
-          echo "Setting static export startup command..."
+          echo "Setting Node startup command..."
           az webapp config set \
             --name "$app_name" \
             --resource-group "$resource_group" \
-            --startup-file "pm2 serve /home/site/wwwroot --no-daemon --spa" >/dev/null
+            --startup-file "pm2 start /home/site/wwwroot/server.js --no-daemon" >/dev/null
 
     # Deploy the built ZIP package
     - task: AzureWebApp@1
