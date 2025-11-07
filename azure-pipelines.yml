@@ -47,6 +47,7 @@ stages:
 
     - script: |
         set -ex
+        export NEXT_OUTPUT=standalone
         npm ci
         npm run build
 
@@ -170,13 +171,22 @@ stages:
         uri="https://$(appName)-$(environment).azurewebsites.net"
         echo "Pinging ${uri} ..."
         for i in {1..10}; do
-          status=$(curl -s -o /dev/null -w "%{http_code}" "$uri" || echo "000")
-          if [[ "$status" == 2* || "$status" == 3* ]]; then
-            echo "✅ Health check passed."
-            exit 0
+          status=$(curl -s -o /dev/null -w "%{http_code}" "$uri")
+          curl_exit=$?
+          if [ $curl_exit -ne 0 ]; then
+            status="000"
           fi
-          echo "Attempt $i failed (status: $status). Retrying..."
-          sleep 10
+
+          case "$status" in
+            2*|3*)
+              echo "✅ Health check passed."
+              exit 0
+              ;;
+            *)
+              echo "Attempt $i failed (status: $status). Retrying..."
+              sleep 10
+              ;;
+          esac
         done
         echo "❌ Health check failed after 10 attempts."
         exit 1
