@@ -21,7 +21,10 @@ export type RecommendationStack = {
   reporting: string;
 };
 
-export type RequirementsPayload = Record<string, unknown>;
+export type RequirementsPayload = {
+  description: string;
+  [key: string]: unknown;
+};
 export type OnboardingPayload = Record<string, unknown>;
 
 export type AiFlowResponse = {
@@ -42,6 +45,8 @@ type TriggerDeploymentExtras = {
 };
 
 const defaultAiRequirements: RequirementsPayload = {
+  description:
+    "AI-generated infrastructure, ETL, governance, and reporting stack requirements.",
   required_stacks: ["managed lakehouse", "event-driven ETL", "governed semantic layer"],
   controls: {
     security: ["RBAC", "audit logging"],
@@ -60,6 +65,7 @@ const defaultAiOnboarding: OnboardingPayload = {
 };
 
 const defaultManualRequirements: RequirementsPayload = {
+  description: "Documents and approvals required for manual onboarding flow.",
   documents: ["Architecture diagram", "Runbook", "Security checklist"],
   approvals: ["Security", "Data Governance"],
 };
