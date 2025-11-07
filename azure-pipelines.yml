@@ -115,6 +115,7 @@ stages:
     # Ensure Web App exists (idempotent)
     - task: AzureCLI@2
       displayName: "Ensure Frontend App Service exists"
+      name: ProvisionApp
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         scriptType: bash
@@ -156,6 +157,10 @@ stages:
             --resource-group "$resource_group" \
             --startup-file "$(app_startup)" >/dev/null
 
+          host=$(az webapp show --name "$app_name" --resource-group "$resource_group" --query defaultHostName -o tsv)
+          echo "Web app host: $host"
+          echo "##vso[task.setvariable variable=webAppHost]$host"
+
     # Deploy the built ZIP package
     - task: AzureWebApp@1
       displayName: "Deploy Next.js Frontend"
@@ -168,22 +173,21 @@ stages:
     # Health Check after deploy
     - bash: |
         set -x
-        uri="https://$(appName)-$(environment).azurewebsites.net"
+        host="$(webAppHost)"
+        if [ -z "$host" ]; then
+          host="$(appName)-$(environment).azurewebsites.net"
+        fi
+        uri="https://${host}"
         echo "Pinging ${uri} ..."
         for i in {1..10}; do
-          status=$(curl -s -o /dev/null -w "%{http_code}" "$uri")
-          curl_exit=$?
-          if [ $curl_exit -ne 0 ]; then
-            status="000"
-          fi
-
-          case "$status" in
+          http_status=$(curl -sS -o /dev/null -w "%{http_code}" "$uri" || echo "000")
+          case "$http_status" in
             2*|3*)
               echo "✅ Health check passed."
               exit 0
               ;;
             *)
-              echo "Attempt $i failed (status: $status). Retrying..."
+              echo "Attempt $i failed (status: $http_status). Retrying..."
               sleep 10
               ;;
           esac
