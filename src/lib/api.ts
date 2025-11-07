@@ -26,6 +26,8 @@ export type OnboardingPayload = Record<string, unknown>;
 
 export type AiFlowResponse = {
   recommendation: RecommendationStack;
+  requirements?: RequirementsPayload;
+  onboarding?: OnboardingPayload;
   terraform_manifest?: Record<string, unknown>;
   next_action?: string;
 };
@@ -37,6 +39,38 @@ type DeploymentResponse = { message: string };
 type TriggerDeploymentExtras = {
   requirements?: RequirementsPayload;
   onboarding?: OnboardingPayload;
+};
+
+const defaultAiRequirements: RequirementsPayload = {
+  required_stacks: ["managed lakehouse", "event-driven ETL", "governed semantic layer"],
+  controls: {
+    security: ["RBAC", "audit logging"],
+    compliance: ["GDPR", "SOC2"],
+  },
+};
+
+const defaultAiOnboarding: OnboardingPayload = {
+  project_name: "Zordrax Analytica - AI Flow",
+  owner: "AI Orchestrator",
+  phases: [
+    { name: "Assess current stack", status: "complete" },
+    { name: "Provision infrastructure", status: "pending" },
+    { name: "Configure governance", status: "pending" },
+  ],
+};
+
+const defaultManualRequirements: RequirementsPayload = {
+  documents: ["Architecture diagram", "Runbook", "Security checklist"],
+  approvals: ["Security", "Data Governance"],
+};
+
+const defaultManualOnboarding: OnboardingPayload = {
+  project_name: "Zordrax Manual Flow",
+  owner: "Manual Flow Coordinator",
+  steps: [
+    { name: "Collect requirements", status: "pending" },
+    { name: "Kick-off workshop", status: "pending" },
+  ],
 };
 
 /**
@@ -68,13 +102,15 @@ export const triggerDeployment = async (
           project: "Zordrax Analytica",
           environment: "dev",
           business_context: "Automate data onboarding with AI orchestration",
-          ...extras,
+          requirements: extras.requirements ?? defaultAiRequirements,
+          onboarding: extras.onboarding ?? defaultAiOnboarding,
         }
       : {
           project_name: "Zordrax Manual",
           environment: "dev",
           trigger_pipeline: true,
-          ...extras,
+          requirements: extras.requirements ?? defaultManualRequirements,
+          onboarding: extras.onboarding ?? defaultManualOnboarding,
         };
 
   const res = await fetch(
