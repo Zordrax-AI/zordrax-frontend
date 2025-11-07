@@ -1,0 +1,70 @@
+# =============================================================
+# Zordrax-Analytica | Frontend CI/CD Pipeline (Next.js)
+# =============================================================
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: "ubuntu-latest"
+
+variables:
+- group: zordrax-analytica-dev-secrets
+- name: appName
+  value: "zordrax-frontend"
+- name: environment
+  value: "dev"
+
+stages:
+- stage: Build
+  displayName: "Build Frontend"
+  jobs:
+  - job: Build
+    pool:
+      vmImage: "ubuntu-latest"
+    steps:
+    - checkout: self
+      persistCredentials: true
+
+    - task: NodeTool@0
+      inputs:
+        versionSpec: "20.x"
+      displayName: "Install Node.js"
+
+    - script: |
+        npm ci
+        npm run build
+      displayName: "Install dependencies and build"
+
+    - task: ArchiveFiles@2
+      displayName: "Package site"
+      inputs:
+        rootFolderOrFile: "$(System.DefaultWorkingDirectory)/out"
+        includeRootFolder: false
+        archiveType: zip
+        archiveFile: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
+        replaceExistingArchive: true
+
+    - publish: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
+      artifact: "drop"
+
+- stage: Deploy
+  displayName: "Deploy Frontend (App Service)"
+  dependsOn: Build
+  jobs:
+  - job: Deploy
+    pool:
+      vmImage: "ubuntu-latest"
+    steps:
+    - download: current
+      artifact: drop
+
+    - task: AzureWebApp@1
+      displayName: "Deploy Next.js Frontend"
+      inputs:
+        azureSubscription: "$(SERVICE_CONNECTION)"
+        appType: webAppLinux
+        appName: "$(appName)-$(environment)"
+        package: "$(Pipeline.Workspace)/drop/$(appName).zip"
