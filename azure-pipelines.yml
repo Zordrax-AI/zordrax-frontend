@@ -1,6 +1,6 @@
 # =============================================================
 # Zordrax-Analytica | Frontend CI/CD Pipeline (Next.js)
-# Phase 2 Final – Build → Package → Deploy (Self-Provisioning)
+# Phase 2 Final – Build → Package → Deploy (with API Injection)
 # =============================================================
 
 trigger:
@@ -18,13 +18,15 @@ variables:
 - name: environment
   value: "dev"
 - name: SERVICE_CONNECTION
-  value: "zordrax-analytica-dev-conn"   # must match Azure DevOps connection
+  value: "zordrax-analytica-dev-conn"
 - name: RESOURCE_GROUP
   value: "zordrax-analytica-dev-rg"
 - name: PLAN_NAME
   value: "zordrax-linux-plan"
 - name: LOCATION
   value: "westeurope"
+- name: NEXT_PUBLIC_API_URL
+  value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net"
 
 # -------------------------------------------------------------
 # Stage 1 – Build Frontend
@@ -47,33 +49,22 @@ stages:
 
     - script: |
         set -ex
+        echo "NEXT_PUBLIC_API_URL=$(NEXT_PUBLIC_API_URL)" > .env.local
+        cat .env.local
+
         export NEXT_OUTPUT=standalone
         npm ci
         npm run build
 
-        # Prefer standalone Node bundle when available; otherwise fall back to static export in out/
+        # Prepare build output
         if [ -d ".next/standalone" ]; then
           rm -rf out
           mkdir -p out/.next
-
-          app_root=$(dirname "$(find .next/standalone -type f -name server.js | head -n 1)")
-          if [ -z "$app_root" ]; then
-            echo "Standalone folder detected but server.js missing."
-            exit 1
-          fi
-
-          cp -R "$app_root/." out/
+          cp -R .next/standalone/. out/
           cp -R .next/static out/.next/static
-          if [ -d public ]; then
-            cp -R public out/public
-          fi
-        else
-          echo "Standalone bundle not found; assuming static export already created ./out."
-          if [ ! -d "out" ]; then
-            echo "No standalone build and ./out missing. Cannot stage artifact."
-            exit 1
-          fi
+          [ -d public ] && cp -R public out/public
         fi
+
         if [ -f "out/server.js" ]; then
           startup_cmd="pm2 start /home/site/wwwroot/server.js --no-daemon"
         else
@@ -81,7 +72,7 @@ stages:
         fi
 
         echo "##vso[task.setvariable variable=appStartupCommand;isOutput=true]$startup_cmd"
-      displayName: "Install dependencies, build, and stage artifact"
+      displayName: "Build with env injection & stage artifact"
       name: BuildAndStage
 
     - task: ArchiveFiles@2
@@ -97,7 +88,7 @@ stages:
       artifact: "drop"
 
 # -------------------------------------------------------------
-# Stage 2 – Deploy to Azure Web App (Self-Provisioning)
+# Stage 2 – Deploy to Azure Web App
 # -------------------------------------------------------------
 - stage: Deploy
   displayName: "Deploy Frontend (App Service)"
@@ -112,56 +103,44 @@ stages:
     - download: current
       artifact: drop
 
-    # Ensure Web App exists (idempotent)
     - task: AzureCLI@2
       displayName: "Ensure Frontend App Service exists"
-      name: ProvisionApp
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         scriptType: bash
         scriptLocation: inlineScript
         inlineScript: |
           set -ex
-          resource_group="$(RESOURCE_GROUP)"
-          plan_name="$(PLAN_NAME)"
-          app_name="$(appName)-$(environment)"
-          location="$(LOCATION)"
-          runtime="NODE|20-lts"
-
-          echo "Ensuring resource group..."
-          az group create --name "$resource_group" --location "$location" >/dev/null
-
-          echo "Ensuring App Service plan..."
+          az group create --name "$(RESOURCE_GROUP)" --location "$(LOCATION)" >/dev/null
           az appservice plan create \
-            --name "$plan_name" \
-            --resource-group "$resource_group" \
+            --name "$(PLAN_NAME)" \
+            --resource-group "$(RESOURCE_GROUP)" \
             --is-linux \
             --sku B1 >/dev/null || true
 
-          echo "Ensuring Web App..."
+          app_name="$(appName)-$(environment)"
+          runtime="NODE|20-lts"
+
           az webapp create \
             --name "$app_name" \
-            --resource-group "$resource_group" \
-            --plan "$plan_name" \
+            --resource-group "$(RESOURCE_GROUP)" \
+            --plan "$(PLAN_NAME)" \
             --runtime "$runtime" >/dev/null || true
 
-          echo "Configuring Node runtime & startup..."
           az webapp config appsettings set \
             --name "$app_name" \
-            --resource-group "$resource_group" \
-            --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false NODE_ENV=production PORT=8080 >/dev/null
+            --resource-group "$(RESOURCE_GROUP)" \
+            --settings \
+              NODE_ENV=production \
+              PORT=8080 \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              NEXT_PUBLIC_API_URL="$(NEXT_PUBLIC_API_URL)" >/dev/null
 
-          echo "Setting startup command to: $(app_startup)"
           az webapp config set \
             --name "$app_name" \
-            --resource-group "$resource_group" \
+            --resource-group "$(RESOURCE_GROUP)" \
             --startup-file "$(app_startup)" >/dev/null
 
-          host=$(az webapp show --name "$app_name" --resource-group "$resource_group" --query defaultHostName -o tsv)
-          echo "Web app host: $host"
-          echo "##vso[task.setvariable variable=webAppHost]$host"
-
-    # Deploy the built ZIP package
     - task: AzureWebApp@1
       displayName: "Deploy Next.js Frontend"
       inputs:
@@ -170,28 +149,18 @@ stages:
         appName: "$(appName)-$(environment)"
         package: "$(Pipeline.Workspace)/drop/$(appName).zip"
 
-    # Health Check after deploy
     - bash: |
-        set -x
-        host="$(webAppHost)"
-        if [ -z "$host" ]; then
-          host="$(appName)-$(environment).azurewebsites.net"
-        fi
-        uri="https://${host}"
-        echo "Pinging ${uri} ..."
+        host="$(appName)-$(environment).azurewebsites.net"
+        echo "Health checking $host ..."
         for i in {1..10}; do
-          http_status=$(curl -sS -o /dev/null -w "%{http_code}" "$uri" || echo "000")
-          case "$http_status" in
-            2*|3*)
-              echo "✅ Health check passed."
-              exit 0
-              ;;
-            *)
-              echo "Attempt $i failed (status: $http_status). Retrying..."
-              sleep 10
-              ;;
-          esac
+          code=$(curl -s -o /dev/null -w "%{http_code}" "https://$host" || true)
+          if [[ $code == 2* || $code == 3* ]]; then
+            echo "✅ $host is healthy ($code)"
+            exit 0
+          fi
+          echo "Attempt $i failed ($code)... retrying"
+          sleep 10
         done
-        echo "❌ Health check failed after 10 attempts."
+        echo "❌ Health check failed."
         exit 1
       displayName: "Health Check Frontend"
