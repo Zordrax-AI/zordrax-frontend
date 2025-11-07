@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState } from "react";
-import { fetchManualFlow } from "../../lib/api";
+import { fetchManualFlow, type ManualFlowResponse } from "../../lib/api";
 
 export default function Manual() {
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<ManualFlowResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
