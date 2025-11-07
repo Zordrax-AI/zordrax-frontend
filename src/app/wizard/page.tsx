@@ -26,6 +26,7 @@ export default function Wizard() {
     const onboardingPayload =
       data.onboarding ??
       {
+        project_name: "Zordrax Analytica - AI Flow",
         owner: "AI Deployment Bot",
         steps: [
           "Validate stack recommendations",

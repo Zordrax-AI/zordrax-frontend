@@ -41,6 +41,7 @@ const defaultAiRequirements: RequirementsPayload = {
 };
 
 const defaultAiOnboarding: OnboardingPayload = {
+  project_name: "Zordrax Analytica - AI Flow",
   owner: "AI Orchestrator",
   phases: [
     { name: "Assess current stack", status: "complete" },
@@ -55,6 +56,7 @@ const defaultManualRequirements: RequirementsPayload = {
 };
 
 const defaultManualOnboarding: OnboardingPayload = {
+  project_name: "Zordrax Manual Flow",
   owner: "Manual Flow Coordinator",
   steps: [
     { name: "Collect requirements", status: "pending" },
