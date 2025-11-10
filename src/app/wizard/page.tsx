@@ -6,6 +6,7 @@ type Recommendations = Record<string, unknown> | unknown[];
 
 type DeploymentResponse = {
   status?: string;
+  message?: string;
   recommendations?: Recommendations;
   pipeline_run?: {
     run_id?: number;
@@ -52,35 +53,43 @@ export default function WizardPage() {
 
   const handleDeploy = async () => {
     setLoading(true);
-    setStatus("Deploying architecture via AI orchestration...");
+    setStatus("Deploying...");
     setBuildState("");
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/onboarding/ai-and-deploy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
       });
-      const data: DeploymentResponse = await res.json();
 
-      if (data.status === "success") {
-        setRecommendations(data.recommendations ?? null);
-
-        if (typeof data.pipeline_run?.run_id === "number") {
-          setRunId(data.pipeline_run.run_id);
-        }
-
-        if (data.pipeline_run?.web_url && typeof data.pipeline_run.run_id === "number") {
-          setStatus(
-            `Deployment triggered - <a href="${data.pipeline_run.web_url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">View in DevOps (Build #${data.pipeline_run.run_id})</a>`
-          );
-        } else {
-          setStatus("Deployment completed successfully (no DevOps URL).");
-        }
-      } else {
-        setStatus("Unexpected response from API.");
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`API returned ${res.status}: ${text}`);
       }
+
+      const data: DeploymentResponse = await res.json();
+      if (!data || !data.status) {
+        throw new Error("Empty or invalid API response");
+      }
+
+      setRecommendations(data.recommendations ?? null);
+
+      if (typeof data.pipeline_run?.run_id === "number") {
+        setRunId(data.pipeline_run.run_id);
+      }
+
+      let successMessage = data.message || "Deployment triggered successfully.";
+      if (data.pipeline_run?.web_url && typeof data.pipeline_run.run_id === "number") {
+        successMessage += ` - <a href="${data.pipeline_run.web_url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">View in DevOps (Build #${data.pipeline_run.run_id})</a>`;
+      } else if (typeof data.pipeline_run?.run_id === "number") {
+        successMessage += ` (Build #${data.pipeline_run.run_id})`;
+      }
+
+      setStatus(`✅ ${successMessage}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      setStatus(`Deployment failed: ${message}`);
+      console.error("Deploy failed:", err);
+      setStatus(`❌ Unexpected response from API: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -132,4 +141,3 @@ export default function WizardPage() {
     </main>
   );
 }
-
