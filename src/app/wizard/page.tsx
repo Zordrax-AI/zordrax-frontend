@@ -1,34 +1,49 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+
+type Recommendations = Record<string, unknown> | unknown[];
+
+type DeploymentResponse = {
+  status?: string;
+  recommendations?: Recommendations;
+  pipeline_run?: {
+    run_id?: number;
+    web_url?: string;
+  };
+};
+
+type BuildStatusResponse = {
+  status?: string;
+  result?: string;
+};
 
 export default function WizardPage() {
   const [status, setStatus] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const [recommendations, setRecommendations] = useState<any>(null);
+  const [recommendations, setRecommendations] = useState<Recommendations | null>(null);
   const [runId, setRunId] = useState<number | null>(null);
   const [buildState, setBuildState] = useState<string>("");
 
   // Poll backend for DevOps build status every 20s if a run is active
   useEffect(() => {
     if (!runId) return;
+
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/devops/status/${runId}`);
-        const data = await res.json();
+        const data: BuildStatusResponse = await res.json();
 
         if (data.status === "completed") {
-          setBuildState(
-            data.result === "succeeded" ? "🟢 Build succeeded" : "🔴 Build failed"
-          );
+          setBuildState(data.result === "succeeded" ? "Build succeeded" : "Build failed");
           clearInterval(interval);
         } else if (data.status === "inProgress") {
-          setBuildState("🟡 Build running...");
+          setBuildState("Build running...");
         } else {
-          setBuildState(`⚙️ Status: ${data.status || "unknown"}`);
+          setBuildState(`Status: ${data.status || "unknown"}`);
         }
       } catch {
-        setBuildState("⚠️ Could not fetch build status");
+        setBuildState("Could not fetch build status");
       }
     }, 20000); // every 20 seconds
 
@@ -37,30 +52,35 @@ export default function WizardPage() {
 
   const handleDeploy = async () => {
     setLoading(true);
-    setStatus("🚀 Deploying architecture via AI Orchestration...");
+    setStatus("Deploying architecture via AI orchestration...");
     setBuildState("");
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/onboarding/ai-and-deploy`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      const data = await res.json();
+      const data: DeploymentResponse = await res.json();
 
       if (data.status === "success") {
-        setRecommendations(data.recommendations);
-        if (data.pipeline_run?.web_url) {
+        setRecommendations(data.recommendations ?? null);
+
+        if (typeof data.pipeline_run?.run_id === "number") {
           setRunId(data.pipeline_run.run_id);
+        }
+
+        if (data.pipeline_run?.web_url && typeof data.pipeline_run.run_id === "number") {
           setStatus(
-            `✅ Deployment triggered — <a href="${data.pipeline_run.web_url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">View in DevOps (Build #${data.pipeline_run.run_id})</a>`
+            `Deployment triggered - <a href="${data.pipeline_run.web_url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline">View in DevOps (Build #${data.pipeline_run.run_id})</a>`
           );
         } else {
-          setStatus("✅ Deployment completed successfully (no DevOps URL).");
+          setStatus("Deployment completed successfully (no DevOps URL).");
         }
       } else {
-        setStatus("❌ Unexpected response from API.");
+        setStatus("Unexpected response from API.");
       }
-    } catch (err: any) {
-      setStatus(`❌ Deployment failed: ${err.message || err}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus(`Deployment failed: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -112,3 +132,4 @@ export default function WizardPage() {
     </main>
   );
 }
+
