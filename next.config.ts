@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "export",
-  distDir: ".next",
+  output: "standalone",
   reactStrictMode: true,
   env: {
     NEXT_PUBLIC_API_URL:

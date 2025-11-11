@@ -70,10 +70,26 @@ stages:
       env:
         NPM_CONFIG_CACHE: "$(Pipeline.Workspace)/.npm"
 
+    - script: |
+        set -ex
+        rm -rf out
+        mkdir -p out
+        cp -R .next/standalone/. out/
+        mkdir -p out/.next
+        cp -R .next/static out/.next/static
+        if [ -d public ]; then
+          cp -R public out/public
+        fi
+        cp package.json out/package.json
+        if [ -f package-lock.json ]; then
+          cp package-lock.json out/package-lock.json
+        fi
+      displayName: "Stage standalone bundle"
+
     - task: ArchiveFiles@2
       displayName: "Package artifact"
       inputs:
-        rootFolderOrFile: "$(System.DefaultWorkingDirectory)"
+        rootFolderOrFile: "$(System.DefaultWorkingDirectory)/out"
         includeRootFolder: false
         archiveType: zip
         archiveFile: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
@@ -129,6 +145,11 @@ stages:
               SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               WEBSITE_RUN_FROM_PACKAGE=1 \
               NEXT_PUBLIC_API_URL="$(NEXT_PUBLIC_API_URL)" >/dev/null
+
+          az webapp config set \
+            --name "$app_name" \
+            --resource-group "$(RESOURCE_GROUP)" \
+            --startup-file "node server.js" >/dev/null
 
     - task: AzureWebApp@1
       displayName: "Deploy packaged frontend"
