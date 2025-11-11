@@ -89,6 +89,12 @@ stages:
     - download: current
       artifact: drop
 
+    - bash: |
+        set -ex
+        rm -rf .next
+        unzip -q "$(Pipeline.Workspace)/drop/$(appName).zip" -d "$(System.DefaultWorkingDirectory)"
+      displayName: "Prepare standalone bundle"
+
     - task: AzureCLI@2
       displayName: "Ensure Frontend App Service exists"
       inputs:
