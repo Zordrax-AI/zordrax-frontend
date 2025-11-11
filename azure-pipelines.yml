@@ -34,9 +34,9 @@ variables:
 stages:
 - stage: Build
   displayName: "Build Frontend"
-  timeoutInMinutes: 120  # ⏱️ allow up to 2 hours
   jobs:
   - job: Build
+    timeoutInMinutes: 120
     pool:
       vmImage: "ubuntu-latest"
     steps:
@@ -82,9 +82,9 @@ stages:
 - stage: Deploy
   displayName: "Deploy Frontend to Azure"
   dependsOn: Build
-  timeoutInMinutes: 120  # ⏱️ extend deploy timeout
   jobs:
   - job: Deploy
+    timeoutInMinutes: 120
     pool:
       vmImage: "ubuntu-latest"
     steps:
@@ -147,3 +147,4 @@ stages:
         echo "❌ Health check failed"
         exit 1
       displayName: "Health Check Frontend"
+
