@@ -1,16 +1,13 @@
-import path from "path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  output: "export",
   distDir: ".next",
-  outputFileTracingRoot: path.join(__dirname),
-  experimental: {
-    turbo: {
-      resolveAlias: {
-        "@/*": "./src/*",
-      },
-    },
+  reactStrictMode: true,
+  env: {
+    NEXT_PUBLIC_API_URL:
+      process.env.NEXT_PUBLIC_API_URL ||
+      "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net",
   },
 };
 
