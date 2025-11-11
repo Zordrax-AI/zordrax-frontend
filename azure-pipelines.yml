@@ -1,32 +1,31 @@
 # =============================================================
 # Zordrax-Analytica | Frontend CI/CD Pipeline (Next.js)
-# Phase 2 Final – Build → Package → Deploy (with API Injection)
+# Phase 2 Final – Build → Package → Deploy (Run-From-Package)
 # =============================================================
 
 trigger:
   branches:
-    include:
-      - main
+    include: [ main ]
 
 pool:
-  vmImage: "ubuntu-latest"
+  vmImage: ubuntu-latest
 
 variables:
 - group: zordrax-analytica-dev-secrets
 - name: appName
-  value: "zordrax-frontend"
+  value: zordrax-frontend
 - name: environment
-  value: "dev"
+  value: dev
 - name: SERVICE_CONNECTION
-  value: "zordrax-analytica-dev-conn"
+  value: zordrax-analytica-dev-conn
 - name: RESOURCE_GROUP
-  value: "zordrax-analytica-dev-rg"
+  value: zordrax-analytica-dev-rg
 - name: PLAN_NAME
-  value: "zordrax-linux-plan"
+  value: zordrax-linux-plan
 - name: LOCATION
-  value: "westeurope"
+  value: westeurope
 - name: NEXT_PUBLIC_API_URL
-  value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net"
+  value: https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net
 
 # -------------------------------------------------------------
 # Stage 1 – Build Frontend
@@ -37,46 +36,35 @@ stages:
   jobs:
   - job: Build
     pool:
-      vmImage: "ubuntu-latest"
+      vmImage: ubuntu-latest
     steps:
     - checkout: self
       persistCredentials: true
 
     - task: NodeTool@0
       inputs:
-        versionSpec: "20.x"
-      displayName: "Install Node.js"
+        versionSpec: 20.x
+      displayName: Install Node.js
 
     - script: |
         set -ex
         echo "NEXT_PUBLIC_API_URL=$(NEXT_PUBLIC_API_URL)" > .env.local
         cat .env.local
-
         export NEXT_OUTPUT=standalone
         npm ci
         npm run build
 
-        # Prepare build output
-        if [ -d ".next/standalone" ]; then
-          rm -rf out
-          mkdir -p out/.next
-          cp -R .next/standalone/. out/
-          cp -R .next/static out/.next/static
-          [ -d public ] && cp -R public out/public
-        fi
+        mkdir -p out
+        cp -R .next/standalone/. out/
+        cp -R .next/static out/.next/static
+        [ -d public ] && cp -R public out/public
 
-        if [ -f "out/server.js" ]; then
-          startup_cmd="pm2 start /home/site/wwwroot/server.js --no-daemon"
-        else
-          startup_cmd="pm2 serve /home/site/wwwroot --no-daemon --spa"
-        fi
-
-        echo "##vso[task.setvariable variable=appStartupCommand;isOutput=true]$startup_cmd"
-      displayName: "Build with env injection & stage artifact"
+        echo "##vso[task.setvariable variable=appStartupCommand;isOutput=true]npm start"
+      displayName: Build with env injection & stage artifact
       name: BuildAndStage
 
     - task: ArchiveFiles@2
-      displayName: "Package site"
+      displayName: Package site
       inputs:
         rootFolderOrFile: "$(System.DefaultWorkingDirectory)/out"
         includeRootFolder: false
@@ -85,7 +73,7 @@ stages:
         replaceExistingArchive: true
 
     - publish: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
-      artifact: "drop"
+      artifact: drop
 
 # -------------------------------------------------------------
 # Stage 2 – Deploy to Azure Web App
@@ -96,7 +84,7 @@ stages:
   jobs:
   - job: Deploy
     pool:
-      vmImage: "ubuntu-latest"
+      vmImage: ubuntu-latest
     variables:
       app_startup: $[ stageDependencies.Build.Build.outputs['BuildAndStage.appStartupCommand'] ]
     steps:
@@ -115,8 +103,7 @@ stages:
           az appservice plan create \
             --name "$(PLAN_NAME)" \
             --resource-group "$(RESOURCE_GROUP)" \
-            --is-linux \
-            --sku B1 >/dev/null || true
+            --is-linux --sku B1 >/dev/null || true
 
           app_name="$(appName)-$(environment)"
           runtime="NODE|20-lts"
@@ -134,6 +121,7 @@ stages:
               NODE_ENV=production \
               PORT=8080 \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+              WEBSITE_RUN_FROM_PACKAGE=1 \
               NEXT_PUBLIC_API_URL="$(NEXT_PUBLIC_API_URL)" >/dev/null
 
           az webapp config set \
@@ -149,18 +137,18 @@ stages:
           echo "##vso[task.setvariable variable=webAppHost]$host"
 
     - task: AzureWebApp@1
-      displayName: "Deploy Next.js Frontend"
+      displayName: "Deploy Next.js Frontend (Run-From-Package)"
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         appType: webAppLinux
         appName: "$(appName)-$(environment)"
         package: "$(Pipeline.Workspace)/drop/$(appName).zip"
+        enableCustomDeployment: true
+        deploymentMethod: runFromPackage
 
     - bash: |
         host="$(webAppHost)"
-        if [ -z "$host" ]; then
-          host="$(appName)-$(environment).azurewebsites.net"
-        fi
+        [ -z "$host" ] && host="$(appName)-$(environment).azurewebsites.net"
         echo "Health checking $host ..."
         for i in {1..10}; do
           code=$(curl -s -o /dev/null -w "%{http_code}" "https://$host" || true)
@@ -173,4 +161,4 @@ stages:
         done
         echo "❌ Health check failed."
         exit 1
-      displayName: "Health Check Frontend"
+      displayName: Health Check Frontend
