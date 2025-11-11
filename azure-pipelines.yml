@@ -64,9 +64,10 @@ stages:
     - script: |
         set -ex
         echo "NEXT_PUBLIC_API_URL=$(NEXT_PUBLIC_API_URL)" > .env.local
+        export NEXT_OUTPUT=standalone
         npm ci
         npm run build
-      displayName: "Build Next.js frontend"
+      displayName: "Build Next.js frontend (standalone forced)"
       env:
         NPM_CONFIG_CACHE: "$(Pipeline.Workspace)/.npm"
 
