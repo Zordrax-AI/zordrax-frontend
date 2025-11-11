@@ -1,6 +1,6 @@
 # =============================================================
-# Zordrax-Analytica | Frontend CI/CD (Restored Codex Stable)
-# Build → Package → Deploy
+# Zordrax-Analytica | Frontend CI/CD (Codex Stable)
+# Build → Package → Deploy | Optimized for Azure Pipelines
 # =============================================================
 
 trigger:
@@ -28,12 +28,12 @@ variables:
 - name: NEXT_PUBLIC_API_URL
   value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net"
 
-stages:
 # -------------------------------------------------------------
 # Stage 1: Build
 # -------------------------------------------------------------
 - stage: Build
   displayName: "Build Frontend"
+  timeoutInMinutes: 120  # ⏱️ allow up to 2 hours
   jobs:
   - job: Build
     pool:
@@ -41,6 +41,15 @@ stages:
     steps:
     - checkout: self
       persistCredentials: true
+
+    # Cache npm packages
+    - task: Cache@2
+      displayName: "Cache npm packages"
+      inputs:
+        key: 'npm | "$(Agent.OS)" | package-lock.json'
+        restoreKeys: |
+          npm | "$(Agent.OS)"
+        path: ~/.npm
 
     - task: NodeTool@0
       inputs:
@@ -72,6 +81,7 @@ stages:
 - stage: Deploy
   displayName: "Deploy Frontend to Azure"
   dependsOn: Build
+  timeoutInMinutes: 120  # ⏱️ extend deploy timeout
   jobs:
   - job: Deploy
     pool:
