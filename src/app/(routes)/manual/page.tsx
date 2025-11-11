@@ -7,8 +7,16 @@ import { RecommendationsCard } from "@/components/RecommendationsCard";
 import { useDeploymentWorkflow } from "@/hooks/useDeploymentWorkflow";
 
 export default function ManualDeployPage() {
+  const manualPayload = {
+    project_name: "zordrax-frontend",
+    infrastructure: { tool: "Azure" },
+    etl: { tool: "Databricks" },
+    governance: { tool: "Great Expectations" },
+    reporting: { tool: "Power BI" },
+  };
+
   const { status, loading, runId, buildState, pollWarning, recommendations, handleDeploy } =
-    useDeploymentWorkflow("/onboarding/manual");
+    useDeploymentWorkflow("/onboarding/manual", manualPayload);
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-8 px-6 py-12">
