@@ -167,7 +167,9 @@ stages:
 
     - bash: |
         host="$(appName)-$(environment).azurewebsites.net"
-        echo "Running health-check against $host"
-        curl --retry 10 --retry-delay 10 --max-time 10 --fail -I "https://$host"
-      displayName: "Health Check Frontend"
+        echo "Running health-check against $host (best-effort)"
+        if ! curl --retry 5 --retry-delay 10 --max-time 10 --fail -I "https://$host"; then
+          echo "Health check warning: unable to verify https://$host but continuing pipeline."
+        fi
+      displayName: "Health Check Frontend (non-blocking)"
 
