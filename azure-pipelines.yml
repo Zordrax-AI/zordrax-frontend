@@ -76,17 +76,15 @@ stages:
       artifact: drop
 
 # -------------------------------------------------------------
-# Stage 2 – Deploy to Azure Web App
+# Stage 2 – Deploy to Azure Web App (self-contained build)
 # -------------------------------------------------------------
 - stage: Deploy
-  displayName: "Deploy Frontend (App Service)"
+  displayName: "Deploy Frontend (self-contained)"
   dependsOn: Build
   jobs:
   - job: Deploy
     pool:
-      vmImage: ubuntu-latest
-    variables:
-      app_startup: $[ stageDependencies.Build.Build.outputs['BuildAndStage.appStartupCommand'] ]
+      vmImage: "ubuntu-latest"
     steps:
     - download: current
       artifact: drop
@@ -114,30 +112,23 @@ stages:
             --plan "$(PLAN_NAME)" \
             --runtime "$runtime" >/dev/null || true
 
+          # Allow node_modules to be used directly from the package
           az webapp config appsettings set \
             --name "$app_name" \
             --resource-group "$(RESOURCE_GROUP)" \
             --settings \
               NODE_ENV=production \
               PORT=8080 \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               WEBSITE_RUN_FROM_PACKAGE=1 \
+              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               NEXT_PUBLIC_API_URL="$(NEXT_PUBLIC_API_URL)" >/dev/null
 
-          az webapp config set \
-            --name "$app_name" \
-            --resource-group "$(RESOURCE_GROUP)" \
-            --startup-file "$(app_startup)" >/dev/null
-
-          host=$(az webapp show \
-            --name "$app_name" \
-            --resource-group "$(RESOURCE_GROUP)" \
-            --query defaultHostName -o tsv)
-          echo "Resolved web app host: $host"
+          host=$(az webapp show --name "$app_name" --resource-group "$(RESOURCE_GROUP)" --query defaultHostName -o tsv)
           echo "##vso[task.setvariable variable=webAppHost]$host"
 
+    # ✅ Deploy the prebuilt artifact (contains node_modules + .next)
     - task: AzureWebApp@1
-      displayName: "Deploy Next.js Frontend (Run-From-Package)"
+      displayName: "Deploy prebuilt artifact (Next.js)"
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         appType: webAppLinux
@@ -146,10 +137,11 @@ stages:
         enableCustomDeployment: true
         deploymentMethod: runFromPackage
 
+    # ✅ Health Check
     - bash: |
         host="$(webAppHost)"
         [ -z "$host" ] && host="$(appName)-$(environment).azurewebsites.net"
-        echo "Health checking $host ..."
+        echo "Health checking https://$host ..."
         for i in {1..10}; do
           code=$(curl -s -o /dev/null -w "%{http_code}" "https://$host" || true)
           if [[ $code == 2* || $code == 3* ]]; then
@@ -161,4 +153,4 @@ stages:
         done
         echo "❌ Health check failed."
         exit 1
-      displayName: Health Check Frontend
+      displayName: "Health Check Frontend"
