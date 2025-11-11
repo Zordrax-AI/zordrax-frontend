@@ -1,157 +1,60 @@
-"use client";
-import axios from "axios";
+const API_BASE = process.env.NEXT_PUBLIC_BACKEND_URL;
 
-/**
- * Base API configuration
- */
-const api = axios.create({
-  baseURL:
-    process.env.NEXT_PUBLIC_API_URL ||
-    "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net",
-  headers: { "Content-Type": "application/json" },
-});
+if (!API_BASE) {
+  console.warn("NEXT_PUBLIC_BACKEND_URL is not defined. API calls will fail until it is set.");
+}
 
-/**
- * Type definitions
- */
-export type RecommendationStack = {
-  infrastructure: string;
-  etl: string;
-  governance: string;
-  reporting: string;
+export type PipelineRun = {
+  run_id?: number;
+  web_url?: string;
 };
 
-export type RequirementsPayload = {
-  description: string;
-  [key: string]: unknown;
-};
-
-export type OnboardingPayload = Record<string, unknown>;
-
-export type AiFlowResponse = {
-  recommendation: RecommendationStack;
-  requirements?: RequirementsPayload;
-  onboarding?: OnboardingPayload;
-  terraform_manifest?: Record<string, unknown>;
-  next_action?: string;
-};
-
-export type ManualFlowResponse = Record<string, unknown>;
-
-/**
- * Updated DeploymentResponse to match backend output
- */
 export type DeploymentResponse = {
-  recommendation?: string;
-  manifest?: Record<string, unknown>;
-  deploy?: {
-    success?: boolean;
-    status?: string;
-  };
-  onboarding?: Record<string, unknown>;
-  message?: string; // optional fallback for legacy responses
+  status?: string;
+  message?: string;
+  pipeline_run?: PipelineRun;
+  run_id?: number;
+  recommendations?: unknown;
 };
 
-type TriggerDeploymentExtras = {
-  requirements?: RequirementsPayload;
-  onboarding?: OnboardingPayload;
+export type BuildStatusResponse = {
+  status?: string;
+  result?: string;
+  details_url?: string;
 };
 
-/**
- * Default payload templates
- */
-const defaultAiRequirements: RequirementsPayload = {
-  description:
-    "AI-generated infrastructure, ETL, governance, and reporting stack requirements.",
-  required_stacks: ["managed lakehouse", "event-driven ETL", "governed semantic layer"],
-  controls: {
-    security: ["RBAC", "audit logging"],
-    compliance: ["GDPR", "SOC2"],
-  },
-};
+function buildUrl(path: string) {
+  if (!API_BASE) {
+    throw new Error("NEXT_PUBLIC_BACKEND_URL is not configured.");
+  }
+  return `${API_BASE.replace(/\/+$/, "")}${path}`;
+}
 
-const defaultAiOnboarding: OnboardingPayload = {
-  project_name: "Zordrax Analytica - AI Flow",
-  owner: "AI Orchestrator",
-  phases: [
-    { name: "Assess current stack", status: "complete" },
-    { name: "Provision infrastructure", status: "pending" },
-    { name: "Configure governance", status: "pending" },
-  ],
-};
-
-const defaultManualRequirements: RequirementsPayload = {
-  description: "Documents and approvals required for manual onboarding flow.",
-  documents: ["Architecture diagram", "Runbook", "Security checklist"],
-  approvals: ["Security", "Data Governance"],
-};
-
-const defaultManualOnboarding: OnboardingPayload = {
-  project_name: "Zordrax Manual Flow",
-  owner: "Manual Flow Coordinator",
-  steps: [
-    { name: "Collect requirements", status: "pending" },
-    { name: "Kick-off workshop", status: "pending" },
-  ],
-};
-
-/**
- * Mock endpoint wrappers
- */
-export const fetchAiFlow = async (): Promise<AiFlowResponse> => {
-  const res = await api.get<AiFlowResponse>("/mock/ai_flow");
-  return res.data;
-};
-
-export const fetchManualFlow = async (): Promise<ManualFlowResponse> => {
-  const res = await api.get<ManualFlowResponse>("/mock/manual_flow");
-  return res.data;
-};
-
-/**
- * Trigger deployment pipeline (AI / Manual)
- */
-export const triggerDeployment = async (
-  mode: "ai" | "manual",
-  extras: TriggerDeploymentExtras = {}
-): Promise<DeploymentResponse> => {
-  const endpoint =
-    mode === "ai" ? "/onboarding/ai-and-deploy" : "/onboarding/manual_flow";
-
-  const payload =
-    mode === "ai"
-      ? {
-          project: "Zordrax Analytica",
-          environment: "dev",
-          business_context: "Automate data onboarding with AI orchestration",
-          requirements: extras.requirements ?? defaultAiRequirements,
-          onboarding: extras.onboarding ?? defaultAiOnboarding,
-        }
-      : {
-          project_name: "Zordrax Manual",
-          environment: "dev",
-          trigger_pipeline: true,
-          requirements: extras.requirements ?? defaultManualRequirements,
-          onboarding: extras.onboarding ?? defaultManualOnboarding,
-        };
-
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
+async function handleResponse(res: Response) {
+  const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Pipeline trigger failed: ${await res.text()}`);
+    const message = text || res.statusText;
+    throw new Error(`HTTP ${res.status}: ${message}`);
   }
 
-  const data = (await res.json()) as DeploymentResponse;
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error("Invalid response from API");
+  }
+}
 
-  // ✅ Normalized return message for UI display
-  data.message =
-    data.message ??
-    data.deploy?.status ??
-    (data.deploy?.success ? "success" : "completed");
+export async function postDeployment(path: string): Promise<DeploymentResponse> {
+  const url = buildUrl(path);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  return handleResponse(res);
+}
 
-  return data;
-};
+export async function fetchBuildStatus(runId: number): Promise<BuildStatusResponse> {
+  const res = await fetch(buildUrl(`/devops/status/${runId}`));
+  return handleResponse(res);
+}
+

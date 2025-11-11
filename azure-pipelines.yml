@@ -25,7 +25,7 @@ variables:
   value: "zordrax-linux-plan"
 - name: LOCATION
   value: "westeurope"
-- name: NEXT_PUBLIC_API_URL
+- name: NEXT_PUBLIC_BACKEND_URL
   value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net"
 
 # -------------------------------------------------------------
@@ -63,7 +63,7 @@ stages:
 
     - script: |
         set -ex
-        echo "NEXT_PUBLIC_API_URL=$(NEXT_PUBLIC_API_URL)" > .env.local
+        echo "NEXT_PUBLIC_BACKEND_URL=$(NEXT_PUBLIC_BACKEND_URL)" > .env.local
         export NEXT_OUTPUT=standalone
         npm ci
         npm run build
@@ -145,7 +145,7 @@ stages:
               PORT=8080 \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               WEBSITE_RUN_FROM_PACKAGE=1 \
-              NEXT_PUBLIC_API_URL="$(NEXT_PUBLIC_API_URL)" >/dev/null
+              NEXT_PUBLIC_BACKEND_URL="$(NEXT_PUBLIC_BACKEND_URL)" >/dev/null
 
           az webapp config set \
             --name "$app_name" \
