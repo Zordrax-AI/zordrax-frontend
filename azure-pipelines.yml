@@ -160,19 +160,14 @@ stages:
         appName: "$(appName)-$(environment)"
         package: "$(Pipeline.Workspace)/drop/$(appName).zip"
 
+    - script: |
+        echo "Waiting 60 seconds for App Service warm-up..."
+        sleep 60
+      displayName: "Warm-up delay before health-check"
+
     - bash: |
         host="$(appName)-$(environment).azurewebsites.net"
-        echo "Health check: https://$host"
-        for i in {1..10}; do
-          code=$(curl -s -o /dev/null -w "%{http_code}" "https://$host" || true)
-          if [[ $code == 2* || $code == 3* ]]; then
-            echo "✅ $host OK ($code)"
-            exit 0
-          fi
-          echo "Attempt $i failed ($code)... retrying"
-          sleep 10
-        done
-        echo "❌ Health check failed"
-        exit 1
+        echo "Running health-check against $host"
+        curl --retry 10 --retry-delay 10 --max-time 10 --fail -I "https://$host"
       displayName: "Health Check Frontend"
 
