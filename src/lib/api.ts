@@ -44,11 +44,15 @@ async function handleResponse(res: Response) {
   }
 }
 
-export async function postDeployment(path: string): Promise<DeploymentResponse> {
+export async function postDeployment(
+  path: string,
+  payload: Record<string, unknown> = {}
+): Promise<DeploymentResponse> {
   const url = buildUrl(path);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
   return handleResponse(res);
 }
@@ -57,4 +61,3 @@ export async function fetchBuildStatus(runId: number): Promise<BuildStatusRespon
   const res = await fetch(buildUrl(`/devops/status/${runId}`));
   return handleResponse(res);
 }
-
