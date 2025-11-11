@@ -128,12 +128,12 @@ stages:
 
     # ✅ Deploy the prebuilt artifact (contains node_modules + .next)
     - task: AzureWebApp@1
-      displayName: "Deploy prebuilt artifact (Next.js)"
+      displayName: "Deploy prebuilt standalone Next.js bundle"
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         appType: webAppLinux
         appName: "$(appName)-$(environment)"
-        package: "$(Pipeline.Workspace)/drop/$(appName).zip"
+        package: "$(System.DefaultWorkingDirectory)/.next/standalone"
         enableCustomDeployment: true
         deploymentMethod: runFromPackage
 
