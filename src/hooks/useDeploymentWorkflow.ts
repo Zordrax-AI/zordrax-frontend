@@ -25,7 +25,23 @@ function extractRunId(data: DeploymentResponse): number | null {
   return null;
 }
 
-export function useDeploymentWorkflow(endpoint: string) {
+const defaultPayload = {
+  requirements: {
+    environment: "dev",
+    region: "westeurope",
+    description: "Triggered from frontend deploy console.",
+  },
+  onboarding: {
+    project_name: "zordrax-frontend",
+    owner: "deploy-console",
+    description: "Triggered from frontend deploy console.",
+  },
+};
+
+export function useDeploymentWorkflow(
+  endpoint: string,
+  payload: Record<string, unknown> = defaultPayload
+) {
   const [status, setStatus] = useState<StatusState>(defaultStatus);
   const [loading, setLoading] = useState(false);
   const [recommendations, setRecommendations] = useState<unknown | null>(null);
@@ -41,7 +57,7 @@ export function useDeploymentWorkflow(endpoint: string) {
     setBuildState(null);
     setPollWarning(null);
     try {
-      const data = await postDeployment(endpoint);
+      const data = await postDeployment(endpoint, payload);
       if (!data) {
         throw new Error("Invalid response from API");
       }
@@ -125,4 +141,3 @@ export function useDeploymentWorkflow(endpoint: string) {
     handleDeploy,
   };
 }
-
