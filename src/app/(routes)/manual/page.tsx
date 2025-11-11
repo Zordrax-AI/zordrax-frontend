@@ -8,7 +8,7 @@ import { useDeploymentWorkflow } from "@/hooks/useDeploymentWorkflow";
 
 export default function ManualDeployPage() {
   const { status, loading, runId, buildState, pollWarning, recommendations, handleDeploy } =
-    useDeploymentWorkflow("/onboarding/manual-deploy");
+    useDeploymentWorkflow("/onboarding/manual");
 
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-8 px-6 py-12">
@@ -16,8 +16,8 @@ export default function ManualDeployPage() {
         <p className="text-sm font-semibold uppercase tracking-wide text-gray-500">Manual controls</p>
         <h1 className="text-3xl font-bold text-gray-900">Manual Deployment</h1>
         <p className="text-gray-600">
-          This page sends <code className="rounded bg-gray-100 px-2 py-0.5 text-xs">POST /onboarding/manual-deploy</code>{" "}
-          and monitors the run if a DevOps build ID is returned.
+          This page sends <code className="rounded bg-gray-100 px-2 py-0.5 text-xs">POST /onboarding/manual</code> and
+          monitors the run if a DevOps build ID is returned.
         </p>
       </header>
 

@@ -49,7 +49,7 @@ All requests are sent to `NEXT_PUBLIC_BACKEND_URL` with the following paths:
 | Route     | HTTP method | Description                                 |
 | --------- | ----------- | ------------------------------------------- |
 | `/onboarding/ai-and-deploy` | POST | Trigger AI deploy flow (Wizard).          |
-| `/onboarding/manual-deploy` | POST | Trigger manual deployment flow.          |
+| `/onboarding/manual` | POST | Trigger manual deployment flow.          |
 | `/devops/status/{run_id}`   | GET  | Poll build state when a `run_id` is returned. |
 
 ### Behavior

@@ -82,7 +82,7 @@ export function useDeploymentWorkflow(
     } finally {
       setLoading(false);
     }
-  }, [endpoint]);
+  }, [endpoint, payload]);
 
   useEffect(() => {
     if (!runId) {
