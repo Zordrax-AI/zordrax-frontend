@@ -43,6 +43,10 @@ stages:
     - checkout: self
       persistCredentials: true
 
+    - script: |
+        mkdir -p "$(Pipeline.Workspace)/.npm"
+      displayName: "Prep npm cache directory"
+
     # Cache npm packages
     - task: Cache@2
       displayName: "Cache npm packages"
@@ -50,7 +54,7 @@ stages:
         key: 'npm | "$(Agent.OS)" | package-lock.json'
         restoreKeys: |
           npm | "$(Agent.OS)"
-        path: ~/.npm
+        path: "$(Pipeline.Workspace)/.npm"
 
     - task: NodeTool@0
       inputs:
@@ -63,6 +67,8 @@ stages:
         npm ci
         npm run build
       displayName: "Build Next.js frontend"
+      env:
+        NPM_CONFIG_CACHE: "$(Pipeline.Workspace)/.npm"
 
     - task: ArchiveFiles@2
       displayName: "Package artifact"
