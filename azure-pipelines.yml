@@ -31,6 +31,7 @@ variables:
 # -------------------------------------------------------------
 # Stage 1: Build
 # -------------------------------------------------------------
+stages:
 - stage: Build
   displayName: "Build Frontend"
   timeoutInMinutes: 120  # ⏱️ allow up to 2 hours
