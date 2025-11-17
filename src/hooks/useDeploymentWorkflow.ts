@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchBuildStatus, postDeployment, DeploymentResponse } from "@/lib/api";
 
-// ✅ NEW IMPORT
+// Store last session id for the merge / governance / deploy console pages
 import { saveLastSessionId } from "@/hooks/useOnboardingSession";
 
 type StatusVariant = "idle" | "info" | "success" | "error";
