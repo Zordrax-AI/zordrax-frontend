@@ -7,14 +7,28 @@ if (!API_BASE) {
 export type PipelineRun = {
   run_id?: number;
   web_url?: string;
+  status?: string;
+  result?: string;
+};
+
+export type RecommendationBundle = {
+  summary?: string | null;
+  manifest_id?: string | null;
+  manifest_path?: string | null;
+  manifest?: unknown;
+  onboarding?: unknown;
 };
 
 export type DeploymentResponse = {
   status?: string;
   message?: string;
+  recommendation?: string | null;
   pipeline_run?: PipelineRun;
   run_id?: number;
-  recommendations?: unknown;
+  recommendations?: RecommendationBundle;
+  onboarding?: unknown;
+  manifest?: unknown;
+  session_id?: string | null;
 };
 
 export type BuildStatusResponse = {

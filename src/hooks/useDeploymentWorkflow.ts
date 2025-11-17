@@ -81,13 +81,19 @@ export function useDeploymentWorkflow(
       const newRunId = extractRunId(data);
       setRunId(newRunId);
 
-      // --------------------------------------------------------
-      // ✅ NEW BLOCK — store session_id for merge/governance pages
-      if (data.session_id && typeof data.session_id === "string") {
-        saveLastSessionId(data.session_id);
-      }
-      // --------------------------------------------------------
+      // -------------------------------------------------------------------
+      // ⭐ Handle ALL possible session_id locations from the backend
+      const raw: any = data;
 
+      const sessionId =
+        raw.session_id ??
+        raw.onboarding?.session_id ??
+        raw.recommendations?.onboarding?.session_id;
+
+      if (sessionId && typeof sessionId === "string") {
+        saveLastSessionId(sessionId);
+      }
+      // -------------------------------------------------------------------
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unexpected deployment error.";
