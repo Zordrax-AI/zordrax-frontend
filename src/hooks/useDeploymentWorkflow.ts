@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchBuildStatus, postDeployment, DeploymentResponse } from "@/lib/api";
 
+// ✅ NEW IMPORT
+import { saveLastSessionId } from "@/hooks/useOnboardingSession";
+
 type StatusVariant = "idle" | "info" | "success" | "error";
 
 type StatusState = {
@@ -56,6 +59,7 @@ export function useDeploymentWorkflow(
     setRecommendations(null);
     setBuildState(null);
     setPollWarning(null);
+
     try {
       const data = await postDeployment(endpoint, payload);
       if (!data) {
@@ -64,16 +68,26 @@ export function useDeploymentWorkflow(
 
       const message = data.message || "Deployment triggered successfully.";
       const linkHref = data.pipeline_run?.web_url;
+
       setStatus({
         variant: "success",
         message,
         linkHref,
         linkLabel: linkHref ? "View build details" : undefined,
       });
+
       setRecommendations(data.recommendations ?? null);
 
       const newRunId = extractRunId(data);
       setRunId(newRunId);
+
+      // --------------------------------------------------------
+      // ✅ NEW BLOCK — store session_id for merge/governance pages
+      if (data.session_id && typeof data.session_id === "string") {
+        saveLastSessionId(data.session_id);
+      }
+      // --------------------------------------------------------
+
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unexpected deployment error.";
@@ -107,7 +121,11 @@ export function useDeploymentWorkflow(
         if (result.status === "completed") {
           const passed = result.result === "succeeded";
           setBuildState(
-            passed ? "Build succeeded" : result.result ? `Build ${result.result}` : "Build completed"
+            passed
+              ? "Build succeeded"
+              : result.result
+              ? `Build ${result.result}`
+              : "Build completed"
           );
           pollingActive.current = false;
         } else if (result.status === "inProgress") {
