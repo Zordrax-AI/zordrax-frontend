@@ -40,11 +40,20 @@ stages:
     pool:
       vmImage: "ubuntu-latest"
     steps:
+
     - checkout: self
       persistCredentials: true
 
+    # -----------------------------------------------------------------
+    # FIX: Remove stale Next.js build artifacts before building
+    # -----------------------------------------------------------------
     - script: |
-        mkdir -p "$(Pipeline.Workspace)/.npm"
+        echo "Cleaning stale Next.js cache..."
+        rm -rf .next
+        rm -rf .next/cache
+      displayName: "Clear Next.js build cache"
+
+    - script: mkdir -p "$(Pipeline.Workspace)/.npm"
       displayName: "Prep npm cache directory"
 
     # Cache npm packages
@@ -172,4 +181,3 @@ stages:
           echo "Health check warning: unable to verify https://$host but continuing pipeline."
         fi
       displayName: "Health Check Frontend (non-blocking)"
-
