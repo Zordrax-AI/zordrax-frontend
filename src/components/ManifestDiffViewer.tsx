@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   fetchManifest,
   acceptMergedManifest,
-  ManifestData,
 } from "@/lib/onboardingConsoleApi";
 
 type ManifestDiffViewerProps = {
@@ -12,9 +11,9 @@ type ManifestDiffViewerProps = {
 };
 
 export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
-  const [aiManifest, setAiManifest] = useState<ManifestData | null>(null);
-  const [manualManifest, setManualManifest] = useState<ManifestData | null>(null);
-  const [mergedManifest, setMergedManifest] = useState<ManifestData | null>(null);
+  const [aiManifest, setAiManifest] = useState<any | null>(null);
+  const [manualManifest, setManualManifest] = useState<any | null>(null);
+  const [mergedManifest, setMergedManifest] = useState<any | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,10 +31,9 @@ export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
         setManualManifest(manual);
         setMergedManifest({ ...(ai || {}), ...(manual || {}) });
         setError(null);
-      } catch (err: unknown) {
+      } catch (err: any) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : "Failed to load manifests";
-        setError(message || "Failed to load manifests");
+        setError(err.message || "Failed to load manifests");
       }
     }
     load();
@@ -50,9 +48,8 @@ export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
     try {
       const res = await acceptMergedManifest(sessionId, mergedManifest);
       setMessage(res.message || "Merged manifest saved.");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to save merged manifest.";
-      setMessage(message || "Failed to save merged manifest.");
+    } catch (err: any) {
+      setMessage(err.message || "Failed to save merged manifest.");
     } finally {
       setSaving(false);
     }
@@ -99,9 +96,9 @@ export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
 
 type ManifestColumnProps = {
   title: string;
-  manifest: ManifestData | null;
+  manifest: any;
   editable?: boolean;
-  onChange?: (value: ManifestData) => void;
+  onChange?: (value: any) => void;
 };
 
 function ManifestColumn({
@@ -125,7 +122,7 @@ function ManifestColumn({
           editable && onChange
             ? (e) => {
                 try {
-                  const parsed = JSON.parse(e.target.value) as ManifestData;
+                  const parsed = JSON.parse(e.target.value);
                   onChange(parsed);
                 } catch {
                   // ignore parse errors while typing

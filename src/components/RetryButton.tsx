@@ -16,9 +16,8 @@ export function RetryButton({ sessionId }: RetryButtonProps) {
     try {
       const res = await retryDeployment(sessionId);
       setMessage(res.message || "Retry triggered.");
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Retry failed.";
-      setMessage(message || "Retry failed.");
+    } catch (err: any) {
+      setMessage(err.message || "Retry failed.");
     } finally {
       setLoading(false);
     }

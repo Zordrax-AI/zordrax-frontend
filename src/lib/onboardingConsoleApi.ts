@@ -1,34 +1,39 @@
-// ============================================================================
-//  v5 Onboarding Console API – Strict Typed, No `any`, No empty interfaces
-// ============================================================================
-
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_ONBOARDING_API_URL ?? "http://localhost:8000/api/v5";
+  process.env.NEXT_PUBLIC_ONBOARDING_API_URL ?? "http://localhost:8000";
 
-// ---------------------------------------------------------------------------
-// Generic JSON-safe types (strict-mode compatible)
-// ---------------------------------------------------------------------------
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = `${API_BASE_URL}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options && options.headers),
+    },
+    cache: "no-store",
+  });
 
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonObject
-  | JsonArray;
+  if (!res.ok) {
+    let message = `Request failed with status ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body && typeof body.detail === "string") {
+        message = body.detail;
+      } else if (body && body.message) {
+        message = body.message;
+      }
+    } catch {
+      // ignore JSON parse errors
+    }
+    throw new Error(message);
+  }
 
-export interface JsonObject {
-  [key: string]: JsonValue;
+  if (res.status === 204) {
+    // no content
+    return undefined as unknown as T;
+  }
+
+  return (await res.json()) as T;
 }
-
-// use type alias → avoids empty-interface rule
-export type JsonArray = JsonValue[];
-
-export type ManifestData = JsonObject;
-
-// ---------------------------------------------------------------------------
-// Session, governance & pipeline types
-// ---------------------------------------------------------------------------
 
 export type SessionStatus = "pending" | "running" | "failed" | "succeeded";
 
@@ -62,107 +67,51 @@ export type BuildRun = {
 };
 
 export type SessionDetail = SessionSummary & {
-  ai_manifest?: ManifestData;
-  manual_manifest?: ManifestData;
-  merged_manifest?: ManifestData;
+  ai_manifest?: any;
+  manual_manifest?: any;
+  merged_manifest?: any;
   governance_status?: "pending" | "running" | "failed" | "passed";
   governance_issues?: GovernanceIssue[];
   runs?: BuildRun[];
 };
 
-// ---------------------------------------------------------------------------
-// Helper: Typed fetch wrapper
-// ---------------------------------------------------------------------------
-
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
-
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
-
-  if (!res.ok) {
-    let message = `Request failed with status ${res.status}`;
-    try {
-      const body = await res.json();
-      if (typeof body?.detail === "string") message = body.detail;
-      else if (typeof body?.message === "string") message = body.message;
-    } catch {
-      /* ignore json parse errors */
-    }
-    throw new Error(message);
-  }
-
-  if (res.status === 204) {
-    // No content
-    return undefined as unknown as T;
-  }
-
-  return (await res.json()) as T;
-}
-
-// ---------------------------------------------------------------------------
-// API: Sessions
-// ---------------------------------------------------------------------------
-
 export async function fetchSessions(): Promise<SessionSummary[]> {
   return request<SessionSummary[]>("/onboarding/sessions");
 }
 
-export async function fetchSession(
-  sessionId: string
-): Promise<SessionDetail> {
-  return request<SessionDetail>(
-    `/onboarding/sessions/${encodeURIComponent(sessionId)}`
-  );
+export async function fetchSession(sessionId: string): Promise<SessionDetail> {
+  return request<SessionDetail>(`/onboarding/sessions/${encodeURIComponent(sessionId)}`);
 }
-
-// ---------------------------------------------------------------------------
-// API: Manifest
-// ---------------------------------------------------------------------------
 
 export async function fetchManifest(
   sessionId: string,
   source: "ai" | "manual" | "merged"
-): Promise<ManifestData> {
-  return request<ManifestData>(
+): Promise<any> {
+  return request<any>(
     `/onboarding/sessions/${encodeURIComponent(sessionId)}/manifest?source=${source}`
   );
 }
 
 export async function acceptMergedManifest(
   sessionId: string,
-  mergedManifest: ManifestData
+  mergedManifest: any
 ): Promise<{ status: string; message?: string }> {
   return request<{ status: string; message?: string }>(
     `/onboarding/sessions/${encodeURIComponent(sessionId)}/manifest/accept`,
     {
       method: "POST",
-      body: JSON.stringify({ merged_manifest: mergedManifest }),
+      body: JSON.stringify({ manifest: mergedManifest }),
     }
   );
 }
-
-// ---------------------------------------------------------------------------
-// API: Governance
-// ---------------------------------------------------------------------------
 
 export async function fetchGovernanceResults(
   sessionId: string
 ): Promise<GovernanceIssue[]> {
   return request<GovernanceIssue[]>(
-    `/onboarding/sessions/${encodeURIComponent(sessionId)}/governance`
+    `/governance/results?session_id=${encodeURIComponent(sessionId)}`
   );
 }
-
-// ---------------------------------------------------------------------------
-// API: Retry deployment
-// ---------------------------------------------------------------------------
 
 export async function retryDeployment(
   sessionId: string

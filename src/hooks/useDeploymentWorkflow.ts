@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  fetchBuildStatus,
-  postDeployment,
-  DeploymentResponse,
-} from "@/lib/api";
+import { fetchBuildStatus, postDeployment, DeploymentResponse } from "@/lib/api";
 
+// Store last session id for the merge / governance / deploy console pages
 import { saveLastSessionId } from "@/hooks/useOnboardingSession";
 
 type StatusVariant = "idle" | "info" | "success" | "error";
@@ -25,16 +22,12 @@ function extractRunId(data: DeploymentResponse): number | null {
   if (typeof data.pipeline_run?.run_id === "number") {
     return data.pipeline_run.run_id;
   }
-
-  // Some mocked pipelines return `run_id` top-level in v5 mock mode
   if (typeof data.run_id === "number") {
     return data.run_id;
   }
-
   return null;
 }
 
-// Default payload used by Deploy Console
 const defaultPayload = {
   requirements: {
     environment: "dev",
@@ -58,12 +51,8 @@ export function useDeploymentWorkflow(
   const [runId, setRunId] = useState<number | null>(null);
   const [buildState, setBuildState] = useState<string | null>(null);
   const [pollWarning, setPollWarning] = useState<string | null>(null);
-
   const pollingActive = useRef(false);
 
-  // ---------------------------------------------------------------------------
-  //                              DEPLOY HANDLER
-  // ---------------------------------------------------------------------------
   const handleDeploy = useCallback(async () => {
     setLoading(true);
     setStatus({ variant: "info", message: "Deploying..." });
@@ -73,7 +62,6 @@ export function useDeploymentWorkflow(
 
     try {
       const data = await postDeployment(endpoint, payload);
-
       if (!data) {
         throw new Error("Invalid response from API");
       }
@@ -88,31 +76,27 @@ export function useDeploymentWorkflow(
         linkLabel: linkHref ? "View build details" : undefined,
       });
 
-      // AI mode returns recommendations; manual mode does not
       setRecommendations(data.recommendations ?? null);
 
-      // run_id comes from Azure DevOps
       const newRunId = extractRunId(data);
       setRunId(newRunId);
 
-      // ---------------------------------------------------------------------
-      // ⭐⭐ 100% CORRECT V5 LOGIC: session_id ALWAYS top-level
-      // ---------------------------------------------------------------------
-      const sessionId = data.session_id;
+      // -------------------------------------------------------------------
+      // ⭐ Handle ALL possible session_id locations from the backend
+      const raw: any = data;
 
-      if (!sessionId || typeof sessionId !== "string") {
-        throw new Error("Backend did not return a valid session_id");
+      const sessionId =
+        raw.session_id ??
+        raw.onboarding?.session_id ??
+        raw.recommendations?.onboarding?.session_id;
+
+      if (sessionId && typeof sessionId === "string") {
+        saveLastSessionId(sessionId);
       }
-
-      // Save for downstream pages (merge / governance / history)
-      saveLastSessionId(sessionId);
-
-    } catch (error: unknown) {
+      // -------------------------------------------------------------------
+    } catch (error) {
       const message =
-        error instanceof Error
-          ? error.message
-          : "Unexpected deployment error.";
-
+        error instanceof Error ? error.message : "Unexpected deployment error.";
       setStatus({ variant: "error", message });
       setRunId(null);
     } finally {
@@ -120,9 +104,6 @@ export function useDeploymentWorkflow(
     }
   }, [endpoint, payload]);
 
-  // ---------------------------------------------------------------------------
-  //                                POLLING
-  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!runId) {
       pollingActive.current = false;
@@ -134,7 +115,6 @@ export function useDeploymentWorkflow(
 
     const poll = async () => {
       if (!pollingActive.current) return;
-
       try {
         const result = await fetchBuildStatus(runId);
         if (cancelled) return;
@@ -146,7 +126,6 @@ export function useDeploymentWorkflow(
 
         if (result.status === "completed") {
           const passed = result.result === "succeeded";
-
           setBuildState(
             passed
               ? "Build succeeded"
@@ -154,37 +133,28 @@ export function useDeploymentWorkflow(
               ? `Build ${result.result}`
               : "Build completed"
           );
-
           pollingActive.current = false;
         } else if (result.status === "inProgress") {
           setBuildState("Build running...");
         } else {
           setBuildState(`Status: ${result.status}`);
         }
-
         setPollWarning(null);
-      } catch (error: unknown) {
+      } catch (error) {
         const message =
-          error instanceof Error
-            ? error.message
-            : "Unable to poll build status.";
-
+          error instanceof Error ? error.message : "Unable to poll build status.";
         setPollWarning(message);
       }
     };
 
     poll();
     const interval = setInterval(poll, 20000);
-
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
   }, [runId]);
 
-  // ---------------------------------------------------------------------------
-  //                                  RETURN
-  // ---------------------------------------------------------------------------
   return {
     status,
     loading,

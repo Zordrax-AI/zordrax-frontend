@@ -17,9 +17,8 @@ export function SessionHistoryTable() {
         setSessions(data);
         setError(null);
       })
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : "Failed to load sessions";
-        setError(message || "Failed to load sessions");
+      .catch((err: any) => {
+        setError(err.message || "Failed to load sessions");
       })
       .finally(() => setLoading(false));
   }, []);

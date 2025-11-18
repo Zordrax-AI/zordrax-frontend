@@ -36,9 +36,8 @@ export function useOnboardingSession(initialSessionId?: string) {
         saveLastSessionId(data.session_id);
         setError(null);
       })
-      .catch((err: unknown) => {
-        const message = err instanceof Error ? err.message : "Failed to load session";
-        setError(message || "Failed to load session");
+      .catch((err: any) => {
+        setError(err.message || "Failed to load session");
         setSession(null);
       })
       .finally(() => setLoading(false));
