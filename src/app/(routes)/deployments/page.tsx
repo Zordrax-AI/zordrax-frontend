@@ -2,7 +2,7 @@
 
 import { ConsoleShell } from "@/components/layout/ConsoleShell";
 import { useOnboardingSession } from "@/hooks/useOnboardingSession";
-import DeploymentTimeline from "@/components/DeploymentTimeline";
+import { DeploymentTimeline } from "@/components/DeploymentTimeline";
 
 
 export default function DeploymentsPage() {

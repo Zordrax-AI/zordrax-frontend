@@ -3,10 +3,10 @@
 import { useParams } from "next/navigation";
 import { ConsoleShell } from "@/components/layout/ConsoleShell";
 import { useOnboardingSession } from "@/hooks/useOnboardingSession";
-import ManifestDiffViewer from "@/components/ManifestDiffViewer";
-import GovernanceResultPanel from "@/components/GovernanceResultPanel";
-import DeploymentTimeline from "@/components/DeploymentTimeline";
-import RetryButton from "@/components/RetryButton";
+import { ManifestDiffViewer } from "@/components/ManifestDiffViewer";
+import { GovernanceResultPanel } from "@/components/GovernanceResultPanel";
+import { DeploymentTimeline } from "@/components/DeploymentTimeline";
+import { RetryButton } from "@/components/RetryButton";
 
 export default function SessionDetailPage() {
   const params = useParams<{ sessionId: string }>();

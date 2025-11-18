@@ -1,7 +1,7 @@
 "use client";
 
 import { ConsoleShell } from "@/components/layout/ConsoleShell";
-import SessionHistoryTable from "@/components/SessionHistoryTable";
+import { SessionHistoryTable } from "@/components/SessionHistoryTable";
 
 
 export default function HistoryPage() {
