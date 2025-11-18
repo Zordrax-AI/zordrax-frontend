@@ -37,6 +37,23 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export type SessionStatus = "pending" | "running" | "failed" | "succeeded";
 
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonObject
+  | JsonArray;
+
+export interface JsonObject {
+  [key: string]: JsonValue;
+}
+
+export interface JsonArray extends Array<JsonValue> {}
+
+export type ManifestData = JsonObject;
+
+
 export type SessionSummary = {
   session_id: string;
   created_at: string;
@@ -67,9 +84,9 @@ export type BuildRun = {
 };
 
 export type SessionDetail = SessionSummary & {
-  ai_manifest?: any;
-  manual_manifest?: any;
-  merged_manifest?: any;
+  ai_manifest?: ManifestData;
+  manual_manifest?: ManifestData;
+  merged_manifest?: ManifestData;
   governance_status?: "pending" | "running" | "failed" | "passed";
   governance_issues?: GovernanceIssue[];
   runs?: BuildRun[];
@@ -86,15 +103,15 @@ export async function fetchSession(sessionId: string): Promise<SessionDetail> {
 export async function fetchManifest(
   sessionId: string,
   source: "ai" | "manual" | "merged"
-): Promise<any> {
-  return request<any>(
+): Promise<ManifestData> {
+  return request<ManifestData>(
     `/onboarding/sessions/${encodeURIComponent(sessionId)}/manifest?source=${source}`
   );
 }
 
 export async function acceptMergedManifest(
   sessionId: string,
-  mergedManifest: any
+  mergedManifest: ManifestData
 ): Promise<{ status: string; message?: string }> {
   return request<{ status: string; message?: string }>(
     `/onboarding/sessions/${encodeURIComponent(sessionId)}/manifest/accept`,

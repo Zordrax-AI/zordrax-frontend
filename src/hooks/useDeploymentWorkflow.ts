@@ -83,7 +83,7 @@ export function useDeploymentWorkflow(
 
       // -------------------------------------------------------------------
       // ⭐ Handle ALL possible session_id locations from the backend
-      const raw: any = data;
+      const raw: DeploymentResponse = data;
 
       const sessionId =
         raw.session_id ??
