@@ -1,6 +1,6 @@
 # =============================================================
-# Zordrax-Analytica | Frontend CI/CD (Codex Stable)
-# Build → Package → Deploy | Optimized for Azure Pipelines
+# Zordrax-Analytica | Frontend CI/CD (Stable)
+# Build → Package → Deploy
 # =============================================================
 
 trigger:
@@ -25,29 +25,36 @@ variables:
   value: "zordrax-linux-plan"
 - name: LOCATION
   value: "westeurope"
-- name: NEXT_PUBLIC_BACKEND_URL
-  value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net"
+- name: NEXT_PUBLIC_ONBOARDING_API_URL
+  value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net/api/v5"
 
-# -------------------------------------------------------------
+# =============================================================
 # Stage 1: Build
-# -------------------------------------------------------------
+# =============================================================
 stages:
 - stage: Build
-  displayName: "Build Frontend"
+  displayName: "Build Frontend v5"
   jobs:
   - job: Build
     timeoutInMinutes: 120
     pool:
       vmImage: "ubuntu-latest"
     steps:
+
     - checkout: self
       persistCredentials: true
 
+    # CLEAN ANY OLD NEXT.JS CACHE
     - script: |
-        mkdir -p "$(Pipeline.Workspace)/.npm"
+        echo "Cleaning stale Next.js build cache..."
+        rm -rf .next
+        rm -rf .next/cache
+      displayName: "Clear Next.js build cache"
+
+    # PREP NPM CACHE
+    - script: mkdir -p "$(Pipeline.Workspace)/.npm"
       displayName: "Prep npm cache directory"
 
-    # Cache npm packages
     - task: Cache@2
       displayName: "Cache npm packages"
       inputs:
@@ -61,34 +68,42 @@ stages:
         versionSpec: "20.x"
       displayName: "Install Node.js"
 
+    # BUILD
     - script: |
         set -ex
-        echo "NEXT_PUBLIC_BACKEND_URL=$(NEXT_PUBLIC_BACKEND_URL)" > .env.local
+        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" > .env.local
         export NEXT_OUTPUT=standalone
         npm ci
         npm run build
-      displayName: "Build Next.js frontend (standalone forced)"
+      displayName: "Build Next.js frontend (standalone mode)"
       env:
         NPM_CONFIG_CACHE: "$(Pipeline.Workspace)/.npm"
 
+    # PACKAGE STANDALONE OUTPUT
     - script: |
         set -ex
         rm -rf out
         mkdir -p out
+
+        # Next.js standalone bundle
         cp -R .next/standalone/. out/
         mkdir -p out/.next
         cp -R .next/static out/.next/static
+
+        # Public folder
         if [ -d public ]; then
           cp -R public out/public
         fi
+
+        # include package.json and lock file
         cp package.json out/package.json
         if [ -f package-lock.json ]; then
           cp package-lock.json out/package-lock.json
         fi
-      displayName: "Stage standalone bundle"
+      displayName: "Package standalone bundle"
 
     - task: ArchiveFiles@2
-      displayName: "Package artifact"
+      displayName: "Archive artifact"
       inputs:
         rootFolderOrFile: "$(System.DefaultWorkingDirectory)/out"
         includeRootFolder: false
@@ -99,9 +114,9 @@ stages:
     - publish: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
       artifact: drop
 
-# -------------------------------------------------------------
+# =============================================================
 # Stage 2: Deploy
-# -------------------------------------------------------------
+# =============================================================
 - stage: Deploy
   displayName: "Deploy Frontend to Azure"
   dependsOn: Build
@@ -111,6 +126,7 @@ stages:
     pool:
       vmImage: "ubuntu-latest"
     steps:
+
     - download: current
       artifact: drop
 
@@ -122,12 +138,17 @@ stages:
         scriptLocation: inlineScript
         inlineScript: |
           set -ex
+
+          # RESOURCE GROUP
           az group create --name "$(RESOURCE_GROUP)" --location "$(LOCATION)" >/dev/null
+
+          # PLAN
           az appservice plan create \
             --name "$(PLAN_NAME)" \
             --resource-group "$(RESOURCE_GROUP)" \
             --is-linux --sku B1 >/dev/null || true
 
+          # APP
           app_name="$(appName)-$(environment)"
           runtime="NODE|20-lts"
 
@@ -137,6 +158,7 @@ stages:
             --plan "$(PLAN_NAME)" \
             --runtime "$runtime" >/dev/null || true
 
+          # ENV VARS
           az webapp config appsettings set \
             --name "$app_name" \
             --resource-group "$(RESOURCE_GROUP)" \
@@ -145,7 +167,7 @@ stages:
               PORT=8080 \
               SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               WEBSITE_RUN_FROM_PACKAGE=1 \
-              NEXT_PUBLIC_BACKEND_URL="$(NEXT_PUBLIC_BACKEND_URL)" >/dev/null
+              NEXT_PUBLIC_ONBOARDING_API_URL="$(NEXT_PUBLIC_ONBOARDING_API_URL)" >/dev/null
 
           az webapp config set \
             --name "$app_name" \
@@ -153,7 +175,7 @@ stages:
             --startup-file "node server.js" >/dev/null
 
     - task: AzureWebApp@1
-      displayName: "Deploy packaged frontend"
+      displayName: "Deploy frontend package"
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         appType: webAppLinux
@@ -161,15 +183,12 @@ stages:
         package: "$(Pipeline.Workspace)/drop/$(appName).zip"
 
     - script: |
-        echo "Waiting 60 seconds for App Service warm-up..."
+        echo "Waiting 60 seconds for warm-up..."
         sleep 60
-      displayName: "Warm-up delay before health-check"
+      displayName: "Warm-up delay"
 
     - bash: |
         host="$(appName)-$(environment).azurewebsites.net"
-        echo "Running health-check against $host (best-effort)"
-        if ! curl --retry 5 --retry-delay 10 --max-time 10 --fail -I "https://$host"; then
-          echo "Health check warning: unable to verify https://$host but continuing pipeline."
-        fi
-      displayName: "Health Check Frontend (non-blocking)"
-
+        echo "Checking $host"
+        curl --retry 5 --retry-delay 10 --max-time 10 --fail -I "https://$host" || echo "Warning: health check failed (non-blocking)"
+      displayName: "Health check"

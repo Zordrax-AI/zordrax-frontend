@@ -25,9 +25,10 @@ export function GovernanceResultPanel({ sessionId }: GovernanceResultPanelProps)
         if (cancelled) return;
         setIssues(data);
         setError(null);
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (cancelled) return;
-        setError(err.message || "Failed to load governance results.");
+        const message = err instanceof Error ? err.message : "Failed to load governance results.";
+        setError(message || "Failed to load governance results.");
       } finally {
         if (!cancelled) setLoading(false);
       }
