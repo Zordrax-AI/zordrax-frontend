@@ -1,6 +1,6 @@
 # =============================================================
-# Zordrax-Analytica | Frontend CI/CD (Stable)
-# Build → Package → Deploy
+# Zordrax Frontend CI/CD
+# Correct Node.js → Next.js 15 Standalone Deployment
 # =============================================================
 
 trigger:
@@ -29,102 +29,66 @@ variables:
   value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net/api/v5"
 
 # =============================================================
-# Stage 1: Build
+# Build Stage
 # =============================================================
 stages:
 - stage: Build
-  displayName: "Build Frontend v5"
   jobs:
-  - job: Build
+  - job: BuildFrontend
     timeoutInMinutes: 120
-    pool:
-      vmImage: "ubuntu-latest"
     steps:
 
     - checkout: self
-      persistCredentials: true
-
-    # CLEAN ANY OLD NEXT.JS CACHE
-    - script: |
-        echo "Cleaning stale Next.js build cache..."
-        rm -rf .next
-        rm -rf .next/cache
-      displayName: "Clear Next.js build cache"
-
-    # PREP NPM CACHE
-    - script: mkdir -p "$(Pipeline.Workspace)/.npm"
-      displayName: "Prep npm cache directory"
-
-    - task: Cache@2
-      displayName: "Cache npm packages"
-      inputs:
-        key: 'npm | "$(Agent.OS)" | package-lock.json'
-        restoreKeys: |
-          npm | "$(Agent.OS)"
-        path: "$(Pipeline.Workspace)/.npm"
 
     - task: NodeTool@0
       inputs:
         versionSpec: "20.x"
-      displayName: "Install Node.js"
 
-    # BUILD
     - script: |
-        set -ex
         echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" > .env.local
         export NEXT_OUTPUT=standalone
         npm ci
         npm run build
-      displayName: "Build Next.js frontend (standalone mode)"
-      env:
-        NPM_CONFIG_CACHE: "$(Pipeline.Workspace)/.npm"
+      displayName: "Build Next.js (standalone mode)"
 
-    # PACKAGE STANDALONE OUTPUT
+    # PACKAGE CORRECT STANDALONE BUNDLE
     - script: |
-        set -ex
         rm -rf out
-        mkdir -p out
+        mkdir out
 
-        # Next.js standalone bundle
-        cp -R .next/standalone/. out/
+        # 1 — Copy standalone server bundle
+        cp -R .next/standalone/* out/
+
+        # 2 — Copy static files
         mkdir -p out/.next
         cp -R .next/static out/.next/static
 
-        # Public folder
-        if [ -d public ]; then
-          cp -R public out/public
-        fi
+        # 3 — Copy public
+        cp -R public out/public
 
-        # include package.json and lock file
+        # 4 — Copy env and package manifests
         cp package.json out/package.json
-        if [ -f package-lock.json ]; then
-          cp package-lock.json out/package-lock.json
-        fi
-      displayName: "Package standalone bundle"
+        cp package-lock.json out/package-lock.json
+      displayName: "Prepare deployment bundle"
 
     - task: ArchiveFiles@2
-      displayName: "Archive artifact"
       inputs:
-        rootFolderOrFile: "$(System.DefaultWorkingDirectory)/out"
+        rootFolderOrFile: "out"
         includeRootFolder: false
         archiveType: zip
-        archiveFile: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
+        archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
         replaceExistingArchive: true
 
-    - publish: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
+    - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
       artifact: drop
 
 # =============================================================
-# Stage 2: Deploy
+# Deploy Stage
 # =============================================================
 - stage: Deploy
-  displayName: "Deploy Frontend to Azure"
   dependsOn: Build
   jobs:
-  - job: Deploy
-    timeoutInMinutes: 120
-    pool:
-      vmImage: "ubuntu-latest"
+  - job: DeployFrontend
     steps:
 
     - download: current
@@ -139,56 +103,50 @@ stages:
         inlineScript: |
           set -ex
 
-          # RESOURCE GROUP
-          az group create --name "$(RESOURCE_GROUP)" --location "$(LOCATION)" >/dev/null
+          # Create RG
+          az group create -n "$(RESOURCE_GROUP)" -l "$(LOCATION)"
 
-          # PLAN
+          # Create plan
           az appservice plan create \
             --name "$(PLAN_NAME)" \
             --resource-group "$(RESOURCE_GROUP)" \
-            --is-linux --sku B1 >/dev/null || true
+            --sku B1 --is-linux || true
 
-          # APP
+          # Create App
           app_name="$(appName)-$(environment)"
-          runtime="NODE|20-lts"
-
           az webapp create \
             --name "$app_name" \
             --resource-group "$(RESOURCE_GROUP)" \
             --plan "$(PLAN_NAME)" \
-            --runtime "$runtime" >/dev/null || true
+            --runtime "NODE:20-lts" || true
 
           # ENV VARS
           az webapp config appsettings set \
-            --name "$app_name" \
             --resource-group "$(RESOURCE_GROUP)" \
+            --name "$app_name" \
             --settings \
               NODE_ENV=production \
               PORT=8080 \
-              SCM_DO_BUILD_DURING_DEPLOYMENT=false \
               WEBSITE_RUN_FROM_PACKAGE=1 \
-              NEXT_PUBLIC_ONBOARDING_API_URL="$(NEXT_PUBLIC_ONBOARDING_API_URL)" >/dev/null
+              NEXT_PUBLIC_ONBOARDING_API_URL="$(NEXT_PUBLIC_ONBOARDING_API_URL)"
 
+          # Startup command
           az webapp config set \
-            --name "$app_name" \
             --resource-group "$(RESOURCE_GROUP)" \
-            --startup-file "node server.js" >/dev/null
+            --name "$app_name" \
+            --startup-file "node server.js"
 
     - task: AzureWebApp@1
-      displayName: "Deploy frontend package"
+      displayName: "Deploy Frontend"
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         appType: webAppLinux
         appName: "$(appName)-$(environment)"
-        package: "$(Pipeline.Workspace)/drop/$(appName).zip"
+        package: "$(Pipeline.Workspace)/drop/frontend.zip"
 
-    - script: |
-        echo "Waiting 60 seconds for warm-up..."
-        sleep 60
-      displayName: "Warm-up delay"
+    - script: sleep 30
+      displayName: "Warm Up"
 
     - bash: |
-        host="$(appName)-$(environment).azurewebsites.net"
-        echo "Checking $host"
-        curl --retry 5 --retry-delay 10 --max-time 10 --fail -I "https://$host" || echo "Warning: health check failed (non-blocking)"
-      displayName: "Health check"
+        curl -I "https://$(appName)-$(environment).azurewebsites.net"
+      displayName: "Health Check"
