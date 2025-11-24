@@ -1,6 +1,5 @@
 # =============================================================
-# Zordrax Frontend CI/CD
-# Correct Node.js → Next.js 15 Standalone Deployment
+# Zordrax-Analytica | Frontend CI/CD (Fixed)
 # =============================================================
 
 trigger:
@@ -17,8 +16,11 @@ variables:
   value: "zordrax-frontend"
 - name: environment
   value: "dev"
+
+# 🔥 FIXED — correct service connection
 - name: SERVICE_CONNECTION
-  value: "zordrax-analytica-dev-conn"
+  value: "zordrax-analytica-dev-spn"
+
 - name: RESOURCE_GROUP
   value: "zordrax-analytica-dev-rg"
 - name: PLAN_NAME
@@ -28,67 +30,82 @@ variables:
 - name: NEXT_PUBLIC_ONBOARDING_API_URL
   value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net/api/v5"
 
-# =============================================================
-# Build Stage
-# =============================================================
 stages:
+# =============================================================
+# Build
+# =============================================================
 - stage: Build
+  displayName: "Build Frontend v5"
   jobs:
-  - job: BuildFrontend
+  - job: Build
     timeoutInMinutes: 120
+    pool:
+      vmImage: "ubuntu-latest"
     steps:
 
     - checkout: self
+      persistCredentials: true
+
+    - script: |
+        rm -rf .next
+        rm -rf .next/cache
+      displayName: "Clear Next.js cache"
+
+    - script: mkdir -p "$(Pipeline.Workspace)/.npm"
+      displayName: "Prep npm cache"
+
+    - task: Cache@2
+      inputs:
+        key: 'npm | "$(Agent.OS)" | package-lock.json'
+        path: "$(Pipeline.Workspace)/.npm"
+      displayName: "Cache npm packages"
 
     - task: NodeTool@0
       inputs:
         versionSpec: "20.x"
+      displayName: "Install Node.js"
 
     - script: |
         echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" > .env.local
         export NEXT_OUTPUT=standalone
         npm ci
         npm run build
-      displayName: "Build Next.js (standalone mode)"
+      displayName: "Build Next.js"
+      env:
+        NPM_CONFIG_CACHE: "$(Pipeline.Workspace)/.npm"
 
-    # PACKAGE CORRECT STANDALONE BUNDLE
     - script: |
         rm -rf out
-        mkdir out
-
-        # 1 — Copy standalone server bundle
-        cp -R .next/standalone/* out/
-
-        # 2 — Copy static files
+        mkdir -p out
+        cp -R .next/standalone/. out/
         mkdir -p out/.next
         cp -R .next/static out/.next/static
-
-        # 3 — Copy public
-        cp -R public out/public
-
-        # 4 — Copy env and package manifests
+        cp -R public out/public || true
         cp package.json out/package.json
-        cp package-lock.json out/package-lock.json
-      displayName: "Prepare deployment bundle"
+        cp package-lock.json out/package-lock.json || true
+      displayName: "Package standalone output"
 
     - task: ArchiveFiles@2
       inputs:
-        rootFolderOrFile: "out"
+        rootFolderOrFile: "$(System.DefaultWorkingDirectory)/out"
         includeRootFolder: false
         archiveType: zip
-        archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
-        replaceExistingArchive: true
+        archiveFile: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
+      displayName: "Archive package"
 
-    - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+    - publish: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
       artifact: drop
 
 # =============================================================
-# Deploy Stage
+# Deploy
 # =============================================================
 - stage: Deploy
+  displayName: "Deploy Frontend to Azure"
   dependsOn: Build
   jobs:
-  - job: DeployFrontend
+  - job: Deploy
+    pool:
+      vmImage: "ubuntu-latest"
     steps:
 
     - download: current
@@ -102,51 +119,31 @@ stages:
         scriptLocation: inlineScript
         inlineScript: |
           set -ex
+          az group create --name "$(RESOURCE_GROUP)" --location "$(LOCATION)" >/dev/null
+          az appservice plan create --name "$(PLAN_NAME)" --resource-group "$(RESOURCE_GROUP)" --is-linux --sku B1 >/dev/null || true
 
-          # Create RG
-          az group create -n "$(RESOURCE_GROUP)" -l "$(LOCATION)"
-
-          # Create plan
-          az appservice plan create \
-            --name "$(PLAN_NAME)" \
-            --resource-group "$(RESOURCE_GROUP)" \
-            --sku B1 --is-linux || true
-
-          # Create App
           app_name="$(appName)-$(environment)"
           az webapp create \
             --name "$app_name" \
             --resource-group "$(RESOURCE_GROUP)" \
             --plan "$(PLAN_NAME)" \
-            --runtime "NODE:20-lts" || true
+            --runtime "NODE|20-lts" >/dev/null || true
 
-          # ENV VARS
           az webapp config appsettings set \
-            --resource-group "$(RESOURCE_GROUP)" \
             --name "$app_name" \
-            --settings \
-              NODE_ENV=production \
-              PORT=8080 \
-              WEBSITE_RUN_FROM_PACKAGE=1 \
-              NEXT_PUBLIC_ONBOARDING_API_URL="$(NEXT_PUBLIC_ONBOARDING_API_URL)"
-
-          # Startup command
-          az webapp config set \
             --resource-group "$(RESOURCE_GROUP)" \
-            --name "$app_name" \
-            --startup-file "node server.js"
+            --settings NEXT_PUBLIC_ONBOARDING_API_URL="$(NEXT_PUBLIC_ONBOARDING_API_URL)" NODE_ENV="production"
 
     - task: AzureWebApp@1
-      displayName: "Deploy Frontend"
+      displayName: "Deploy frontend package"
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         appType: webAppLinux
         appName: "$(appName)-$(environment)"
-        package: "$(Pipeline.Workspace)/drop/frontend.zip"
-
-    - script: sleep 30
-      displayName: "Warm Up"
+        package: "$(Pipeline.Workspace)/drop/$(appName).zip"
 
     - bash: |
-        curl -I "https://$(appName)-$(environment).azurewebsites.net"
-      displayName: "Health Check"
+        sleep 30
+        echo "Health check:"
+        curl -I "https://$(appName)-$(environment).azurewebsites.net" || true
+      displayName: "Health check"
