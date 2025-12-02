@@ -1,43 +1,92 @@
 "use client";
 
-import { BuildRun } from "@/lib/onboardingConsoleApi";
+import { useEffect, useState } from "react";
 
-type DeploymentTimelineProps = {
-  runs: BuildRun[];
+type TimelineStep = {
+  name: string;
+  status: string;
+  result?: string | null;
+  duration?: number;
 };
 
-export function DeploymentTimeline({ runs }: DeploymentTimelineProps) {
-  if (!runs || !runs.length) {
-    return <p className="text-sm text-gray-500">No deployments yet for this session.</p>;
+type TimelineResponse = {
+  project: string;
+  pipeline_run_id: number | null;
+  timeline: TimelineStep[];
+  pipeline?: {
+    _links?: {
+      web?: {
+        href?: string;
+      };
+    };
+  };
+};
+
+type DeploymentTimelineProps = {
+  project: string;
+};
+
+export function DeploymentTimeline({ project }: DeploymentTimelineProps) {
+  const [data, setData] = useState<TimelineResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Poll timeline API every 5s
+  useEffect(() => {
+    async function fetchTimeline() {
+      const res = await fetch(`/api/onboarding/timeline/${project}`);
+      const json = await res.json();
+      setData(json);
+      setLoading(false);
+    }
+
+    fetchTimeline();
+    const interval = setInterval(fetchTimeline, 5000);
+    return () => clearInterval(interval);
+  }, [project]);
+
+  if (loading) {
+    return <p className="text-sm text-gray-500">Loading deployment timeline...</p>;
   }
 
+  if (!data) {
+    return <p className="text-sm text-red-600">No timeline data available.</p>;
+  }
+
+  const devopsUrl = data.pipeline?._links?.web?.href;
+
   return (
-    <ol className="space-y-3 text-sm">
-      {runs.map((run) => (
-        <li
-          key={run.run_id}
-          className="flex items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3"
+    <div className="space-y-4">
+      <h2 className="text-md font-semibold">
+        Deployment Timeline · {data.project}
+      </h2>
+
+      {devopsUrl && (
+        <a
+          href={devopsUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-xs text-blue-600 underline"
         >
-          <div>
-            <p className="font-semibold">
-              Run #{run.run_id} · {run.status}
-            </p>
-            {run.details_url && (
-              <a
-                href={run.details_url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-blue-600 underline"
-              >
-                Open in Azure DevOps
-              </a>
-            )}
-          </div>
-          <p className="text-xs text-gray-500">
-            {run.started_at || "N/A"} → {run.completed_at || "in progress"}
-          </p>
-        </li>
-      ))}
-    </ol>
+          Open Pipeline Run in Azure DevOps
+        </a>
+      )}
+
+      <ol className="space-y-3 text-sm">
+        {data.timeline.map((step, idx) => (
+          <li
+            key={idx}
+            className="flex items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3"
+          >
+            <div>
+              <p className="font-semibold">{step.name}</p>
+              <p className="text-xs text-gray-500">{step.status}</p>
+              {step.result && (
+                <p className="text-xs text-gray-400">Result: {step.result}</p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

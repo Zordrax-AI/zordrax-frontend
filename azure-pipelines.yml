@@ -12,37 +12,21 @@ pool:
 
 variables:
 - group: zordrax-analytica-dev-secrets
-
 - name: appName
   value: "zordrax-frontend"
-
 - name: environment
   value: "dev"
-
 - name: SERVICE_CONNECTION
   value: "zordrax-analytica-dev-spn"
-
 - name: RESOURCE_GROUP
   value: "zordrax-analytica-dev-rg"
-
 - name: PLAN_NAME
   value: "zordrax-linux-plan"
-
 - name: LOCATION
   value: "westeurope"
-
-# Frontend env values
 - name: NEXT_PUBLIC_ONBOARDING_API_URL
   value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net/api/v5"
 
-- name: NEXT_PUBLIC_BACKEND_URL
-  value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net"
-
-- name: NEXT_PUBLIC_AUTH_URL
-  value: "https://zordrax-auth-agent-zordrax-analytica-dev.azurewebsites.net/api/v5"
-
-- name: NEXT_PUBLIC_CLIENT_ID
-  value: "ZordraxWebAppDev"
 
 stages:
 
@@ -58,6 +42,7 @@ stages:
       vmImage: "ubuntu-latest"
 
     steps:
+
     - checkout: self
       persistCredentials: true
 
@@ -81,14 +66,7 @@ stages:
       displayName: "Install NodeJS"
 
     - script: |
-        set -ex
-        cat > .env.local <<EOF
-        NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)
-        NEXT_PUBLIC_BACKEND_URL=$(NEXT_PUBLIC_BACKEND_URL)
-        NEXT_PUBLIC_AUTH_URL=$(NEXT_PUBLIC_AUTH_URL)
-        NEXT_PUBLIC_CLIENT_ID=$(NEXT_PUBLIC_CLIENT_ID)
-        EOF
-
+        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" > .env.local
         export NEXT_OUTPUT=standalone
         npm ci
         npm run build
@@ -96,26 +74,29 @@ stages:
       env:
         NPM_CONFIG_CACHE: "$(Pipeline.Workspace)/.npm"
 
+    # =============================================================
+    # FIXED PACKAGING SECTION (includes wizard route)
+    # =============================================================
     - script: |
         set -ex
         rm -rf out
         mkdir -p out
 
-        # Standalone server (includes Node server.js etc.)
+        # Standalone server
         cp -R .next/standalone/. out/
 
         # Static assets
         mkdir -p out/.next
         cp -R .next/static out/.next/static
 
-        # App router server files (wizard, etc.)
+        # 🔥 CRITICAL FIX — include server app routes (wizard, sessions, etc.)
         mkdir -p out/.next/server
         cp -R .next/server/app out/.next/server/app
 
-        # Public assets
+        # Public files
         cp -R public out/public || true
 
-        # Package metadata
+        # Node metadata
         cp package.json out/package.json
         cp package-lock.json out/package-lock.json || true
       displayName: "Package Next.js standalone build"
@@ -131,6 +112,7 @@ stages:
     - publish: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
       artifact: drop
 
+
 # =============================================================
 # DEPLOY STAGE
 # =============================================================
@@ -144,11 +126,12 @@ stages:
       vmImage: "ubuntu-latest"
 
     steps:
+
     - download: current
       artifact: drop
 
     - task: AzureCLI@2
-      displayName: "Ensure App Service exists + apply env vars"
+      displayName: "Ensure App Service exists"
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
         scriptType: bash
@@ -156,50 +139,40 @@ stages:
         inlineScript: |
           set -ex
 
-          resource_group="$(RESOURCE_GROUP)"
-          plan_name="$(PLAN_NAME)"
-          location="$(LOCATION)"
-          app_name="$(appName)-$(environment)"
+          az group create --name "$(RESOURCE_GROUP)" --location "$(LOCATION)" >/dev/null
 
-          echo "Ensuring resource group..."
-          az group create --name "${resource_group}" --location "${location}" >/dev/null
-
-          echo "Ensuring App Service plan..."
           az appservice plan create \
-            --name "${plan_name}" \
-            --resource-group "${resource_group}" \
+            --name "$(PLAN_NAME)" \
+            --resource-group "$(RESOURCE_GROUP)" \
             --is-linux \
             --sku B1 >/dev/null || true
 
-          echo "Ensuring Web App..."
+          app_name="$(appName)-$(environment)"
+
           az webapp create \
-            --name "${app_name}" \
-            --resource-group "${resource_group}" \
-            --plan "${plan_name}" \
+            --name "$app_name" \
+            --resource-group "$(RESOURCE_GROUP)" \
+            --plan "$(PLAN_NAME)" \
             --runtime "NODE|20-lts" >/dev/null || true
 
-          echo "Applying frontend App Settings (all NEXT_* vars)..."
           az webapp config appsettings set \
-            --name "${app_name}" \
-            --resource-group "${resource_group}" \
+            --name "$app_name" \
+            --resource-group "$(RESOURCE_GROUP)" \
             --settings \
               NODE_ENV="production" \
               PORT=8080 \
-              NEXT_PUBLIC_ONBOARDING_API_URL="$(NEXT_PUBLIC_ONBOARDING_API_URL)" \
-              NEXT_PUBLIC_BACKEND_URL="$(NEXT_PUBLIC_BACKEND_URL)" \
-              NEXT_PUBLIC_AUTH_URL="$(NEXT_PUBLIC_AUTH_URL)" \
-              NEXT_PUBLIC_CLIENT_ID="$(NEXT_PUBLIC_CLIENT_ID)" >/dev/null
+              NEXT_PUBLIC_ONBOARDING_API_URL="$(NEXT_PUBLIC_ONBOARDING_API_URL)"
 
     - task: AzureWebApp@1
       displayName: "Deploy frontend package"
       inputs:
         azureSubscription: "$(SERVICE_CONNECTION)"
-        appType: "webAppLinux"
+        appType: webAppLinux
         appName: "$(appName)-$(environment)"
         package: "$(Pipeline.Workspace)/drop/$(appName).zip"
 
     - bash: |
-        set -ex
+        sleep 20
         echo "Health check..."
         curl -I "https://$(appName)-$(environment).azurewebsites.net" || true
       displayName: "Health check"
