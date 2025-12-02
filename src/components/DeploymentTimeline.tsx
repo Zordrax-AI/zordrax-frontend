@@ -7,7 +7,7 @@ type DeploymentTimelineProps = {
 };
 
 export function DeploymentTimeline({ runs }: DeploymentTimelineProps) {
-  if (!runs || !runs.length) {
+  if (!runs || runs.length === 0) {
     return <p className="text-sm text-gray-500">No deployments yet for this session.</p>;
   }
 
@@ -34,7 +34,7 @@ export function DeploymentTimeline({ runs }: DeploymentTimelineProps) {
             )}
           </div>
           <p className="text-xs text-gray-500">
-            {run.started_at || "N/A"} → {run.completed_at || "in progress"}
+            {run.started_at || "N/A"} {"->"} {run.completed_at || "in progress"}
           </p>
         </li>
       ))}

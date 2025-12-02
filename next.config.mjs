@@ -2,9 +2,8 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  experimental: {
-    serverActions: true,
-  },
+  // Keep experimental empty for now to avoid Next 15 warnings
+  experimental: {},
 
   images: {
     remotePatterns: [

@@ -13,6 +13,7 @@ export default function DeploymentsPage() {
       subtitle="View deployment progress for the current onboarding session."
     >
       {loading && <p className="text-sm text-gray-500">Loading session…</p>}
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       {!session && !loading && !error && (
@@ -26,9 +27,7 @@ export default function DeploymentsPage() {
           <p className="text-xs text-gray-500">
             Session: <span className="font-mono">{session.session_id}</span>
           </p>
-
-          {/* NEW: Use project_name for timeline */}
-          <DeploymentTimeline project={session.project_name} />
+          <DeploymentTimeline runs={session.runs || []} />
         </div>
       )}
     </ConsoleShell>
