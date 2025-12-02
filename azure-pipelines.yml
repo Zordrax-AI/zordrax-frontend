@@ -1,6 +1,5 @@
 # ==========================================================
-# Zordrax-Analytica | Frontend Next.js Deployment Pipeline
-# Next.js 15 → Standalone Build → Zip → Azure Web App Deploy
+# Zordrax Frontend Pipeline - Next.js 15 (Azure App Service)
 # ==========================================================
 
 trigger:
@@ -14,44 +13,40 @@ pool:
 variables:
   appName: "zordrax-frontend-dev"
   serviceConnection: "zordrax-analytica-dev-spn"
-  artifactName: "frontend-build"
+  artifactName: "frontend-app"
   zipPath: "$(Build.ArtifactStagingDirectory)/frontend.zip"
 
 steps:
 
-# 1️⃣ Install Node.js 20 (required by Azure App Service)
+# 1. Install Node 20
 - task: NodeTool@0
   inputs:
     versionSpec: "20.x"
   displayName: "Use Node.js 20"
 
-# 2️⃣ Install dependencies
+# 2. Install dependencies
 - script: |
     npm ci
   displayName: "Install dependencies"
 
-# 3️⃣ Build Next.js (with standalone output)
+# 3. Build Next.js
 - script: |
     npm run build
   displayName: "Build Next.js app"
 
-# 4️⃣ Prepare output folder for deployment
+# 4. Prepare deployment folder
 - script: |
     rm -rf out
     mkdir -p out
 
-    # Copy standalone server build
-    cp -R .next/standalone/* out/
-
-    # Copy static assets
-    mkdir -p out/.next
-    cp -R .next/static out/.next/static
-
-    # Copy public assets
+    # Copy required folders
+    cp -R .next out/.next
     cp -R public out/public
-  displayName: "Prepare deployment package"
+    cp package.json out/package.json
 
-# 5️⃣ Zip deployment package
+  displayName: "Prepare deployment folder"
+
+# 5. Zip build
 - task: ArchiveFiles@2
   inputs:
     rootFolderOrFile: "out"
@@ -59,20 +54,19 @@ steps:
     archiveType: zip
     archiveFile: "$(zipPath)"
     replaceExistingArchive: true
-  displayName: "Create deployment ZIP"
+  displayName: "Create ZIP"
 
-# 6️⃣ Publish artifact
+# 6. Publish artifact
 - task: PublishPipelineArtifact@1
   inputs:
     targetPath: "$(Build.ArtifactStagingDirectory)"
     artifact: "$(artifactName)"
-  displayName: "Publish artifact"
 
-# 7️⃣ Deploy to Azure Web App
+# 7. Deploy to Azure App Service
 - task: AzureWebApp@1
   inputs:
     azureSubscription: "$(serviceConnection)"
     appName: "$(appName)"
     package: "$(zipPath)"
-    startupCommand: "node server.js"
+    startupCommand: "npx next start"
   displayName: "Deploy to Azure Web App"
