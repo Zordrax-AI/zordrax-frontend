@@ -1,6 +1,7 @@
-# =============================================================
-# Zordrax-Analytica | Frontend CI/CD (FINAL FIXED)
-# =============================================================
+# ==========================================================
+# Zordrax-Analytica | Frontend Next.js Deployment Pipeline
+# Next.js 15 → Standalone Build → Zip → Azure Web App Deploy
+# ==========================================================
 
 trigger:
   branches:
@@ -8,171 +9,70 @@ trigger:
       - main
 
 pool:
-  vmImage: "ubuntu-latest"
+  vmImage: ubuntu-latest
 
 variables:
-- group: zordrax-analytica-dev-secrets
-- name: appName
-  value: "zordrax-frontend"
-- name: environment
-  value: "dev"
-- name: SERVICE_CONNECTION
-  value: "zordrax-analytica-dev-spn"
-- name: RESOURCE_GROUP
-  value: "zordrax-analytica-dev-rg"
-- name: PLAN_NAME
-  value: "zordrax-linux-plan"
-- name: LOCATION
-  value: "westeurope"
-- name: NEXT_PUBLIC_ONBOARDING_API_URL
-  value: "https://zordrax-onboarding-agent-zordrax-analytica-dev.azurewebsites.net/api/v5"
+  appName: "zordrax-frontend-dev"
+  serviceConnection: "zordrax-analytica-dev-spn"
+  artifactName: "frontend-build"
+  zipPath: "$(Build.ArtifactStagingDirectory)/frontend.zip"
 
+steps:
 
-stages:
+# 1️⃣ Install Node.js 20 (required by Azure App Service)
+- task: NodeTool@0
+  inputs:
+    versionSpec: "20.x"
+  displayName: "Use Node.js 20"
 
-# =============================================================
-# BUILD STAGE
-# =============================================================
-- stage: Build
-  displayName: "Build Frontend"
-  jobs:
-  - job: Build
-    timeoutInMinutes: 120
-    pool:
-      vmImage: "ubuntu-latest"
+# 2️⃣ Install dependencies
+- script: |
+    npm ci
+  displayName: "Install dependencies"
 
-    steps:
+# 3️⃣ Build Next.js (with standalone output)
+- script: |
+    npm run build
+  displayName: "Build Next.js app"
 
-    - checkout: self
-      persistCredentials: true
+# 4️⃣ Prepare output folder for deployment
+- script: |
+    rm -rf out
+    mkdir -p out
 
-    - script: |
-        rm -rf .next
-        rm -rf .next/cache
-      displayName: "Clear Next.js cache"
+    # Copy standalone server build
+    cp -R .next/standalone/* out/
 
-    - script: mkdir -p "$(Pipeline.Workspace)/.npm"
-      displayName: "Prep NPM cache"
+    # Copy static assets
+    mkdir -p out/.next
+    cp -R .next/static out/.next/static
 
-    - task: Cache@2
-      inputs:
-        key: 'npm | "$(Agent.OS)" | package-lock.json'
-        path: "$(Pipeline.Workspace)/.npm"
-      displayName: "Cache npm packages"
+    # Copy public assets
+    cp -R public out/public
+  displayName: "Prepare deployment package"
 
-    - task: NodeTool@0
-      inputs:
-        versionSpec: "20.x"
-      displayName: "Install NodeJS"
+# 5️⃣ Zip deployment package
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: "out"
+    includeRootFolder: false
+    archiveType: zip
+    archiveFile: "$(zipPath)"
+    replaceExistingArchive: true
+  displayName: "Create deployment ZIP"
 
-    - script: |
-        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" > .env.local
-        export NEXT_OUTPUT=standalone
-        npm ci
-        npm run build
-      displayName: "Build Next.js"
-      env:
-        NPM_CONFIG_CACHE: "$(Pipeline.Workspace)/.npm"
+# 6️⃣ Publish artifact
+- task: PublishPipelineArtifact@1
+  inputs:
+    targetPath: "$(Build.ArtifactStagingDirectory)"
+    artifact: "$(artifactName)"
+  displayName: "Publish artifact"
 
-    # =============================================================
-    # FIXED PACKAGING SECTION (includes wizard route)
-    # =============================================================
-    - script: |
-        set -ex
-        rm -rf out
-        mkdir -p out
-
-        # Standalone server
-        cp -R .next/standalone/. out/
-
-        # Static assets
-        mkdir -p out/.next
-        cp -R .next/static out/.next/static
-
-        # 🔥 CRITICAL FIX — include server app routes (wizard, sessions, etc.)
-        mkdir -p out/.next/server
-        cp -R .next/server/app out/.next/server/app
-
-        # Public files
-        cp -R public out/public || true
-
-        # Node metadata
-        cp package.json out/package.json
-        cp package-lock.json out/package-lock.json || true
-      displayName: "Package Next.js standalone build"
-
-    - task: ArchiveFiles@2
-      displayName: "Archive deployment output"
-      inputs:
-        rootFolderOrFile: "$(System.DefaultWorkingDirectory)/out"
-        includeRootFolder: false
-        archiveType: zip
-        archiveFile: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
-
-    - publish: "$(Build.ArtifactStagingDirectory)/$(appName).zip"
-      artifact: drop
-
-
-# =============================================================
-# DEPLOY STAGE
-# =============================================================
-- stage: Deploy
-  displayName: "Deploy Frontend"
-  dependsOn: Build
-
-  jobs:
-  - job: Deploy
-    pool:
-      vmImage: "ubuntu-latest"
-
-    steps:
-
-    - download: current
-      artifact: drop
-
-    - task: AzureCLI@2
-      displayName: "Ensure App Service exists"
-      inputs:
-        azureSubscription: "$(SERVICE_CONNECTION)"
-        scriptType: bash
-        scriptLocation: inlineScript
-        inlineScript: |
-          set -ex
-
-          az group create --name "$(RESOURCE_GROUP)" --location "$(LOCATION)" >/dev/null
-
-          az appservice plan create \
-            --name "$(PLAN_NAME)" \
-            --resource-group "$(RESOURCE_GROUP)" \
-            --is-linux \
-            --sku B1 >/dev/null || true
-
-          app_name="$(appName)-$(environment)"
-
-          az webapp create \
-            --name "$app_name" \
-            --resource-group "$(RESOURCE_GROUP)" \
-            --plan "$(PLAN_NAME)" \
-            --runtime "NODE|20-lts" >/dev/null || true
-
-          az webapp config appsettings set \
-            --name "$app_name" \
-            --resource-group "$(RESOURCE_GROUP)" \
-            --settings \
-              NODE_ENV="production" \
-              PORT=8080 \
-              NEXT_PUBLIC_ONBOARDING_API_URL="$(NEXT_PUBLIC_ONBOARDING_API_URL)"
-
-    - task: AzureWebApp@1
-      displayName: "Deploy frontend package"
-      inputs:
-        azureSubscription: "$(SERVICE_CONNECTION)"
-        appType: webAppLinux
-        appName: "$(appName)-$(environment)"
-        package: "$(Pipeline.Workspace)/drop/$(appName).zip"
-
-    - bash: |
-        sleep 20
-        echo "Health check..."
-        curl -I "https://$(appName)-$(environment).azurewebsites.net" || true
-      displayName: "Health check"
+# 7️⃣ Deploy to Azure Web App
+- task: AzureWebApp@1
+  inputs:
+    azureSubscription: "$(serviceConnection)"
+    appName: "$(appName)"
+    package: "$(zipPath)"
+    startupCommand: "node server.js"
+  displayName: "Deploy to Azure Web App"

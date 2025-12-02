@@ -2,8 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
 
-  // Keep experimental empty for now to avoid Next 15 warnings
+  // Keep experimental empty to avoid invalid flags in Next.js 15
   experimental: {},
+
+  // Required for Azure Web App deployment
+  output: "standalone",
 
   images: {
     remotePatterns: [
