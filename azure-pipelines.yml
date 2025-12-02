@@ -34,7 +34,7 @@ steps:
     npm run build
   displayName: "Build Next.js app"
 
-# 4. Prepare deployment folder
+# 4️⃣ Prepare deployment folder
 - script: |
     rm -rf out
     mkdir -p out
@@ -68,5 +68,5 @@ steps:
     azureSubscription: "$(serviceConnection)"
     appName: "$(appName)"
     package: "$(zipPath)"
-    startupCommand: "npx next start"
+    startupCommand: "npx next start --port $PORT"
   displayName: "Deploy to Azure Web App"
