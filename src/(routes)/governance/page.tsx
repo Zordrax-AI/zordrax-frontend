@@ -2,7 +2,7 @@
 
 import { ConsoleShell } from "@/components/layout/ConsoleShell";
 import { useOnboardingSession } from "@/hooks/useOnboardingSession";
-import { GovernanceResultPanel } from "@/components/onboarding/GovernanceResultPanel";
+import { GovernanceResultPanel } from "@/components/GovernanceResultPanel";
 
 export default function GovernancePage() {
   const { sessionId, loading, error } = useOnboardingSession();

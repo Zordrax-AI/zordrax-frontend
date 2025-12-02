@@ -2,7 +2,7 @@
 
 import { ConsoleShell } from "@/components/layout/ConsoleShell";
 import { useOnboardingSession } from "@/hooks/useOnboardingSession";
-import { ManifestDiffViewer } from "@/components/onboarding/ManifestDiffViewer";
+import { ManifestDiffViewer } from "@/components/ManifestDiffViewer";
 
 export default function MergePage() {
   const { sessionId, loading, error } = useOnboardingSession();
