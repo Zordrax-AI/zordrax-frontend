@@ -1,5 +1,5 @@
 # ==========================================================
-# Zordrax Frontend Pipeline - Fully Fixed (NO Oryx Build)
+# Zordrax Frontend Pipeline - FINAL FIXED VERSION
 # ==========================================================
 
 trigger:
@@ -18,7 +18,7 @@ variables:
 
 steps:
 
-# 1. Install Node 20
+# 1. Node 20
 - task: NodeTool@0
   inputs:
     versionSpec: "20.x"
@@ -32,34 +32,30 @@ steps:
 # 3. Build Next.js
 - script: |
     npm run build
-  displayName: "Build Next.js app"
+  displayName: "Build Next.js"
 
-# 4️⃣ Prepare deployment folder (INCLUDES node_modules)
+# 4. Prepare ZIP ROOT (NO 'out/' folder)
 - script: |
-    rm -rf out
-    mkdir -p out
+    mkdir -p package
 
-    # Copy application build
-    cp -R .next out/.next
-    cp -R public out/public
+    cp -R .next package/.next
+    cp -R public package/public
+    cp -R node_modules package/node_modules
 
-    # Copy required metadata
-    cp package.json out/package.json
-    cp package-lock.json out/package-lock.json
+    cp package.json package/package.json
+    cp package-lock.json package/package-lock.json
+    cp next.config.js package/next.config.js || true
+  displayName: "Assemble Deployment Package"
 
-    # 🔥 COPY NODE_MODULES (this is the fix)
-    cp -R node_modules out/node_modules
-  displayName: "Prepare deployment folder"
-
-# 5. Create ZIP package
+# 5. Create ZIP
 - task: ArchiveFiles@2
   inputs:
-    rootFolderOrFile: "out"
+    rootFolderOrFile: "package"
     includeRootFolder: false
     archiveType: zip
     archiveFile: "$(zipPath)"
     replaceExistingArchive: true
-  displayName: "Create ZIP"
+  displayName: "ZIP Frontend"
 
 # 6. Publish artifact
 - task: PublishPipelineArtifact@1
@@ -67,11 +63,11 @@ steps:
     targetPath: "$(Build.ArtifactStagingDirectory)"
     artifact: "$(artifactName)"
 
-# 7. Deploy to Azure App Service (NO Oryx build)
+# 7. Deploy ZIP to Azure App Service
 - task: AzureWebApp@1
   inputs:
     azureSubscription: "$(serviceConnection)"
     appName: "$(appName)"
     package: "$(zipPath)"
     startupCommand: "npx next start --port $PORT"
-  displayName: "Deploy to Azure App Service"
+  displayName: "Deploy to App Service"
