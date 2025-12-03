@@ -66,5 +66,5 @@ steps:
     azureSubscription: "$(serviceConnection)"
     appName: "$(appName)"
     package: "$(zipPath)"
-    startupCommand: "npx next start --port $PORT"
+    startupCommand: "cd /home/site/wwwroot && node node_modules/next/dist/bin/next start --port $PORT"
   displayName: "Deploy to Azure App Service"
