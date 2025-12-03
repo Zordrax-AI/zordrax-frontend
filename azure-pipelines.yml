@@ -28,32 +28,19 @@ steps:
 - script: npm ci
   displayName: "Install dependencies"
 
-# 3. Build Next.js with standalone output
-- script: |
-    npm run build
-    echo "Build completed. Checking standalone folder:"
-    ls -la .next/standalone
-  displayName: "Build Next.js (standalone)"
-
-# 4. Prepare deployment folder (standalone bundle)
+# 3. Build standalone output
 - script: |
     rm -rf out
     mkdir -p out
 
-    # Copy standalone server bundle
+    # Build Next.js standalone
+    npm run build
+
+    # Copy required standalone files
     cp -R .next/standalone/* out/
-
-    # Copy static files required by standalone
     cp -R .next/static out/.next/static
-
-    # Copy public assets
-    cp -R public out/public
-
-    # Copy package metadata (Azure requires this)
-    cp package.json out/package.json
-    cp package-lock.json out/package-lock.json
-
-  displayName: "Prepare deployment folder for Azure App Service"
+    cp -R public out/public || true
+  displayName: "Prepare standalone deployment"
 
 # 5. Create deployment ZIP
 - task: ArchiveFiles@2
