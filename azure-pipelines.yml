@@ -1,5 +1,5 @@
 # ==========================================================
-# Zordrax Frontend Pipeline - FINAL FIXED VERSION
+# Zordrax Frontend Pipeline - Next.js 15 (Azure App Service)
 # ==========================================================
 
 trigger:
@@ -15,10 +15,11 @@ variables:
   serviceConnection: "zordrax-analytica-dev-spn"
   artifactName: "frontend-app"
   zipPath: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+  stagingDir: "$(Build.ArtifactStagingDirectory)/site"
 
 steps:
 
-# 1. Node 20
+# 1. Install Node 20
 - task: NodeTool@0
   inputs:
     versionSpec: "20.x"
@@ -32,30 +33,30 @@ steps:
 # 3. Build Next.js
 - script: |
     npm run build
-  displayName: "Build Next.js"
+  displayName: "Build Next.js app"
 
-# 4. Prepare ZIP ROOT (NO 'out/' folder)
+# 4. Prepare deployment folder at archive root (no /out nesting)
 - script: |
-    mkdir -p package
+    rm -rf "$(stagingDir)"
+    mkdir -p "$(stagingDir)"
 
-    cp -R .next package/.next
-    cp -R public package/public
-    cp -R node_modules package/node_modules
+    cp -R .next "$(stagingDir)/.next"
+    cp -R node_modules "$(stagingDir)/node_modules"
+    cp -R public "$(stagingDir)/public"
+    cp package.json "$(stagingDir)/package.json"
+    cp package-lock.json "$(stagingDir)/package-lock.json"
+    if [ -f next.config.mjs ]; then cp next.config.mjs "$(stagingDir)/next.config.mjs"; fi
+  displayName: "Prepare deployment folder"
 
-    cp package.json package/package.json
-    cp package-lock.json package/package-lock.json
-    cp next.config.js package/next.config.js || true
-  displayName: "Assemble Deployment Package"
-
-# 5. Create ZIP
+# 5. Zip build (contents land directly in /home/site/wwwroot)
 - task: ArchiveFiles@2
   inputs:
-    rootFolderOrFile: "package"
+    rootFolderOrFile: "$(stagingDir)"
     includeRootFolder: false
     archiveType: zip
     archiveFile: "$(zipPath)"
     replaceExistingArchive: true
-  displayName: "ZIP Frontend"
+  displayName: "Create ZIP"
 
 # 6. Publish artifact
 - task: PublishPipelineArtifact@1
@@ -63,11 +64,11 @@ steps:
     targetPath: "$(Build.ArtifactStagingDirectory)"
     artifact: "$(artifactName)"
 
-# 7. Deploy ZIP to Azure App Service
+# 7. Deploy to Azure App Service (no Oryx build; run Next directly)
 - task: AzureWebApp@1
   inputs:
     azureSubscription: "$(serviceConnection)"
     appName: "$(appName)"
     package: "$(zipPath)"
-    startupCommand: "npx next start --port $PORT"
-  displayName: "Deploy to App Service"
+    startupCommand: "cd /home/site/wwwroot && node node_modules/next/dist/bin/next start --port $PORT"
+  displayName: "Deploy to Azure Web App"
