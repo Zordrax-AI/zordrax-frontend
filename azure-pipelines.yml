@@ -32,37 +32,32 @@ steps:
 - script: npm run build
   displayName: "Next.js build (standalone)"
 
-# 4. Prepare correct standalone deployment folder
+# 4. Prepare correct standalone layout
 - script: |
     rm -rf out
     mkdir -p out
-    mkdir -p out/.next
-    mkdir -p out/.next/server
-    mkdir -p out/.next/static
 
-    echo ">>> Copying standalone root bundle"
+    # Copy standalone server bundle
     cp -R .next/standalone/* out/
 
-    echo ">>> Copying static assets"
-    cp -R .next/static/* out/.next/static/
+    # Copy required Next.js files into the nested .next directory
+    mkdir -p out/.next
+    cp -R .next/static out/.next/static
+    cp -R .next/server out/.next/server
+    cp -R .next/BUILD_ID out/.next/BUILD_ID
+    cp -R .next/*.json out/.next/ || true
 
-    echo ">>> Copying server output"
-    cp -R .next/server/* out/.next/server/
+    # Copy package files (REQUIRED or server will CRASH)
+    cp package.json out/package.json
+    cp package-lock.json out/package-lock.json
 
-    echo ">>> Copying manifest files"
-    cp .next/BUILD_ID out/.next/BUILD_ID
-    cp .next/routes-manifest.json out/.next/routes-manifest.json
-    cp .next/build-manifest.json out/.next/build-manifest.json
-    cp .next/prerender-manifest.json out/.next/prerender-manifest.json
-    cp .next/middleware-manifest.json out/.next/middleware-manifest.json
-    cp .next/app-build-manifest.json out/.next/app-build-manifest.json 2>/dev/null || true
-
-    echo ">>> Copying public folder"
+    # Copy public (optional)
     cp -R public out/public || true
 
-    echo ">>> FINAL DEPLOY CONTENTS:"
+    echo "FINAL OUT CONTENTS:"
     ls -R out
-  displayName: "Prepare standalone deployment correctly"
+  displayName: "Assemble final standalone deployment folder"
+
 
 
 # 5. Create deployment ZIP
