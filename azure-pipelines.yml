@@ -34,16 +34,17 @@ steps:
     npm run build
   displayName: "Build Next.js app"
 
-# 4️⃣ Prepare deployment folder
+# 4. Prepare deployment folder
 - script: |
     rm -rf out
     mkdir -p out
 
-    # Copy required folders
+    # Copy required folders/files for runtime
     cp -R .next out/.next
+    cp -R node_modules out/node_modules
     cp -R public out/public
     cp package.json out/package.json
-
+    cp package-lock.json out/package-lock.json
   displayName: "Prepare deployment folder"
 
 # 5. Zip build
