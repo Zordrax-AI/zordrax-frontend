@@ -32,29 +32,38 @@ steps:
 - script: npm run build
   displayName: "Next.js build (standalone)"
 
-# 4. Prepare correct standalone layout for Azure Web App
+# 4. Prepare correct standalone deployment folder
 - script: |
     rm -rf out
     mkdir -p out
+    mkdir -p out/.next
+    mkdir -p out/.next/server
+    mkdir -p out/.next/static
 
-    echo ">>> Copying standalone runtime (server.js + node_modules)"
+    echo ">>> Copying standalone root bundle"
     cp -R .next/standalone/* out/
 
-    echo ">>> Copying required .next assets"
-    mkdir -p out/.next
-    cp -R .next/static out/.next/static
-    cp -R .next/server out/.next/server
+    echo ">>> Copying static assets"
+    cp -R .next/static/* out/.next/static/
+
+    echo ">>> Copying server output"
+    cp -R .next/server/* out/.next/server/
+
+    echo ">>> Copying manifest files"
     cp .next/BUILD_ID out/.next/BUILD_ID
+    cp .next/routes-manifest.json out/.next/routes-manifest.json
+    cp .next/build-manifest.json out/.next/build-manifest.json
+    cp .next/prerender-manifest.json out/.next/prerender-manifest.json
+    cp .next/middleware-manifest.json out/.next/middleware-manifest.json
+    cp .next/app-build-manifest.json out/.next/app-build-manifest.json 2>/dev/null || true
 
-    echo ">>> Copying Next.js manifests"
-    cp .next/*.json out/.next/ 2>/dev/null || true
-
-    echo ">>> Copying public assets"
+    echo ">>> Copying public folder"
     cp -R public out/public || true
 
     echo ">>> FINAL DEPLOY CONTENTS:"
     ls -R out
-  displayName: "Assemble final Next.js standalone deployment folder"
+  displayName: "Prepare standalone deployment correctly"
+
 
 # 5. Create deployment ZIP
 - task: ArchiveFiles@2
