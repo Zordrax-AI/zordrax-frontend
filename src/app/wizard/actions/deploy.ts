@@ -1,6 +1,17 @@
 "use server";
 
-export async function deployArchitecture(payload: any) {
+type DeploymentRequirements = {
+  environment: string;
+  region: string;
+};
+
+export type DeploymentPayload = {
+  project_name: string;
+  description: string;
+  requirements: DeploymentRequirements;
+};
+
+export async function deployArchitecture(payload: DeploymentPayload): Promise<unknown> {
   const backend = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   if (!backend) {

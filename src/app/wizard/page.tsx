@@ -1,10 +1,10 @@
 "use client";
 
-import { deployArchitecture } from "./actions/deploy";
 import { useState } from "react";
+import { deployArchitecture } from "./actions/deploy";
 
 export default function Wizard() {
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<unknown | null>(null);
 
   async function handleDeploy() {
     const payload = {
@@ -21,11 +21,18 @@ export default function Wizard() {
   }
 
   return (
-    <button
-      onClick={handleDeploy}
-      className="px-4 py-2 rounded bg-blue-600 text-white"
-    >
-      Deploy Architecture
-    </button>
+    <div className="space-y-4">
+      <button
+        onClick={handleDeploy}
+        className="px-4 py-2 rounded bg-blue-600 text-white"
+      >
+        Deploy Architecture
+      </button>
+      {result ? (
+        <pre className="rounded bg-gray-900 p-3 text-sm text-white">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      ) : null}
+    </div>
   );
 }
