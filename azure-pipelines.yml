@@ -37,8 +37,8 @@ steps:
     rm -rf out
     mkdir -p out
 
-    # Copy standalone server bundle
-    cp -R .next/standalone/. out/
+    # Copy standalone server bundle (IMPORTANT: use '*', NOT '.')
+    cp -R .next/standalone/* out/
 
     # Copy static assets
     mkdir -p out/.next
