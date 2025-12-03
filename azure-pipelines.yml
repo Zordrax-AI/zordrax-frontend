@@ -37,16 +37,20 @@ steps:
     rm -rf out
     mkdir -p out
 
-    # Copy standalone server bundle (IMPORTANT: use '*', NOT '.')
+    # Copy standalone server bundle
     cp -R .next/standalone/* out/
 
-    # Copy static assets
+    # Copy required next build assets
     mkdir -p out/.next
     cp -R .next/static out/.next/static
+    cp -R .next/BUILD_ID out/.next/BUILD_ID
+    cp -R .next/server/app out/.next/server/app || true
+    cp -R .next/server/chunks out/.next/server/chunks || true
 
-    # Copy public folder (optional)
+    # Copy public folder
     cp -R public out/public || true
-  displayName: "Copy standalone deployment files"
+  displayName: "Prepare standalone deployment"
+
 
 # 5. Create deployment ZIP
 - task: ArchiveFiles@2
