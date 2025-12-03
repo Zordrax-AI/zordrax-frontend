@@ -1,5 +1,5 @@
 # ==========================================================
-# Zordrax Frontend Pipeline - Next.js 15 (Azure App Service)
+# Zordrax Frontend Pipeline - Fully Fixed (NO Oryx Build)
 # ==========================================================
 
 trigger:
@@ -34,20 +34,24 @@ steps:
     npm run build
   displayName: "Build Next.js app"
 
-# 4. Prepare deployment folder
+# 4️⃣ Prepare deployment folder (INCLUDES node_modules)
 - script: |
     rm -rf out
     mkdir -p out
 
-    # Copy required folders/files for runtime
+    # Copy application build
     cp -R .next out/.next
-    cp -R node_modules out/node_modules
     cp -R public out/public
+
+    # Copy required metadata
     cp package.json out/package.json
     cp package-lock.json out/package-lock.json
+
+    # 🔥 COPY NODE_MODULES (this is the fix)
+    cp -R node_modules out/node_modules
   displayName: "Prepare deployment folder"
 
-# 5. Zip build
+# 5. Create ZIP package
 - task: ArchiveFiles@2
   inputs:
     rootFolderOrFile: "out"
@@ -63,11 +67,11 @@ steps:
     targetPath: "$(Build.ArtifactStagingDirectory)"
     artifact: "$(artifactName)"
 
-# 7. Deploy to Azure App Service
+# 7. Deploy to Azure App Service (NO Oryx build)
 - task: AzureWebApp@1
   inputs:
     azureSubscription: "$(serviceConnection)"
     appName: "$(appName)"
     package: "$(zipPath)"
     startupCommand: "npx next start --port $PORT"
-  displayName: "Deploy to Azure Web App"
+  displayName: "Deploy to Azure App Service"
