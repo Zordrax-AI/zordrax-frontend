@@ -32,31 +32,31 @@ steps:
 - script: npm run build
   displayName: "Next.js build (standalone)"
 
-# 4. Prepare correct standalone layout
+# 4. Prepare standalone output (corrected)
 - script: |
     rm -rf out
     mkdir -p out
 
-    # Copy standalone server bundle
-    cp -R .next/standalone/* out/
+    # Copy standalone root (server.js, node_modules, package.json)
+    cp -a .next/standalone/. out/
 
-    # Copy required Next.js files into the nested .next directory
+    # Copy necessary .next structure
     mkdir -p out/.next
-    cp -R .next/static out/.next/static
-    cp -R .next/server out/.next/server
-    cp -R .next/BUILD_ID out/.next/BUILD_ID
-    cp -R .next/*.json out/.next/ || true
+    cp -a .next/static out/.next/static
+    cp -a .next/server out/.next/server
 
-    # Copy package files (REQUIRED or server will CRASH)
-    cp package.json out/package.json
-    cp package-lock.json out/package-lock.json
+    cp .next/BUILD_ID out/.next/BUILD_ID
 
-    # Copy public (optional)
-    cp -R public out/public || true
+    # Copy all manifests
+    cp -a .next/*.json out/.next/ 2>/dev/null || true
 
-    echo "FINAL OUT CONTENTS:"
+    # Public folder
+    cp -a public out/public 2>/dev/null || true
+
+    echo "FINAL OUTPUT LISTING ==="
     ls -R out
-  displayName: "Assemble final standalone deployment folder"
+  displayName: "Assemble final standalone deployment"
+
 
 
 
