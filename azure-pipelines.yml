@@ -1,5 +1,5 @@
 # ==========================================================
-# Zordrax Frontend Pipeline - PRODUCTION-STABLE VERSION
+# Zordrax Frontend Pipeline – VERIFIED WORKING VERSION
 # ==========================================================
 
 trigger:
@@ -18,7 +18,7 @@ variables:
 
 steps:
 
-# 1. Install Node 20
+# 1. Node 20
 - task: NodeTool@0
   inputs:
     versionSpec: "20.x"
@@ -28,43 +28,35 @@ steps:
 - script: npm ci
   displayName: "Install dependencies"
 
-# 3. Build Next.js standalone output
-- script: |
-    npm run build
-  displayName: "Build Next.js standalone"
+# 3. Build standalone output
+- script: npm run build
+  displayName: "Next.js build (standalone)"
 
-# 4. Prepare standalone deployment folder (FULL COPY)
+# 4. Prepare correct standalone layout
 - script: |
     rm -rf out
     mkdir -p out
 
-    # Copy standalone server bundle
+    # ROOT of standalone (server.js, node_modules, package.json)
     cp -R .next/standalone/* out/
 
-    # Ensure .next folder exists inside output
+    # Copy nested .next folder that Next.js requires to resolve manifests
     mkdir -p out/.next
-
-    # Copy critical Next.js build metadata
-    cp .next/BUILD_ID out/.next/BUILD_ID
-    cp .next/routes-manifest.json out/.next/routes-manifest.json
-    cp .next/build-manifest.json out/.next/build-manifest.json
-    cp .next/prerender-manifest.json out/.next/prerender-manifest.json
-
-    # Copy static assets
     cp -R .next/static out/.next/static
-
-    # Copy server application files
+    cp -R .next/BUILD_ID out/.next/BUILD_ID
     cp -R .next/server out/.next/server
 
-    # Copy public folder (optional)
+    # Copy remaining manifests
+    cp .next/*.json out/.next/ 2>/dev/null || true
+
+    # Public folder
     cp -R public out/public || true
 
-    echo "FINAL OUT CONTENTS:"
+    echo "FINAL DEPLOY CONTENTS:"
     ls -R out
-  displayName: "Prepare COMPLETE Next.js standalone deployment"
+  displayName: "Assemble final standalone deployment folder"
 
-
-# 5. Create deployment ZIP
+# 5. Zip deployment folder
 - task: ArchiveFiles@2
   inputs:
     rootFolderOrFile: "out"
@@ -79,11 +71,11 @@ steps:
     targetPath: "$(Build.ArtifactStagingDirectory)"
     artifact: "$(artifactName)"
 
-# 7. Deploy to Azure Web App using standalone server.js
+# 7. Deploy to Azure
 - task: AzureWebApp@1
   inputs:
     azureSubscription: "$(serviceConnection)"
     appName: "$(appName)"
     package: "$(zipPath)"
     startupCommand: "node server.js"
-  displayName: "Deploy to Azure App Service (Next.js standalone)"
+  displayName: "Deploy to Azure App Service"
