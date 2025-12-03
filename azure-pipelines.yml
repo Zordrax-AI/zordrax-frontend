@@ -1,5 +1,5 @@
 # ==========================================================
-# Zordrax Frontend Pipeline - FINAL WORKING VERSION
+# Zordrax Frontend Pipeline - PRODUCTION-STABLE VERSION
 # ==========================================================
 
 trigger:
@@ -28,24 +28,34 @@ steps:
 - script: npm ci
   displayName: "Install dependencies"
 
-# 3. Build Next.js
-- script: npm run build
-  displayName: "Build application"
+# 3. Build Next.js with standalone output
+- script: |
+    npm run build
+    echo "Build completed. Checking standalone folder:"
+    ls -la .next/standalone
+  displayName: "Build Next.js (standalone)"
 
-# 4. Prepare deployment folder including node_modules
+# 4. Prepare deployment folder (standalone bundle)
 - script: |
     rm -rf out
     mkdir -p out
 
-    cp -R .next out/.next
+    # Copy standalone server bundle
+    cp -R .next/standalone/* out/
+
+    # Copy static files required by standalone
+    cp -R .next/static out/.next/static
+
+    # Copy public assets
     cp -R public out/public
+
+    # Copy package metadata (Azure requires this)
     cp package.json out/package.json
     cp package-lock.json out/package-lock.json
 
-    cp -R node_modules out/node_modules
-  displayName: "Prepare deployment folder"
+  displayName: "Prepare deployment folder for Azure App Service"
 
-# 5. Create ZIP
+# 5. Create deployment ZIP
 - task: ArchiveFiles@2
   inputs:
     rootFolderOrFile: "out"
@@ -60,11 +70,11 @@ steps:
     targetPath: "$(Build.ArtifactStagingDirectory)"
     artifact: "$(artifactName)"
 
-# 7. Deploy to Azure Web App
+# 7. Deploy to Azure Web App using server.js entry point
 - task: AzureWebApp@1
   inputs:
     azureSubscription: "$(serviceConnection)"
     appName: "$(appName)"
     package: "$(zipPath)"
-    startupCommand: "cd /home/site/wwwroot && node node_modules/next/dist/bin/next start --port $PORT"
-  displayName: "Deploy to Azure App Service"
+    startupCommand: "node server.js"
+  displayName: "Deploy to Azure App Service (Next.js standalone)"
