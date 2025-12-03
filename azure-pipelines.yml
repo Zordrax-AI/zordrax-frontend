@@ -28,19 +28,25 @@ steps:
 - script: npm ci
   displayName: "Install dependencies"
 
-# 3. Build standalone output
+# 3. Build Next.js standalone output
+- script: npm run build
+  displayName: "Build Next.js standalone"
+
+# 4. Prepare standalone deployment folder
 - script: |
     rm -rf out
     mkdir -p out
 
-    # Build Next.js standalone
-    npm run build
-
-    # Copy required standalone files
+    # Copy standalone server bundle
     cp -R .next/standalone/* out/
+
+    # Copy static assets
+    mkdir -p out/.next
     cp -R .next/static out/.next/static
+
+    # Copy public folder (optional)
     cp -R public out/public || true
-  displayName: "Prepare standalone deployment"
+  displayName: "Copy standalone deployment files"
 
 # 5. Create deployment ZIP
 - task: ArchiveFiles@2
@@ -57,7 +63,7 @@ steps:
     targetPath: "$(Build.ArtifactStagingDirectory)"
     artifact: "$(artifactName)"
 
-# 7. Deploy to Azure Web App using server.js entry point
+# 7. Deploy to Azure Web App using standalone server.js
 - task: AzureWebApp@1
   inputs:
     azureSubscription: "$(serviceConnection)"
