@@ -1,5 +1,5 @@
 # ==========================================================
-# Zordrax Frontend Pipeline – FINAL VERIFIED STANDALONE VERSION
+# Zordrax Frontend Pipeline – FINAL WORKING STANDALONE VERSION
 # ==========================================================
 
 trigger:
@@ -32,30 +32,25 @@ steps:
 - script: npm run build
   displayName: "Next.js build (standalone)"
 
-# 4. Prepare standalone output (CORRECT)
+# 4. Prepare final standalone deployment (CLEAN & AZURE-SAFE)
 - script: |
     rm -rf out
     mkdir -p out
 
-    echo "Copying standalone root..."
-    cp -a .next/standalone/. out/
+    echo "Copying standalone root (server.js + node_modules)..."
+    cp -R .next/standalone/* out/
 
-    echo "Copying .next required structure..."
+    echo "Copying required .next runtime folders..."
     mkdir -p out/.next
-    cp -a .next/static out/.next/static
-    cp -a .next/server out/.next/server
-    cp -a .next/BUILD_ID out/.next/BUILD_ID
-
-    echo "Copying manifests..."
-    cp -a .next/*.json out/.next/ 2>/dev/null || true
+    cp -R .next/static out/.next/static
+    cp .next/BUILD_ID out/.next/BUILD_ID
 
     echo "Copying public folder..."
-    cp -a public out/public 2>/dev/null || true
+    cp -R public out/public || true
 
-    echo "Listing final output..."
+    echo "FINAL OUT STRUCTURE:"
     ls -R out
-  displayName: "Assemble final standalone deployment"
-
+  displayName: "Assemble final standalone folder"
 
 # 5. Create deployment ZIP
 - task: ArchiveFiles@2
@@ -66,13 +61,13 @@ steps:
     archiveFile: "$(zipPath)"
     replaceExistingArchive: true
 
-# 6. Publish artifact for pipeline logs
+# 6. Publish artifact for logging
 - task: PublishPipelineArtifact@1
   inputs:
     targetPath: "$(Build.ArtifactStagingDirectory)"
     artifact: "$(artifactName)"
 
-# 7. Deploy to Azure Web App
+# 7. Deploy ZIP to Azure Web App
 - task: AzureWebApp@1
   inputs:
     azureSubscription: "$(serviceConnection)"
