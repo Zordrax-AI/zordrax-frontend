@@ -1,9 +1,7 @@
-// NO "use server" — Azure cannot run server actions in standalone mode
+// NOTE: No "use server" — standalone mode cannot run server actions
 
 export async function checkDeploymentStatus(runId: number) {
-  const backend =
-    process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL;
+  const backend = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
 
   if (!backend) {
     return {
@@ -13,10 +11,13 @@ export async function checkDeploymentStatus(runId: number) {
     };
   }
 
-  const response = await fetch(`${backend}/deploy-status/${runId}`, {
-    method: "GET",
-    cache: "no-store",
-  });
+  const response = await fetch(
+    `${backend}/onboarding/deploy-status/${runId}`,
+    {
+      method: "GET",
+      cache: "no-store",
+    }
+  );
 
   return response.json();
 }
