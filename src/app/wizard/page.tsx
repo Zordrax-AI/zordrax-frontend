@@ -49,12 +49,11 @@ export default function Wizard() {
     setLoading(false);
   }
 
-  // 🔥 TypeScript-safe render helper
-  const renderResult = (value: unknown) => {
-    return <pre className="rounded bg-gray-900 p-3 text-sm text-white">
+  const renderResult = (value: unknown) => (
+    <pre className="rounded bg-gray-900 p-3 text-sm text-white">
       {JSON.stringify(value, null, 2)}
-    </pre>;
-  };
+    </pre>
+  );
 
   return (
     <div className="space-y-4 p-6">

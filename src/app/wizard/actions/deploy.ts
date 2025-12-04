@@ -1,28 +1,12 @@
-// NO "use server" HERE — THIS IS NOW A CLIENT UTILITY FUNCTION
+// No "use server" — runs client side
 
-export type DeploymentRequirements = {
-  environment: string;
-  region: string;
-};
-
-export type DeploymentPayload = {
-  project_name: string;
-  description: string;
-  requirements: DeploymentRequirements;
-};
-
-export async function deployArchitecture(
-  payload: DeploymentPayload
-): Promise<unknown> {
-  const backend =
-    process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL;
+export async function deployArchitecture(payload: unknown): Promise<unknown> {
+  const backend = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
 
   if (!backend) {
     return {
       status: "error",
-      message:
-        "Backend URL missing. Set NEXT_PUBLIC_ONBOARDING_API_URL in App Service.",
+      message: "NEXT_PUBLIC_ONBOARDING_API_URL missing in App Service",
     };
   }
 
@@ -32,5 +16,5 @@ export async function deployArchitecture(
     body: JSON.stringify(payload),
   });
 
-  return await response.json();
+  return response.json();
 }
