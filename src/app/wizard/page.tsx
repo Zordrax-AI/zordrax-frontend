@@ -3,11 +3,21 @@
 import { useState } from "react";
 
 export default function Wizard() {
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<unknown | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleDeploy() {
     setLoading(true);
+
+    const backend = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+
+    if (!backend) {
+      setResult({
+        error: "NEXT_PUBLIC_ONBOARDING_API_URL is missing. Check App Service env vars.",
+      });
+      setLoading(false);
+      return;
+    }
 
     const payload = {
       project_name: "zordrax-demo",
@@ -19,20 +29,21 @@ export default function Wizard() {
     };
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_ONBOARDING_API_URL}/ai-and-deploy`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        }
-      );
+      const res = await fetch(`${backend}/ai-and-deploy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
-      const data = await res.json();
+      const data: unknown = await res.json();
       setResult(data);
-    } catch (err: any) {
-      console.error("DEPLOY FAILED:", err);
-      setResult({ error: err.message });
+
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Unknown error during deployment";
+
+      console.error("DEPLOY FAILED:", message);
+      setResult({ error: message });
     }
 
     setLoading(false);
