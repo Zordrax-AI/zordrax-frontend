@@ -49,6 +49,13 @@ export default function Wizard() {
     setLoading(false);
   }
 
+  // 🔥 TypeScript-safe render helper
+  const renderResult = (value: unknown) => {
+    return <pre className="rounded bg-gray-900 p-3 text-sm text-white">
+      {JSON.stringify(value, null, 2)}
+    </pre>;
+  };
+
   return (
     <div className="space-y-4 p-6">
       <button
@@ -59,11 +66,7 @@ export default function Wizard() {
         {loading ? "Deploying..." : "Deploy Architecture"}
       </button>
 
-      {result && (
-        <pre className="rounded bg-gray-900 p-3 text-sm text-white">
-          {JSON.stringify(result, null, 2)}
-        </pre>
-      )}
+      {result !== null && renderResult(result)}
     </div>
   );
 }
