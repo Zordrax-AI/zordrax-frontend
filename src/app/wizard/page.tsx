@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import type { DeploymentPayload } from "./actions/deploy";
+import { deployArchitecture } from "./actions/deploy";
 
 export default function Wizard() {
   const [result, setResult] = useState<unknown | null>(null);
@@ -9,17 +11,7 @@ export default function Wizard() {
   async function handleDeploy() {
     setLoading(true);
 
-    const backend = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
-
-    if (!backend) {
-      setResult({
-        error: "NEXT_PUBLIC_ONBOARDING_API_URL is missing. Check App Service env vars.",
-      });
-      setLoading(false);
-      return;
-    }
-
-    const payload = {
+    const payload: DeploymentPayload = {
       project_name: "zordrax-demo",
       description: "AI deploy from wizard",
       requirements: {
@@ -29,24 +21,16 @@ export default function Wizard() {
     };
 
     try {
-      const res = await fetch(`${backend}/ai-and-deploy`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data: unknown = await res.json();
+      const data = await deployArchitecture(payload);
       setResult(data);
-
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown error during deployment";
-
       console.error("DEPLOY FAILED:", message);
       setResult({ error: message });
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   const renderResult = (value: unknown) => (

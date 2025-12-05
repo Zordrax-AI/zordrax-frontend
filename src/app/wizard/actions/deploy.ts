@@ -1,16 +1,29 @@
-// No "use server" — runs client side
+// NO "use server" — this is just a shared client helper
 
-export async function deployArchitecture(payload: unknown): Promise<unknown> {
-  const backend = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+export type DeploymentRequirements = {
+  environment: string;
+  region: string;
+};
+
+export type DeploymentPayload = {
+  project_name: string;
+  description: string;
+  requirements: DeploymentRequirements;
+};
+
+export async function deployArchitecture(
+  payload: DeploymentPayload
+): Promise<unknown> {
+  const backend = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   if (!backend) {
     return {
       status: "error",
-      message: "NEXT_PUBLIC_ONBOARDING_API_URL missing in App Service",
+      message: "NEXT_PUBLIC_BACKEND_URL is not configured. API calls will fail.",
     };
   }
 
-  const response = await fetch(`${backend}/ai-and-deploy`, {
+  const response = await fetch(`${backend}/onboarding/ai-and-deploy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

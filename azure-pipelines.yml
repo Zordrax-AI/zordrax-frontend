@@ -1,6 +1,4 @@
-# ==========================================================
-# Zordrax Frontend Pipeline – FINAL WORKING STANDALONE VERSION
-# ==========================================================
+name: Azure Static Web Apps CI/CD
 
 trigger:
   branches:
@@ -10,68 +8,29 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
+# ❗ NO VARIABLE GROUPS — DIRECT VARIABLE FROM PIPELINE UI
 variables:
-  appName: "zordrax-frontend-dev"
-  serviceConnection: "zordrax-analytica-dev-spn"
-  artifactName: "frontend-app"
-  zipPath: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+  SWA_DEPLOYMENT_TOKEN: $(SWA_DEPLOYMENT_TOKEN)
 
 steps:
-
-# 1. Node 20
+# 1. Install Node
 - task: NodeTool@0
   inputs:
-    versionSpec: "20.x"
-  displayName: "Use Node.js 20"
+    versionSpec: '20.x'
+  displayName: "Install Node.js"
 
 # 2. Install dependencies
 - script: npm ci
   displayName: "Install dependencies"
 
-# 3. Build standalone output
+# 3. Build Next.js
 - script: npm run build
-  displayName: "Next.js build (standalone)"
+  displayName: "Build Next.js"
 
-# 4. Prepare final standalone deployment (CLEAN & AZURE-SAFE)
-- script: |
-    rm -rf out
-    mkdir -p out
-
-    echo "Copying standalone root (server.js + node_modules)..."
-    cp -R .next/standalone/* out/
-
-    echo "Copying required .next runtime folders..."
-    mkdir -p out/.next
-    cp -R .next/static out/.next/static
-    cp .next/BUILD_ID out/.next/BUILD_ID
-
-    echo "Copying public folder..."
-    cp -R public out/public || true
-
-    echo "FINAL OUT STRUCTURE:"
-    ls -R out
-  displayName: "Assemble final standalone folder"
-
-# 5. Create deployment ZIP
-- task: ArchiveFiles@2
+# 4. Deploy to Azure Static Web Apps
+- task: AzureStaticWebApp@0
+  displayName: "Deploy to Azure Static Web Apps"
   inputs:
-    rootFolderOrFile: "out"
-    includeRootFolder: false
-    archiveType: zip
-    archiveFile: "$(zipPath)"
-    replaceExistingArchive: true
-
-# 6. Publish artifact for logging
-- task: PublishPipelineArtifact@1
-  inputs:
-    targetPath: "$(Build.ArtifactStagingDirectory)"
-    artifact: "$(artifactName)"
-
-# 7. Deploy ZIP to Azure Web App
-- task: AzureWebApp@1
-  inputs:
-    azureSubscription: "$(serviceConnection)"
-    appName: "$(appName)"
-    package: "$(zipPath)"
-    startupCommand: "node server.js"
-  displayName: "Deploy to Azure App Service"
+    azure_static_web_apps_api_token: $(SWA_DEPLOYMENT_TOKEN)
+    app_location: "/"
+    output_location: ".next"
