@@ -1,0 +1,36 @@
+name: Azure Static Web Apps CI/CD
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: ubuntu-latest
+
+# ❗ NO VARIABLE GROUPS — DIRECT VARIABLE FROM PIPELINE UI
+variables:
+  SWA_DEPLOYMENT_TOKEN: $(SWA_DEPLOYMENT_TOKEN)
+
+steps:
+# 1. Install Node
+- task: NodeTool@0
+  inputs:
+    versionSpec: '20.x'
+  displayName: "Install Node.js"
+
+# 2. Install dependencies
+- script: npm ci
+  displayName: "Install dependencies"
+
+# 3. Build Next.js
+- script: npm run build
+  displayName: "Build Next.js"
+
+# 4. Deploy to Azure Static Web Apps
+- task: AzureStaticWebApp@0
+  displayName: "Deploy to Azure Static Web Apps"
+  inputs:
+    azure_static_web_apps_api_token: $(SWA_DEPLOYMENT_TOKEN)
+    app_location: "/"
+    output_location: ".next"
