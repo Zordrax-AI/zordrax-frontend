@@ -49,6 +49,7 @@ function StatusContent() {
 
     fetchStatus();
     const interval = setInterval(fetchStatus, 5000);
+
     return () => clearInterval(interval);
   }, [runId]);
 
@@ -73,13 +74,15 @@ function StatusContent() {
 
   return (
     <div className="p-8 space-y-8 max-w-3xl mx-auto">
-      <h1 className="text-4xl font-bold mb-2">Deployment Status</h1>
+      {/* HEADER */}
+      <h1 className="text-4xl font-bold mb-2 text-white">Deployment Status</h1>
 
       <p className="text-gray-400">
         Tracking pipeline run{" "}
-        <span className="text-white">{runId}</span>
+        <span className="font-medium text-white">{runId}</span>
       </p>
 
+      {/* STATUS CARD */}
       <div className="rounded-xl p-6 bg-gray-900 text-white shadow-lg">
         <div className={`text-3xl font-bold capitalize ${statusColor}`}>
           {status}
@@ -93,15 +96,17 @@ function StatusContent() {
           <a
             href={details.url}
             target="_blank"
-            className="mt-4 inline-block bg-blue-600 py-2 px-4 rounded-lg"
+            rel="noopener noreferrer"
+            className="mt-4 inline-block bg-blue-600 py-2 px-4 rounded-lg hover:bg-blue-700"
           >
             View Logs →
           </a>
         )}
       </div>
 
-      <div className="space-y-2">
-        <div className="text-sm text-gray-400">Progress</div>
+      {/* PROGRESS BAR */}
+      <div>
+        <div className="text-sm text-gray-400 mb-1">Progress</div>
         <div className="w-full bg-gray-800 h-3 rounded-full overflow-hidden">
           <div
             className="h-full bg-blue-500 transition-all duration-700"
@@ -111,10 +116,11 @@ function StatusContent() {
                 (currentStageIndex / (STAGES.length - 1)) * 100
               )}%`,
             }}
-          ></div>
+          />
         </div>
       </div>
 
+      {/* STAGE TIMELINE */}
       <div className="space-y-4">
         <div className="text-lg font-semibold text-white">
           Deployment Stages
@@ -134,7 +140,7 @@ function StatusContent() {
                     ? "bg-yellow-300 animate-pulse"
                     : "bg-gray-600"
                 }`}
-              ></div>
+              />
 
               <div
                 className={`text-lg capitalize ${
@@ -152,11 +158,12 @@ function StatusContent() {
         })}
       </div>
 
+      {/* RAW JSON */}
       <div className="mt-10">
-        <h2 className="text-xl font-semibold mb-2 text-white">
+        <h2 className="text-xl font-semibold text-white mb-2">
           Raw API Response
         </h2>
-        <pre className="bg-black text-green-400 rounded-lg p-4 text-sm">
+        <pre className="bg-black text-green-400 rounded-lg p-4 text-sm overflow-auto">
           {JSON.stringify({ status, details }, null, 2)}
         </pre>
       </div>
