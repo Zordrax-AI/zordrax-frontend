@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import type { DeploymentPayload } from "./actions/deploy";
 import { deployArchitecture } from "./actions/deploy";
 
 export default function Wizard() {
   const [result, setResult] = useState<unknown | null>(null);
   const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   async function handleDeploy() {
     setLoading(true);
@@ -23,6 +25,11 @@ export default function Wizard() {
     try {
       const data = await deployArchitecture(payload);
       setResult(data);
+
+      const runId = (data as any)?.pipeline_run?.id;
+      if (runId) {
+        router.push(`/wizard/status?run=${runId}`);
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Unknown error during deployment";
