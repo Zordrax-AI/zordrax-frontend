@@ -43,10 +43,11 @@ export default function DeploymentStatusPage() {
         setDetails(data);
         setStatus(data.status ?? "unknown");
 
-      } catch (err) {
-        setStatus("error");
-      }
-    }
+      }  catch (e) {
+    console.error("Status fetch failed:", e);
+    setStatus("error");
+}
+
 
     fetchStatus();
     const interval = setInterval(fetchStatus, 5000);
