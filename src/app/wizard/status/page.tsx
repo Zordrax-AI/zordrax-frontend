@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -22,7 +23,7 @@ const STAGES = [
   "failed",
 ];
 
-export default function DeploymentStatusPage() {
+function StatusContent() {
   const params = useSearchParams();
   const runId = params.get("run");
 
@@ -41,8 +42,7 @@ export default function DeploymentStatusPage() {
         const data: PipelineStatus = await response.json();
         setDetails(data);
         setStatus(data.status ?? "unknown");
-      } catch (e) {
-        console.error("Status fetch failed:", e);
+      } catch {
         setStatus("error");
       }
     }
@@ -73,19 +73,14 @@ export default function DeploymentStatusPage() {
 
   return (
     <div className="p-8 space-y-8 max-w-3xl mx-auto">
+      <h1 className="text-4xl font-bold mb-2">Deployment Status</h1>
 
-      {/* TITLE */}
-      <div>
-        <h1 className="text-4xl font-bold mb-2">Deployment Status</h1>
-        <p className="text-gray-400">
-          Tracking pipeline run{" "}
-          <span className="text-white font-medium">{runId}</span>
-        </p>
-      </div>
+      <p className="text-gray-400">
+        Tracking pipeline run{" "}
+        <span className="text-white">{runId}</span>
+      </p>
 
-      {/* STATUS CARD */}
       <div className="rounded-xl p-6 bg-gray-900 text-white shadow-lg">
-        <div className="text-lg font-semibold mb-1">Current Status</div>
         <div className={`text-3xl font-bold capitalize ${statusColor}`}>
           {status}
         </div>
@@ -98,14 +93,13 @@ export default function DeploymentStatusPage() {
           <a
             href={details.url}
             target="_blank"
-            className="mt-4 inline-block bg-blue-600 py-2 px-4 rounded-lg text-white hover:bg-blue-700"
+            className="mt-4 inline-block bg-blue-600 py-2 px-4 rounded-lg"
           >
-            View Full Logs in Azure DevOps →
+            View Logs →
           </a>
         )}
       </div>
 
-      {/* PROGRESS BAR */}
       <div className="space-y-2">
         <div className="text-sm text-gray-400">Progress</div>
         <div className="w-full bg-gray-800 h-3 rounded-full overflow-hidden">
@@ -121,55 +115,59 @@ export default function DeploymentStatusPage() {
         </div>
       </div>
 
-      {/* TIMELINE */}
       <div className="space-y-4">
         <div className="text-lg font-semibold text-white">
           Deployment Stages
         </div>
 
-        <div className="space-y-4">
-          {STAGES.map((stage, i) => {
-            const isCompleted = i < currentStageIndex;
-            const isCurrent = i === currentStageIndex;
+        {STAGES.map((stage, i) => {
+          const isCompleted = i < currentStageIndex;
+          const isCurrent = i === currentStageIndex;
 
-            return (
-              <div key={stage} className="flex items-center space-x-4">
-                <div
-                  className={`w-4 h-4 rounded-full ${
-                    isCompleted
-                      ? "bg-green-500"
-                      : isCurrent
-                      ? "bg-yellow-400 animate-pulse"
-                      : "bg-gray-600"
-                  }`}
-                ></div>
+          return (
+            <div key={stage} className="flex items-center space-x-4">
+              <div
+                className={`w-4 h-4 rounded-full ${
+                  isCompleted
+                    ? "bg-green-500"
+                    : isCurrent
+                    ? "bg-yellow-300 animate-pulse"
+                    : "bg-gray-600"
+                }`}
+              ></div>
 
-                <div
-                  className={`text-lg capitalize ${
-                    isCompleted
-                      ? "text-green-400"
-                      : isCurrent
-                      ? "text-yellow-300"
-                      : "text-gray-400"
-                  }`}
-                >
-                  {stage.replace("_", " ")}
-                </div>
+              <div
+                className={`text-lg capitalize ${
+                  isCompleted
+                    ? "text-green-400"
+                    : isCurrent
+                    ? "text-yellow-300"
+                    : "text-gray-400"
+                }`}
+              >
+                {stage.replace("_", " ")}
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* RAW JSON */}
       <div className="mt-10">
         <h2 className="text-xl font-semibold mb-2 text-white">
           Raw API Response
         </h2>
-        <pre className="bg-black text-green-400 rounded-lg p-4 text-sm overflow-auto">
+        <pre className="bg-black text-green-400 rounded-lg p-4 text-sm">
           {JSON.stringify({ status, details }, null, 2)}
         </pre>
       </div>
     </div>
+  );
+}
+
+export default function DeploymentStatusPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-white">Loading status…</div>}>
+      <StatusContent />
+    </Suspense>
   );
 }
