@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import type { DeploymentPayload } from "./actions/deploy";
 import { deployArchitecture } from "./actions/deploy";
 
+interface DeployResponse {
+  pipeline_run?: {
+    id?: number;
+    url?: string;
+  };
+  status?: string;
+  project_name?: string;
+}
+
 export default function Wizard() {
   const [result, setResult] = useState<unknown | null>(null);
   const [loading, setLoading] = useState(false);
@@ -23,10 +32,10 @@ export default function Wizard() {
     };
 
     try {
-      const data = await deployArchitecture(payload);
+      const data = (await deployArchitecture(payload)) as DeployResponse;
       setResult(data);
 
-      const runId = (data as any)?.pipeline_run?.id;
+      const runId = data.pipeline_run?.id;
       if (runId) {
         router.push(`/wizard/status?run=${runId}`);
       }
