@@ -36,7 +36,8 @@ function StatusContent() {
     async function fetchStatus() {
       try {
         const response = await fetch(
-          `${process.env.NEXT_PUBLIC_BACKEND_URL}/pipeline/status/${runId}`
+          `${process.env.NEXT_PUBLIC_BACKEND_URL}/pipeline/pipeline/status/${runId}`
+
         );
 
         const data: PipelineStatus = await response.json();
