@@ -39,15 +39,13 @@ export default function DeploymentStatusPage() {
         );
 
         const data: PipelineStatus = await response.json();
-
         setDetails(data);
         setStatus(data.status ?? "unknown");
-
-      }  catch (e) {
-    console.error("Status fetch failed:", e);
-    setStatus("error");
-}
-
+      } catch (e) {
+        console.error("Status fetch failed:", e);
+        setStatus("error");
+      }
+    }
 
     fetchStatus();
     const interval = setInterval(fetchStatus, 5000);
@@ -80,7 +78,8 @@ export default function DeploymentStatusPage() {
       <div>
         <h1 className="text-4xl font-bold mb-2">Deployment Status</h1>
         <p className="text-gray-400">
-          Tracking pipeline run <span className="text-white font-medium">{runId}</span>
+          Tracking pipeline run{" "}
+          <span className="text-white font-medium">{runId}</span>
         </p>
       </div>
 
@@ -124,7 +123,9 @@ export default function DeploymentStatusPage() {
 
       {/* TIMELINE */}
       <div className="space-y-4">
-        <div className="text-lg font-semibold text-white">Deployment Stages</div>
+        <div className="text-lg font-semibold text-white">
+          Deployment Stages
+        </div>
 
         <div className="space-y-4">
           {STAGES.map((stage, i) => {
@@ -162,7 +163,9 @@ export default function DeploymentStatusPage() {
 
       {/* RAW JSON */}
       <div className="mt-10">
-        <h2 className="text-xl font-semibold mb-2 text-white">Raw API Response</h2>
+        <h2 className="text-xl font-semibold mb-2 text-white">
+          Raw API Response
+        </h2>
         <pre className="bg-black text-green-400 rounded-lg p-4 text-sm overflow-auto">
           {JSON.stringify({ status, details }, null, 2)}
         </pre>
