@@ -8,23 +8,26 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
-# ❗ NO VARIABLE GROUPS — DIRECT VARIABLE FROM PIPELINE UI
 variables:
-  SWA_DEPLOYMENT_TOKEN: $(SWA_DEPLOYMENT_TOKEN)
+  - group: azure-static-web-apps-orange-moss-0f5ea9e03-variable-group
+  # This group must contain: SWA_DEPLOYMENT_TOKEN
 
 steps:
+
 # 1. Install Node
 - task: NodeTool@0
-  inputs:
-    versionSpec: '20.x'
   displayName: "Install Node.js"
+  inputs:
+    versionSpec: "20.x"
 
 # 2. Install dependencies
-- script: npm ci
+- script: |
+    npm ci
   displayName: "Install dependencies"
 
-# 3. Build Next.js
-- script: npm run build
+# 3. Build Next.js output
+- script: |
+    npm run build
   displayName: "Build Next.js"
 
 # 4. Deploy to Azure Static Web Apps
