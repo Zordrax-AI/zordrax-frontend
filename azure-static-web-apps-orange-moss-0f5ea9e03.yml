@@ -10,7 +10,7 @@ pool:
 
 variables:
   - group: azure-static-web-apps-orange-moss-0f5ea9e03-variable-group
-  # This group must contain: SWA_DEPLOYMENT_TOKEN
+  # Group must contain: SWA_DEPLOYMENT_TOKEN
 
 steps:
 
@@ -21,14 +21,22 @@ steps:
     versionSpec: "20.x"
 
 # 2. Install dependencies
-- script: |
-    npm ci
+- script: npm ci
   displayName: "Install dependencies"
 
-# 3. Build Next.js output
+# 3. Build Next.js WITH ENVIRONMENT VARIABLES
 - script: |
+    echo "NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL" >> $GITHUB_ENV
+    echo "NEXT_PUBLIC_ONBOARDING_API_URL=$NEXT_PUBLIC_ONBOARDING_API_URL" >> $GITHUB_ENV
+    echo "NEXT_PUBLIC_AUTH_URL=$NEXT_PUBLIC_AUTH_URL" >> $GITHUB_ENV
+    echo "NEXT_PUBLIC_CLIENT_ID=$NEXT_PUBLIC_CLIENT_ID" >> $GITHUB_ENV
     npm run build
   displayName: "Build Next.js"
+  env:
+    NEXT_PUBLIC_BACKEND_URL: $(NEXT_PUBLIC_BACKEND_URL)
+    NEXT_PUBLIC_ONBOARDING_API_URL: $(NEXT_PUBLIC_ONBOARDING_API_URL)
+    NEXT_PUBLIC_AUTH_URL: $(NEXT_PUBLIC_AUTH_URL)
+    NEXT_PUBLIC_CLIENT_ID: $(NEXT_PUBLIC_CLIENT_ID)
 
 # 4. Deploy to Azure Static Web Apps
 - task: AzureStaticWebApp@0
