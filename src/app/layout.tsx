@@ -1,19 +1,22 @@
-import type { Metadata } from "next";
 import "./globals.css";
+import TopNav from "@/components/nav/top-nav";
 
-export const metadata: Metadata = {
-  title: "Zordrax Analytica | Deploy Console",
-  description: "Trigger AI-driven or manual infrastructure deployments.",
+export const metadata = {
+  title: "Zordrax Analytica",
+  description: "AI Orchestrated Data Infrastructure",
 };
 
-type RootLayoutProps = {
+export default function RootLayout({
+  children,
+}: {
   children: React.ReactNode;
-};
-
-export default function RootLayout({ children }: RootLayoutProps) {
+}) {
   return (
     <html lang="en">
-      <body className="bg-gray-50 text-gray-900 antialiased">{children}</body>
+      <body className="bg-gray-50 min-h-screen">
+        <TopNav />
+        <main className="pt-20">{children}</main>
+      </body>
     </html>
   );
 }
