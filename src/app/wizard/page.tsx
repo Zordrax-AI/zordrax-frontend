@@ -40,9 +40,13 @@ export default function WizardPage() {
 
       const runId = resp.pipeline_run?.id;
       if (runId) router.push(`/wizard/status?run=${runId}`);
-    } catch (err) {
-      setResult({ error: String(err) });
-    } finally {
+    } catch (err: unknown) {
+  if (err instanceof Error) {
+    setResult({ error: err.message });
+  } else {
+    setResult({ error: String(err) });
+  }
+} finally {
       setLoading(false);
     }
   }
