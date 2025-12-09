@@ -13,11 +13,14 @@ export default function ReviewPage() {
       const stored = localStorage.getItem("onboarding_answers");
       const answers: Record<string, string> = stored ? JSON.parse(stored) : {};
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai/recommend-stack`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_ONBOARDING_API_URL}/ai/recommend-stack`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers }),
+        }
+      );
 
       const data: Architecture = await res.json();
       setRecommendation(data);

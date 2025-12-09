@@ -17,7 +17,8 @@ export default function QuestionsPage() {
 
   useEffect(() => {
     async function loadQuestions() {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai/questions`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_ONBOARDING_API_URL}/ai/questions`);
+
       const data = await res.json();
       setQuestions(data);
     }

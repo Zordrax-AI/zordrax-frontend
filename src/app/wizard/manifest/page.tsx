@@ -15,7 +15,7 @@ export default function ManifestPage() {
 
       const architecture: Architecture = JSON.parse(stored);
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai/manifest`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_ONBOARDING_API_URL}/ai/manifest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(architecture),

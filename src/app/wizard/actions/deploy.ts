@@ -18,7 +18,7 @@ export interface DeploymentPayload {
 export async function deployArchitecture(
   payload: DeploymentPayload
 ): Promise<DeployResponse> {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/deploy`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_ONBOARDING_API_URL}/deploy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
