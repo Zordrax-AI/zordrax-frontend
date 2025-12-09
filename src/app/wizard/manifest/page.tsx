@@ -1,3 +1,4 @@
+// src/app/wizard/manifest/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -7,7 +8,7 @@ import type {
   ArchitectureRecommendation,
   EtlSpec,
   GovernanceSpec,
-  BiSpec
+  BiSpec,
 } from "@/types/onboarding";
 
 // Manifest slice that matches backend shape EXACTLY
@@ -38,6 +39,7 @@ export default function ManifestPage() {
 
       etl: {
         tool: arch.etl?.tool ?? "unknown",
+        ...arch.etl,
       },
 
       governance: {
@@ -46,9 +48,9 @@ export default function ManifestPage() {
 
       bi: {
         tool: arch.bi?.tool ?? "none",
-        model: arch.bi?.model ?? undefined,
-        kpis: arch.bi?.kpis ?? [],
-      }
+        model: arch.bi?.model,
+        kpis: arch.bi?.kpis,
+      },
     };
 
     setManifest(generatedManifest);
@@ -71,6 +73,7 @@ export default function ManifestPage() {
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold">Generated Terraform Manifest</h1>
 
+      {/* Architecture Preview */}
       <div>
         <h2 className="text-lg font-semibold mb-2">
           Architecture Recommendation
@@ -80,6 +83,7 @@ export default function ManifestPage() {
         </pre>
       </div>
 
+      {/* Manifest Preview */}
       <div>
         <h2 className="text-lg font-semibold mb-2">Terraform Manifest</h2>
         <pre className="bg-gray-900 text-white text-sm p-4 rounded overflow-auto">

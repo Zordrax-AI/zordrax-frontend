@@ -1,3 +1,20 @@
+// src/types/onboarding.ts
+
+// ---------- Onboarding Q&A ----------
+
+export interface OnboardingQuestion {
+  id: string;
+  text: string;
+  type: "single" | "multi" | "text";
+  options?: string[];
+}
+
+export interface OnboardingAnswers {
+  answers: Record<string, string>;
+}
+
+// ---------- Architecture + Manifest ----------
+
 export interface InfrastructureSpec {
   [key: string]: unknown;
 }
@@ -18,6 +35,7 @@ export interface BiSpec {
 }
 
 export interface ArchitectureRecommendation {
+  // frontend-only metadata (backend ignores extras)
   project_name?: string;
   description?: string;
 
@@ -26,6 +44,8 @@ export interface ArchitectureRecommendation {
   governance: GovernanceSpec;
   bi: BiSpec;
 }
+
+// ---------- Deployment ----------
 
 export interface DeployPipelineInfo {
   id?: number;

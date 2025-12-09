@@ -1,3 +1,4 @@
+// src/app/wizard/deploy/page.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -8,7 +9,7 @@ import type {
   GovernanceSpec,
   BiSpec,
   ArchitectureRecommendation,
-  DeployResponse
+  DeployResponse,
 } from "@/types/onboarding";
 
 import type { DeployError } from "../actions/deploy";
@@ -45,13 +46,14 @@ export default function DeployPage() {
 
     setLoading(true);
 
+    // FINAL Correct Payload — matches backend ArchitectureRecommendation
     const payload: ArchitectureRecommendation = {
       project_name: "zordrax-demo",
       description: "AI deploy from wizard",
       infrastructure: manifest.infrastructure,
       etl: manifest.etl,
       governance: manifest.governance,
-      bi: manifest.bi
+      bi: manifest.bi,
     };
 
     const resp = await deployArchitecture(payload);
