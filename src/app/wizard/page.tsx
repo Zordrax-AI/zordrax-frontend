@@ -3,11 +3,21 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import type { Manifest, DeployResponse } from "@/types/onboarding";
+import type { DeployResponse } from "@/types/onboarding";
 import type { DeployError } from "./actions/deploy";
 import { deployArchitecture } from "./actions/deploy";
 
-// Union type for success OR error
+// -------------------------------
+// LOCAL Manifest Type
+// -------------------------------
+type Manifest = {
+  infrastructure: Record<string, unknown>;
+  etl: Record<string, unknown>;
+  governance: Record<string, unknown>;
+  bi: Record<string, unknown>;
+};
+
+// Deploy can return success OR error
 type DeployResult = DeployResponse | DeployError;
 
 export default function WizardPage() {
@@ -17,7 +27,9 @@ export default function WizardPage() {
   const [result, setResult] = useState<DeployResult | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // ---------------------------------------
   // Load manifest from localStorage
+  // ---------------------------------------
   useEffect(() => {
     const stored = localStorage.getItem("terraform_manifest");
     if (stored) {
@@ -25,6 +37,9 @@ export default function WizardPage() {
     }
   }, []);
 
+  // ---------------------------------------
+  // Perform the deployment
+  // ---------------------------------------
   async function handleDeploy() {
     if (!manifest) {
       alert("Manifest missing — complete onboarding first.");
@@ -43,16 +58,15 @@ export default function WizardPage() {
       bi: manifest.bi,
     });
 
-    // Works with both DeployResponse and DeployError
     setResult(resp);
 
-    // If backend returned an error, do not redirect
+    // Stop if API returned an error
     if ("error" in resp) {
       setLoading(false);
       return;
     }
 
-    // Otherwise proceed to status page
+    // Otherwise redirect to pipeline status
     const runId = resp.pipeline_run?.id;
     if (runId) {
       router.push(`/wizard/status?run=${runId}`);
