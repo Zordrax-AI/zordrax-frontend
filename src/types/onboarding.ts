@@ -37,3 +37,10 @@ export interface DeployResponse {
   project_name?: string;
   error?: string;
 }
+
+export interface OnboardingQuestion {
+  id: string;
+  text: string;
+  type: "select" | "text";
+  options: string[];
+}
