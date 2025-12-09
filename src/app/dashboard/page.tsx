@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 interface PipelineRun {
@@ -22,8 +22,7 @@ interface RetryResponse {
   url?: string;
 }
 
-type ManifestData = any;
-
+type ManifestData = Record<string, any> | any[] | null;   // ✅ FIXED TYPE
 
 export default function DashboardPage() {
   const [runs, setRuns] = useState<PipelineRun[]>([]);
@@ -34,7 +33,7 @@ export default function DashboardPage() {
   const [retryLoading, setRetryLoading] = useState(false);
   const [retryMessage, setRetryMessage] = useState<string | null>(null);
 
-  const [manifest, setManifest] = useState<ManifestData | null>(null);
+  const [manifest, setManifest] = useState<ManifestData>(null);
   const [manifestLoading, setManifestLoading] = useState(false);
   const [manifestError, setManifestError] = useState<string | null>(null);
 
@@ -46,7 +45,7 @@ export default function DashboardPage() {
     : undefined;
 
   // --------- LOAD HISTORY ----------
-  async function loadHistory() {
+  const loadHistory = useCallback(async () => {
     if (!pipelineBase) {
       setError("NEXT_PUBLIC_BACKEND_URL is not configured.");
       return;
@@ -71,11 +70,11 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [pipelineBase]);  // ✅ FIXED DEPENDENCY
 
   useEffect(() => {
-    void loadHistory();
-  }, []);
+    loadHistory();     // ✅ OK because of useCallback()
+  }, [loadHistory]);
 
   // --------- VIEW STATUS ----------
   function handleViewStatus(runId: number) {
@@ -107,14 +106,12 @@ export default function DashboardPage() {
 
       if (newId) {
         setRetryMessage(`Run retriggered as #${newId}`);
-        // Optional: jump to status page for new run
         router.push(`/wizard/status?run=${newId.toString()}`);
       } else {
         setRetryMessage("Retry completed, but no new_run_id was returned.");
       }
 
-      // Refresh history after retry
-      void loadHistory();
+      await loadHistory();
     } catch {
       setRetryMessage("Retry request failed.");
     } finally {
@@ -133,10 +130,7 @@ export default function DashboardPage() {
       return;
     }
 
-    // 🧠 Assumed endpoint – adjust if your backend exposes manifest differently.
-    // For example: /timeline/{run_id} or /onboarding/manifest/{run_id}
     const manifestUrl = `${backendUrl}/timeline/${run.id.toString()}`;
-
     setManifestLoading(true);
 
     try {
@@ -158,9 +152,9 @@ export default function DashboardPage() {
     }
   }
 
+  // ---------- RENDER ----------
   return (
     <div className="min-h-screen bg-black text-white p-8">
-      {/* HEADER */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-4xl font-bold">Zordrax Deploy Console</h1>
@@ -184,7 +178,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* GRID LAYOUT */}
+      {/* GRID: HISTORY + DETAILS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* LEFT: HISTORY TABLE */}
         <div className="lg:col-span-2 rounded-2xl bg-gray-900 p-6 shadow-xl">
@@ -206,35 +200,28 @@ export default function DashboardPage() {
                   <th className="px-4 py-2 text-left">Actions</th>
                 </tr>
               </thead>
+
               <tbody>
                 {runs.length === 0 && !loading && (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-6 text-center text-gray-400"
-                    >
+                    <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                       No runs found. Trigger a deployment from the wizard.
                     </td>
                   </tr>
                 )}
 
                 {runs.map((run) => {
-                  const state = (run.state ?? "").toLowerCase();
-                  const result = (run.result ?? "").toLowerCase();
-
                   const stateColor =
-                    state === "completed"
+                    run.state?.toLowerCase() === "completed"
                       ? "text-green-400"
-                      : state === "running"
+                      : run.state?.toLowerCase() === "running"
                       ? "text-yellow-300"
-                      : state === "cancelling" || state === "canceled"
-                      ? "text-orange-300"
                       : "text-gray-300";
 
                   const resultColor =
-                    result === "succeeded"
+                    run.result?.toLowerCase() === "succeeded"
                       ? "text-green-400"
-                      : result === "failed"
+                      : run.result?.toLowerCase() === "failed"
                       ? "text-red-400"
                       : "text-gray-300";
 
@@ -258,11 +245,12 @@ export default function DashboardPage() {
                           ? new Date(run.created).toLocaleString()
                           : "—"}
                       </td>
+
                       <td className="px-4 py-2 space-x-2">
                         <button
                           type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
+                          onClick={(e) => {
+                            e.stopPropagation();
                             handleViewStatus(run.id);
                           }}
                           className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs"
@@ -272,9 +260,9 @@ export default function DashboardPage() {
 
                         <button
                           type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleRetry(run.id);
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRetry(run.id);
                           }}
                           disabled={retryLoading}
                           className="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-xs disabled:opacity-50"
@@ -287,7 +275,7 @@ export default function DashboardPage() {
                             href={run.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            onClick={(event) => event.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
                             className="px-3 py-1 rounded bg-gray-700 hover:bg-gray-600 text-xs"
                           >
                             Logs
@@ -300,10 +288,7 @@ export default function DashboardPage() {
 
                 {loading && (
                   <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-6 text-center text-gray-400"
-                    >
+                    <td colSpan={5} className="px-4 py-6 text-center text-gray-400">
                       Loading history…
                     </td>
                   </tr>
@@ -319,10 +304,11 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* RIGHT: DETAILS + MANIFEST */}
+        {/* RIGHT: Selected Run + Manifest */}
         <div className="rounded-2xl bg-gray-900 p-6 shadow-xl space-y-6">
           <div>
             <h2 className="text-xl font-semibold mb-2">Selected Run</h2>
+
             {!selectedRun && (
               <p className="text-gray-500 text-sm">
                 Click a row in the history table to see details & manifest.
@@ -337,25 +323,22 @@ export default function DashboardPage() {
                     #{selectedRun.id}
                   </span>
                 </div>
+
                 <div>
                   <span className="text-gray-400">State: </span>
-                  <span className="capitalize">
-                    {selectedRun.state ?? "—"}
-                  </span>
+                  <span>{selectedRun.state ?? "—"}</span>
                 </div>
+
                 <div>
                   <span className="text-gray-400">Result: </span>
-                  <span className="capitalize">
-                    {selectedRun.result ?? "—"}
-                  </span>
+                  <span>{selectedRun.result ?? "—"}</span>
                 </div>
+
                 <div>
                   <span className="text-gray-400">Created: </span>
                   <span>
                     {selectedRun.created
-                      ? new Date(
-                          selectedRun.created,
-                        ).toLocaleString()
+                      ? new Date(selectedRun.created).toLocaleString()
                       : "—"}
                   </span>
                 </div>
@@ -363,13 +346,15 @@ export default function DashboardPage() {
             )}
           </div>
 
+          {/* Manifest Viewer */}
           <div className="border-t border-gray-800 pt-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-lg font-semibold">Terraform Manifest</h3>
+
               {selectedRun && (
                 <button
                   type="button"
-                  onClick={() => void handleSelectRun(selectedRun)}
+                  onClick={() => handleSelectRun(selectedRun)}
                   disabled={manifestLoading}
                   className="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-xs disabled:opacity-50"
                 >
@@ -377,13 +362,6 @@ export default function DashboardPage() {
                 </button>
               )}
             </div>
-
-            {!selectedRun && (
-              <p className="text-gray-500 text-sm">
-                Select a run to attempt loading its manifest timeline from the
-                backend.
-              </p>
-            )}
 
             {manifestError && (
               <div className="mb-2 text-xs text-red-400">
@@ -399,8 +377,7 @@ export default function DashboardPage() {
 
             {!manifest && selectedRun && !manifestLoading && !manifestError && (
               <p className="text-gray-500 text-xs">
-                No manifest loaded yet. Click “Reload” to fetch from the
-                backend once the manifest endpoint is ready.
+                No manifest loaded yet. Click “Reload” to fetch from the backend.
               </p>
             )}
           </div>
