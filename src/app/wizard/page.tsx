@@ -2,19 +2,27 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
 import type { Manifest, DeployResponse } from "@/types/onboarding";
+import type { DeployError } from "./actions/deploy";
 import { deployArchitecture } from "./actions/deploy";
+
+// Union type for success OR error
+type DeployResult = DeployResponse | DeployError;
 
 export default function WizardPage() {
   const router = useRouter();
 
   const [manifest, setManifest] = useState<Manifest | null>(null);
-  const [result, setResult] = useState<DeployResponse | null>(null);
+  const [result, setResult] = useState<DeployResult | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Load manifest from localStorage
   useEffect(() => {
     const stored = localStorage.getItem("terraform_manifest");
-    if (stored) setManifest(JSON.parse(stored) as Manifest);
+    if (stored) {
+      setManifest(JSON.parse(stored) as Manifest);
+    }
   }, []);
 
   async function handleDeploy() {
@@ -25,30 +33,32 @@ export default function WizardPage() {
 
     setLoading(true);
 
-    try {
-      const resp = await deployArchitecture({
-        project_name: "zordrax-demo",
-        description: "AI deploy from wizard",
-        requirements: { environment: "dev", region: "westeurope" },
-        infrastructure: manifest.infrastructure,
-        etl: manifest.etl,
-        governance: manifest.governance,
-        bi: manifest.bi,
-      });
+    const resp = await deployArchitecture({
+      project_name: "zordrax-demo",
+      description: "AI deploy from wizard",
+      requirements: { environment: "dev", region: "westeurope" },
+      infrastructure: manifest.infrastructure,
+      etl: manifest.etl,
+      governance: manifest.governance,
+      bi: manifest.bi,
+    });
 
-      setResult(resp);
+    // Works with both DeployResponse and DeployError
+    setResult(resp);
 
-      const runId = resp.pipeline_run?.id;
-      if (runId) router.push(`/wizard/status?run=${runId}`);
-    } catch (err: unknown) {
-  if (err instanceof Error) {
-    setResult({ error: err.message });
-  } else {
-    setResult({ error: String(err) });
-  }
-} finally {
+    // If backend returned an error, do not redirect
+    if ("error" in resp) {
       setLoading(false);
+      return;
     }
+
+    // Otherwise proceed to status page
+    const runId = resp.pipeline_run?.id;
+    if (runId) {
+      router.push(`/wizard/status?run=${runId}`);
+    }
+
+    setLoading(false);
   }
 
   return (
