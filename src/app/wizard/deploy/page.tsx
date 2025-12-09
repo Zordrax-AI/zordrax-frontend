@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { Manifest, DeployResponse } from "@/types/onboarding";
+import type { Manifest } from "@/types/onboarding";
 import { deployArchitecture } from "../actions/deploy";
 
 export default function DeployPage() {
   const router = useRouter();
 
   const [manifest, setManifest] = useState<Manifest | null>(null);
-  const [result, setResult] = useState<DeployResponse | null>(null);
+  const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -27,33 +27,31 @@ export default function DeployPage() {
 
     setLoading(true);
 
-    try {
-      const resp = await deployArchitecture({
-        project_name: "zordrax-demo",
-        description: "AI deploy from wizard",
-        requirements: {
-          environment: "dev",
-          region: "westeurope",
-        },
-        infrastructure: manifest.infrastructure,
-        etl: manifest.etl,
-        governance: manifest.governance,
-        bi: manifest.bi,
-      });
+    const resp = await deployArchitecture({
+      project_name: "zordrax-demo",
+      description: "AI deploy from wizard",
+      requirements: { environment: "dev", region: "westeurope" },
+      infrastructure: manifest.infrastructure,
+      etl: manifest.etl,
+      governance: manifest.governance,
+      bi: manifest.bi,
+    });
 
-      setResult(resp);
+    setResult(resp);
 
-      const runId = resp.pipeline_run?.id;
-      if (runId) router.push(`/wizard/status?run=${runId}`);
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setResult({ error: err.message });
-      } else {
-        setResult({ error: String(err) });
-      }
-    } finally {
+    // If backend returned an error → stop here
+    if ("error" in resp) {
       setLoading(false);
+      return;
     }
+
+    // On success, redirect to status page
+    const runId = resp.pipeline_run?.id;
+    if (runId) {
+      router.push(`/wizard/status?run=${runId}`);
+    }
+
+    setLoading(false);
   }
 
   return (
