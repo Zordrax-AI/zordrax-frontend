@@ -14,7 +14,6 @@ import type {
 import type { DeployError } from "../actions/deploy";
 import { deployArchitecture } from "../actions/deploy";
 
-// Manifest type that matches EXACT backend structure
 type Manifest = {
   infrastructure: Record<string, unknown>;
   etl: EtlSpec;
@@ -22,7 +21,6 @@ type Manifest = {
   bi: BiSpec;
 };
 
-// Union type for success OR error responses
 type DeployResult = DeployResponse | DeployError;
 
 export default function DeployPage() {
@@ -32,7 +30,6 @@ export default function DeployPage() {
   const [result, setResult] = useState<DeployResult | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Load manifest from localStorage
   useEffect(() => {
     const stored = localStorage.getItem("terraform_manifest");
     if (stored) {
@@ -48,14 +45,12 @@ export default function DeployPage() {
 
     setLoading(true);
 
-    // Build the payload EXACTLY matching backend ArchitectureRecommendation
+    // 🔥 FINAL Correct Payload — matches backend ArchitectureRecommendation
     const payload: ArchitectureRecommendation = {
       project_name: "zordrax-demo",
       description: "AI deploy from wizard",
-      requirements: {
-        environment: "dev",
-        region: "westeurope"
-      },
+
+      // NO requirements — backend removed this
       infrastructure: manifest.infrastructure,
       etl: manifest.etl,
       governance: manifest.governance,
@@ -65,17 +60,13 @@ export default function DeployPage() {
     const resp = await deployArchitecture(payload);
     setResult(resp);
 
-    // Stop if backend reports an error
     if ("error" in resp) {
       setLoading(false);
       return;
     }
 
-    // Redirect to deployment status dashboard
     const runId = resp.pipeline_run?.id;
-    if (runId) {
-      router.push(`/wizard/status?run=${runId}`);
-    }
+    if (runId) router.push(`/wizard/status?run=${runId}`);
 
     setLoading(false);
   }
