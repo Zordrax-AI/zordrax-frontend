@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 interface PipelineStatus {
   run_id?: number;
   status?: string;
-  stage?: string;
+  stage?: string | null;
   message?: string;
   url?: string;
 }
@@ -23,6 +23,22 @@ const STAGES = [
   "failed",
 ];
 
+// -------------------------
+// MAP DEVOPS STATUS TO UI
+// -------------------------
+function mapStatusToStage(status?: string | null): string {
+  if (!status) return "queued";
+
+  const s = status.toLowerCase();
+
+  if (s === "notstarted") return "queued";
+  if (s === "inprogress") return "provisioning";
+  if (s === "completed" || s === "succeeded") return "completed";
+  if (s === "failed") return "failed";
+
+  return "queued";
+}
+
 function StatusContent() {
   const params = useSearchParams();
   const runId = params.get("run");
@@ -37,7 +53,6 @@ function StatusContent() {
       try {
         const response = await fetch(
           `${process.env.NEXT_PUBLIC_BACKEND_URL}/pipeline/pipeline/status/${runId}`
-
         );
 
         const data: PipelineStatus = await response.json();
@@ -62,14 +77,19 @@ function StatusContent() {
     );
   }
 
-  const currentStageIndex = STAGES.indexOf(details?.stage || "");
+  // -------------------------
+  // Stage Mapping
+  // -------------------------
+  const mappedStage = mapStatusToStage(status);
+  const currentStageIndex = STAGES.indexOf(mappedStage);
 
   const statusColor =
-    status === "succeeded"
+    status.toLowerCase() === "completed" ||
+    status.toLowerCase() === "succeeded"
       ? "text-green-400"
-      : status === "failed"
+      : status.toLowerCase() === "failed"
       ? "text-red-400"
-      : status === "running"
+      : status.toLowerCase() === "inprogress"
       ? "text-yellow-300"
       : "text-gray-300";
 
@@ -80,7 +100,7 @@ function StatusContent() {
 
       <p className="text-gray-400">
         Tracking pipeline run{" "}
-        <span className="font-medium text-white">{runId}</span>
+        <span className="font-mono text-white">#{runId}</span>
       </p>
 
       {/* STATUS CARD */}
@@ -88,10 +108,6 @@ function StatusContent() {
         <div className={`text-3xl font-bold capitalize ${statusColor}`}>
           {status}
         </div>
-
-        {details?.message && (
-          <p className="mt-3 text-yellow-400 text-sm">{details.message}</p>
-        )}
 
         {details?.url && (
           <a
@@ -105,9 +121,9 @@ function StatusContent() {
         )}
       </div>
 
-      {/* PROGRESS BAR */}
-      <div>
-        <div className="text-sm text-gray-400 mb-1">Progress</div>
+      {/* PROGRESS */}
+      <div className="space-y-2">
+        <div className="text-sm text-gray-400">Progress</div>
         <div className="w-full bg-gray-800 h-3 rounded-full overflow-hidden">
           <div
             className="h-full bg-blue-500 transition-all duration-700"
@@ -117,7 +133,7 @@ function StatusContent() {
                 (currentStageIndex / (STAGES.length - 1)) * 100
               )}%`,
             }}
-          />
+          ></div>
         </div>
       </div>
 
@@ -127,9 +143,9 @@ function StatusContent() {
           Deployment Stages
         </div>
 
-        {STAGES.map((stage, i) => {
-          const isCompleted = i < currentStageIndex;
-          const isCurrent = i === currentStageIndex;
+        {STAGES.map((stage, index) => {
+          const isCompleted = index < currentStageIndex;
+          const isCurrent = index === currentStageIndex;
 
           return (
             <div key={stage} className="flex items-center space-x-4">
@@ -141,7 +157,7 @@ function StatusContent() {
                     ? "bg-yellow-300 animate-pulse"
                     : "bg-gray-600"
                 }`}
-              />
+              ></div>
 
               <div
                 className={`text-lg capitalize ${
@@ -164,8 +180,9 @@ function StatusContent() {
         <h2 className="text-xl font-semibold text-white mb-2">
           Raw API Response
         </h2>
+
         <pre className="bg-black text-green-400 rounded-lg p-4 text-sm overflow-auto">
-          {JSON.stringify({ status, details }, null, 2)}
+          {JSON.stringify({ status, details, mappedStage }, null, 2)}
         </pre>
       </div>
     </div>
