@@ -3,10 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+interface Question {
+  id: string;
+  text: string;
+  type: string;
+  options: string[];
+}
+
 export default function QuestionsPage() {
   const router = useRouter();
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState({});
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
 
   useEffect(() => {
     async function loadQuestions() {
@@ -17,7 +24,7 @@ export default function QuestionsPage() {
     loadQuestions();
   }, []);
 
-  function handleChange(id, value) {
+  function handleChange(id: string, value: string) {
     setAnswers(prev => ({ ...prev, [id]: value }));
   }
 
