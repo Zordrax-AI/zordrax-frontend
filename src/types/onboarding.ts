@@ -44,3 +44,12 @@ export interface OnboardingQuestion {
   type: "select" | "text";
   options: string[];
 }
+
+export interface ArchitectureRecommendation {
+  project_name?: string;
+  description?: string;
+  infrastructure: any;
+  etl: any;
+  governance: any;
+  bi: any;
+}
