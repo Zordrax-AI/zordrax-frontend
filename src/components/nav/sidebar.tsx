@@ -3,36 +3,38 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const pages = [
-  { href: "/wizard/questions", label: "AI Questions" },
-  { href: "/wizard/review", label: "Review" },
-  { href: "/wizard/manifest", label: "Manifest" },
-  { href: "/wizard/deploy", label: "Deploy" },
-  { href: "/wizard/status", label: "Status" },
-  { href: "/wizard/history", label: "History" },
+const steps = [
+  { label: "AI Questions", href: "/wizard/questions" },
+  { label: "Review", href: "/wizard/review" },
+  { label: "Manifest", href: "/wizard/manifest" },
+  { label: "Deploy", href: "/wizard/deploy" },
+  { label: "Status", href: "/wizard/status" },
+  { label: "History", href: "/wizard/history" },
 ];
 
 export default function Sidebar() {
-  const path = usePathname();
+  const pathname = usePathname();
 
   return (
     <aside className="w-64 min-h-screen bg-white dark:bg-gray-900 border-r p-4">
-      <h3 className="text-xs uppercase text-gray-500 mb-4">Onboarding Wizard</h3>
+      <h3 className="text-xs uppercase text-gray-500 mb-3 tracking-wide">
+        Onboarding Wizard
+      </h3>
 
       <nav className="space-y-1">
-        {pages.map((p) => {
-          const active = path.startsWith(p.href);
+        {steps.map((step) => {
+          const active = pathname.startsWith(step.href);
           return (
             <Link
-              key={p.href}
-              href={p.href}
+              key={step.href}
+              href={step.href}
               className={`block px-3 py-2 rounded text-sm ${
                 active
                   ? "bg-blue-600 text-white"
                   : "text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-800"
               }`}
             >
-              {p.label}
+              {step.label}
             </Link>
           );
         })}

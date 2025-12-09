@@ -1,7 +1,7 @@
 "use client";
 
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function TenantSelector() {
   const [tenant, setTenant] = useState("default");
@@ -11,21 +11,21 @@ export default function TenantSelector() {
     if (saved) setTenant(saved);
   }, []);
 
-  function handleChange(value: string) {
-    setTenant(value);
-    localStorage.setItem("tenant", value);
+  function changeTenant(val: string) {
+    setTenant(val);
+    localStorage.setItem("tenant", val);
   }
 
   return (
-    <Select value={tenant} onValueChange={handleChange}>
+    <Select value={tenant} onValueChange={changeTenant}>
       <SelectTrigger className="w-40">
-        <SelectValue placeholder="Select tenant" />
+        <SelectValue placeholder="Select Tenant" />
       </SelectTrigger>
       <SelectContent>
         <SelectItem value="default">Default Tenant</SelectItem>
-        <SelectItem value="acme">Acme Corp</SelectItem>
         <SelectItem value="healthcare">Healthcare Org</SelectItem>
         <SelectItem value="finance">Finance Group</SelectItem>
+        <SelectItem value="acme">Acme Corp</SelectItem>
       </SelectContent>
     </Select>
   );

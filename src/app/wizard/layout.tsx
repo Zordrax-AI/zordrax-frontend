@@ -8,7 +8,7 @@ export default function WizardLayout({ children }: { children: React.ReactNode }
 
       <div className="flex-1 p-8">
         <Breadcrumbs />
-        <div className="mt-6">{children}</div>
+        {children}
       </div>
     </div>
   );
