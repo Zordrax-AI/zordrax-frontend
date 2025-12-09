@@ -8,11 +8,13 @@ import type { DeployError } from "./actions/deploy";
 import { deployArchitecture } from "./actions/deploy";
 
 // -------------------------------
-// LOCAL Manifest Type
+// Types matching backend contract
 // -------------------------------
+type EtlSpec = { tool: string };
+
 type Manifest = {
   infrastructure: Record<string, unknown>;
-  etl: Record<string, unknown>;
+  etl: EtlSpec;
   governance: Record<string, unknown>;
   bi: Record<string, unknown>;
 };
@@ -27,9 +29,7 @@ export default function WizardPage() {
   const [result, setResult] = useState<DeployResult | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // ---------------------------------------
   // Load manifest from localStorage
-  // ---------------------------------------
   useEffect(() => {
     const stored = localStorage.getItem("terraform_manifest");
     if (stored) {
@@ -37,9 +37,6 @@ export default function WizardPage() {
     }
   }, []);
 
-  // ---------------------------------------
-  // Perform the deployment
-  // ---------------------------------------
   async function handleDeploy() {
     if (!manifest) {
       alert("Manifest missing — complete onboarding first.");
@@ -53,20 +50,18 @@ export default function WizardPage() {
       description: "AI deploy from wizard",
       requirements: { environment: "dev", region: "westeurope" },
       infrastructure: manifest.infrastructure,
-      etl: manifest.etl,
+      etl: manifest.etl,                // ✔ Correctly typed
       governance: manifest.governance,
       bi: manifest.bi,
     });
 
     setResult(resp);
 
-    // Stop if API returned an error
     if ("error" in resp) {
       setLoading(false);
       return;
     }
 
-    // Otherwise redirect to pipeline status
     const runId = resp.pipeline_run?.id;
     if (runId) {
       router.push(`/wizard/status?run=${runId}`);
