@@ -1,47 +1,52 @@
+"use client";
+
 import Link from "next/link";
 
-const actions = [
-  {
-    href: "/wizard",
-    title: "AI Deploy Architecture",
-    description: "Let the AI orchestrator provision the recommended architecture.",
-  },
-  {
-    href: "/manual",
-    title: "Manual Deploy",
-    description: "Trigger a manual deployment run with your curated configuration.",
-  },
-];
-
-export default function HomePage() {
+export default function Home() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col items-center justify-center gap-10 px-6 py-16">
-      <section className="text-center">
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">
-          Zordrax Analytica
-        </p>
-        <h1 className="mt-4 text-4xl font-bold text-gray-900">
-          Deploy adaptive data infrastructure in minutes.
-        </h1>
-        <p className="mt-4 text-lg text-gray-600">
-          Choose between AI-guided orchestration or a manual run. Both paths connect to the existing
-          onboarding backend.
-        </p>
-      </section>
+    <div className="flex flex-col items-center justify-center py-20 px-6">
+      <h2 className="text-sm uppercase tracking-wide text-blue-600 font-semibold mb-2">
+        Zordrax Analytica
+      </h2>
 
-      <section className="grid w-full gap-6 md:grid-cols-2">
-        {actions.map((action) => (
-          <Link
-            key={action.href}
-            href={action.href}
-            className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-200 hover:shadow-md"
-          >
-            <p className="text-sm font-semibold uppercase tracking-wide text-blue-500">Start here</p>
-            <h2 className="mt-3 text-2xl font-semibold text-gray-900">{action.title}</h2>
-            <p className="mt-2 text-sm text-gray-600">{action.description}</p>
-          </Link>
-        ))}
-      </section>
-    </main>
+      <h1 className="text-4xl font-bold text-center mb-4">
+        Deploy adaptive data infrastructure in minutes.
+      </h1>
+
+      <p className="text-gray-600 text-center max-w-xl mb-10">
+        Choose between AI-guided orchestration or a manual run. 
+        Both paths connect to the existing onboarding backend.
+      </p>
+
+      <div className="flex gap-6">
+        {/* AI Deploy Card */}
+        <Link href="/wizard/questions">
+          <div className="cursor-pointer border rounded-xl p-6 w-80 shadow-sm hover:shadow-md transition">
+            <p className="text-xs text-blue-600 font-semibold">START HERE</p>
+            <h3 className="text-xl font-bold mb-1">AI Deploy Architecture</h3>
+            <p className="text-gray-600">
+              Let the AI orchestrator provision the recommended architecture.
+            </p>
+          </div>
+        </Link>
+
+        {/* Manual Deploy Card */}
+        <Link href="/wizard/deploy">
+          <div className="cursor-pointer border rounded-xl p-6 w-80 shadow-sm hover:shadow-md transition">
+            <p className="text-xs text-blue-600 font-semibold">START HERE</p>
+            <h3 className="text-xl font-bold mb-1">Manual Deploy</h3>
+            <p className="text-gray-600">
+              Trigger a manual deployment run with your curated configuration.
+            </p>
+          </div>
+        </Link>
+      </div>
+
+      {/* Extra navigation */}
+      <div className="mt-10 flex gap-6 text-sm text-blue-600">
+        <Link href="/wizard/history">View Deployment History</Link>
+        <Link href="/wizard/status">View Current Status</Link>
+      </div>
+    </div>
   );
 }
