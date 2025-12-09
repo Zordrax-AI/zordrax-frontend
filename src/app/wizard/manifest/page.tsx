@@ -3,14 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type { ArchitectureRecommendation } from "@/types/onboarding";
+import type {
+  ArchitectureRecommendation,
+  EtlSpec,
+  GovernanceSpec,
+  BiSpec
+} from "@/types/onboarding";
 
-// Correct Manifest structure — guaranteed to satisfy backend
+// Manifest slice that matches backend shape EXACTLY
 type Manifest = {
   infrastructure: Record<string, unknown>;
-  etl: { tool: string };
-  governance: { rules: string[] };
-  bi: Record<string, unknown>;
+  etl: EtlSpec;
+  governance: GovernanceSpec;
+  bi: BiSpec;
 };
 
 export default function ManifestPage() {
@@ -27,21 +32,26 @@ export default function ManifestPage() {
     const arch: ArchitectureRecommendation = JSON.parse(stored);
     setArchitecture(arch);
 
-    // SAFELY normalise to backend-required manifest structure
+    // SAFELY normalise all required fields
     const generatedManifest: Manifest = {
       infrastructure: arch.infrastructure ?? {},
+
       etl: {
-        tool: arch.etl?.tool ?? "unknown", // required by backend
+        tool: arch.etl?.tool ?? "unknown"
       },
+
       governance: {
-        rules: arch.governance?.rules ?? [], // required by backend
+        rules: arch.governance?.rules ?? []
       },
-      bi: arch.bi ?? {},
+
+      bi: {
+        // patch BI spec type-safe
+        ...(arch.bi ?? {}),
+      }
     };
 
     setManifest(generatedManifest);
 
-    // Persist for deploy step
     localStorage.setItem(
       "terraform_manifest",
       JSON.stringify(generatedManifest)
@@ -60,7 +70,6 @@ export default function ManifestPage() {
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold">Generated Terraform Manifest</h1>
 
-      {/* Architecture Preview */}
       <div>
         <h2 className="text-lg font-semibold mb-2">
           Architecture Recommendation
@@ -70,7 +79,6 @@ export default function ManifestPage() {
         </pre>
       </div>
 
-      {/* Manifest Preview */}
       <div>
         <h2 className="text-lg font-semibold mb-2">Terraform Manifest</h2>
         <pre className="bg-gray-900 text-white text-sm p-4 rounded overflow-auto">
