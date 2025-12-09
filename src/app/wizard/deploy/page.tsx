@@ -3,13 +3,16 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import type { DeployResponse } from "@/types/onboarding";
-import type { DeployError } from "./actions/deploy";
-import { deployArchitecture } from "./actions/deploy";
+import type {
+  EtlSpec,
+  GovernanceSpec,
+  BiSpec,
+  ArchitectureRecommendation,
+  DeployResponse
+} from "@/types/onboarding";
 
-type EtlSpec = { tool: string };
-type GovernanceSpec = { rules: string[] };
-type BiSpec = { tool: string };
+import type { DeployError } from "../actions/deploy";
+import { deployArchitecture } from "../actions/deploy";
 
 type Manifest = {
   infrastructure: Record<string, unknown>;
@@ -20,7 +23,7 @@ type Manifest = {
 
 type DeployResult = DeployResponse | DeployError;
 
-export default function WizardPage() {
+export default function DeployPage() {
   const router = useRouter();
 
   const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -30,16 +33,7 @@ export default function WizardPage() {
   useEffect(() => {
     const stored = localStorage.getItem("terraform_manifest");
     if (stored) {
-      const raw = JSON.parse(stored);
-
-      const normalized: Manifest = {
-        infrastructure: raw.infrastructure ?? {},
-        etl: { tool: raw.etl?.tool ?? "unknown" },
-        governance: { rules: raw.governance?.rules ?? [] },
-        bi: { tool: raw.bi?.tool ?? "none" },
-      };
-
-      setManifest(normalized);
+      setManifest(JSON.parse(stored) as Manifest);
     }
   }, []);
 
@@ -51,16 +45,16 @@ export default function WizardPage() {
 
     setLoading(true);
 
-    const resp = await deployArchitecture({
+    const payload: ArchitectureRecommendation = {
       project_name: "zordrax-demo",
       description: "AI deploy from wizard",
-
       infrastructure: manifest.infrastructure,
       etl: manifest.etl,
       governance: manifest.governance,
-      bi: manifest.bi,
-    });
+      bi: manifest.bi
+    };
 
+    const resp = await deployArchitecture(payload);
     setResult(resp);
 
     if ("error" in resp) {
@@ -75,8 +69,8 @@ export default function WizardPage() {
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-bold">Ready to Deploy</h1>
+    <div className="p-6 space-y-4 max-w-3xl mx-auto">
+      <h1 className="text-xl font-bold">Deploy Infrastructure</h1>
 
       {manifest && (
         <pre className="bg-gray-900 text-white p-3 rounded text-sm overflow-auto">
@@ -87,9 +81,9 @@ export default function WizardPage() {
       <button
         onClick={handleDeploy}
         disabled={loading}
-        className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
+        className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
       >
-        {loading ? "Deploying..." : "Deploy Infrastructure"}
+        {loading ? "Deploying…" : "Deploy Infrastructure"}
       </button>
 
       {result && (
