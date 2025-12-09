@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { Manifest } from "@/types/onboarding";
+import type { Manifest, DeployResponse } from "@/types/onboarding";
 import { deployArchitecture } from "../actions/deploy";
+import type { DeployError } from "../actions/deploy";
+
+type DeployResult = DeployResponse | DeployError;
 
 export default function DeployPage() {
   const router = useRouter();
 
   const [manifest, setManifest] = useState<Manifest | null>(null);
-  const [result, setResult] = useState<any>(null);
+  const [result, setResult] = useState<DeployResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
