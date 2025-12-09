@@ -1,22 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Architecture, Manifest } from "@/types/onboarding";
 import { useRouter } from "next/navigation";
-
-interface Architecture {
-  infrastructure: Record<string, any>;
-  etl: Record<string, any>;
-  governance: Record<string, any>;
-  bi: Record<string, any>;
-}
-
-interface ManifestResponse {
-  manifest: Record<string, any>;
-}
 
 export default function ManifestPage() {
   const router = useRouter();
-  const [manifest, setManifest] = useState<Record<string, any> | null>(null);
+  const [manifest, setManifest] = useState<Manifest | null>(null);
 
   useEffect(() => {
     async function loadManifest() {
@@ -25,16 +15,13 @@ export default function ManifestPage() {
 
       const architecture: Architecture = JSON.parse(stored);
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/ai/manifest`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(architecture),
-        }
-      );
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/ai/manifest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(architecture),
+      });
 
-      const data: ManifestResponse = await res.json();
+      const data: { manifest: Manifest } = await res.json();
       setManifest(data.manifest);
 
       localStorage.setItem("terraform_manifest", JSON.stringify(data.manifest));

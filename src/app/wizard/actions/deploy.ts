@@ -1,5 +1,7 @@
 "use server";
 
+import type { Manifest, DeployResponse } from "@/types/onboarding";
+
 export interface DeploymentPayload {
   project_name: string;
   description: string;
@@ -7,13 +9,15 @@ export interface DeploymentPayload {
     environment: string;
     region: string;
   };
-  infrastructure: Record<string, any>;
-  etl: Record<string, any>;
-  governance: Record<string, any>;
-  bi: Record<string, any>;
+  infrastructure: Manifest["infrastructure"];
+  etl: Manifest["etl"];
+  governance: Manifest["governance"];
+  bi: Manifest["bi"];
 }
 
-export async function deployArchitecture(payload: DeploymentPayload) {
+export async function deployArchitecture(
+  payload: DeploymentPayload
+): Promise<DeployResponse> {
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/deploy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -1,23 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Architecture } from "@/types/onboarding";
 import { useRouter } from "next/navigation";
-
-// ---- Types ----
-interface Architecture {
-  infrastructure: Record<string, any>;
-  etl: Record<string, any>;
-  governance: Record<string, any>;
-  bi: Record<string, any>;
-}
 
 export default function ReviewPage() {
   const router = useRouter();
   const [recommendation, setRecommendation] = useState<Architecture | null>(null);
 
   useEffect(() => {
-    async function loadRec() {
-      // Safe parsing of localStorage
+    async function loadRecommendation() {
       const stored = localStorage.getItem("onboarding_answers");
       const answers: Record<string, string> = stored ? JSON.parse(stored) : {};
 
@@ -30,15 +22,14 @@ export default function ReviewPage() {
       const data: Architecture = await res.json();
       setRecommendation(data);
 
-      // Persist architecture for deploy step
       localStorage.setItem("architecture", JSON.stringify(data));
     }
 
-    loadRec();
+    loadRecommendation();
   }, []);
 
   if (!recommendation) {
-    return <div className="p-6">Loading...</div>;
+    return <div className="p-6">Loading recommendation...</div>;
   }
 
   return (
@@ -50,10 +41,10 @@ export default function ReviewPage() {
       </pre>
 
       <button
-        onClick={() => router.push("/wizard/deploy")}
-        className="mt-4 bg-green-600 text-white px-4 py-2 rounded"
+        onClick={() => router.push("/wizard/manifest")}
+        className="mt-4 bg-blue-600 text-white px-4 py-2 rounded"
       >
-        Deploy Infrastructure
+        Continue to Manifest
       </button>
     </div>
   );
