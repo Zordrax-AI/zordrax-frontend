@@ -37,16 +37,17 @@ export default function ManifestPage() {
       infrastructure: arch.infrastructure ?? {},
 
       etl: {
-        tool: arch.etl?.tool ?? "unknown"
+        tool: arch.etl?.tool ?? "unknown",
       },
 
       governance: {
-        rules: arch.governance?.rules ?? []
+        rules: arch.governance?.rules ?? [],
       },
 
       bi: {
-        // patch BI spec type-safe
-        ...(arch.bi ?? {}),
+        tool: arch.bi?.tool ?? "none",
+        model: arch.bi?.model ?? undefined,
+        kpis: arch.bi?.kpis ?? [],
       }
     };
 

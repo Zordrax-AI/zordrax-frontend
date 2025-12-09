@@ -11,12 +11,14 @@ import { deployArchitecture } from "./actions/deploy";
 // Types matching backend contract
 // -------------------------------
 type EtlSpec = { tool: string };
+type GovernanceSpec = { rules: string[] };
+type BiSpec = { tool: string };
 
 type Manifest = {
   infrastructure: Record<string, unknown>;
   etl: EtlSpec;
-  governance: Record<string, unknown>;
-  bi: Record<string, unknown>;
+  governance: GovernanceSpec;
+  bi: BiSpec;
 };
 
 // Deploy can return success OR error
@@ -33,7 +35,26 @@ export default function WizardPage() {
   useEffect(() => {
     const stored = localStorage.getItem("terraform_manifest");
     if (stored) {
-      setManifest(JSON.parse(stored) as Manifest);
+      const raw = JSON.parse(stored);
+
+      // Normalize missing fields
+      const normalized: Manifest = {
+        infrastructure: raw.infrastructure ?? {},
+
+        etl: {
+          tool: raw.etl?.tool ?? "unknown",
+        },
+
+        governance: {
+          rules: raw.governance?.rules ?? [],
+        },
+
+        bi: {
+          tool: raw.bi?.tool ?? "none",
+        },
+      };
+
+      setManifest(normalized);
     }
   }, []);
 
@@ -48,9 +69,9 @@ export default function WizardPage() {
     const resp = await deployArchitecture({
       project_name: "zordrax-demo",
       description: "AI deploy from wizard",
-      requirements: { environment: "dev", region: "westeurope" },
+
       infrastructure: manifest.infrastructure,
-      etl: manifest.etl,                // ✔ Correctly typed
+      etl: manifest.etl,
       governance: manifest.governance,
       bi: manifest.bi,
     });

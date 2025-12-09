@@ -3,16 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-import type {
-  EtlSpec,
-  GovernanceSpec,
-  BiSpec,
-  ArchitectureRecommendation,
-  DeployResponse
-} from "@/types/onboarding";
+import type { DeployResponse } from "@/types/onboarding";
+import type { DeployError } from "./actions/deploy";
+import { deployArchitecture } from "./actions/deploy";
 
-import type { DeployError } from "../actions/deploy";
-import { deployArchitecture } from "../actions/deploy";
+type EtlSpec = { tool: string };
+type GovernanceSpec = { rules: string[] };
+type BiSpec = { tool: string };
 
 type Manifest = {
   infrastructure: Record<string, unknown>;
@@ -23,7 +20,7 @@ type Manifest = {
 
 type DeployResult = DeployResponse | DeployError;
 
-export default function DeployPage() {
+export default function WizardPage() {
   const router = useRouter();
 
   const [manifest, setManifest] = useState<Manifest | null>(null);
@@ -33,7 +30,16 @@ export default function DeployPage() {
   useEffect(() => {
     const stored = localStorage.getItem("terraform_manifest");
     if (stored) {
-      setManifest(JSON.parse(stored) as Manifest);
+      const raw = JSON.parse(stored);
+
+      const normalized: Manifest = {
+        infrastructure: raw.infrastructure ?? {},
+        etl: { tool: raw.etl?.tool ?? "unknown" },
+        governance: { rules: raw.governance?.rules ?? [] },
+        bi: { tool: raw.bi?.tool ?? "none" },
+      };
+
+      setManifest(normalized);
     }
   }, []);
 
@@ -45,19 +51,16 @@ export default function DeployPage() {
 
     setLoading(true);
 
-    // 🔥 FINAL Correct Payload — matches backend ArchitectureRecommendation
-    const payload: ArchitectureRecommendation = {
+    const resp = await deployArchitecture({
       project_name: "zordrax-demo",
       description: "AI deploy from wizard",
 
-      // NO requirements — backend removed this
       infrastructure: manifest.infrastructure,
       etl: manifest.etl,
       governance: manifest.governance,
-      bi: manifest.bi
-    };
+      bi: manifest.bi,
+    });
 
-    const resp = await deployArchitecture(payload);
     setResult(resp);
 
     if ("error" in resp) {
@@ -72,8 +75,8 @@ export default function DeployPage() {
   }
 
   return (
-    <div className="p-6 space-y-4 max-w-3xl mx-auto">
-      <h1 className="text-xl font-bold">Deploy Infrastructure</h1>
+    <div className="p-6 space-y-4">
+      <h1 className="text-xl font-bold">Ready to Deploy</h1>
 
       {manifest && (
         <pre className="bg-gray-900 text-white p-3 rounded text-sm overflow-auto">
@@ -84,9 +87,9 @@ export default function DeployPage() {
       <button
         onClick={handleDeploy}
         disabled={loading}
-        className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+        className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
       >
-        {loading ? "Deploying…" : "Deploy Infrastructure"}
+        {loading ? "Deploying..." : "Deploy Infrastructure"}
       </button>
 
       {result && (
