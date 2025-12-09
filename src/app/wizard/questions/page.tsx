@@ -1,4 +1,3 @@
-// src/app/wizard/questions/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -7,9 +6,9 @@ import type { OnboardingQuestion } from "@/types/onboarding";
 
 export default function QuestionsPage() {
   const router = useRouter();
+
   const [questions, setQuestions] = useState<OnboardingQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     async function loadQuestions() {
@@ -32,7 +31,6 @@ export default function QuestionsPage() {
   }
 
   function handleNext() {
-    // store answers for later steps
     localStorage.setItem("onboarding_answers", JSON.stringify(answers));
     router.push("/wizard/review");
   }
@@ -70,8 +68,7 @@ export default function QuestionsPage() {
 
       <button
         onClick={handleNext}
-        className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
-        disabled={loading}
+        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
       >
         Continue
       </button>
