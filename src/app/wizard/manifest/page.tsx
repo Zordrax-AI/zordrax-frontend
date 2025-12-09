@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 
 import type { ArchitectureRecommendation } from "@/types/onboarding";
 
-// Manifest = just the infra/etl/governance/bi slice of the recommendation
-type Manifest = Pick<
-  ArchitectureRecommendation,
-  "infrastructure" | "etl" | "governance" | "bi"
->;
+// Correct Manifest structure — guaranteed to satisfy backend
+type Manifest = {
+  infrastructure: Record<string, unknown>;
+  etl: { tool: string };
+  governance: { rules: string[] };
+  bi: Record<string, unknown>;
+};
 
 export default function ManifestPage() {
   const router = useRouter();
@@ -20,24 +22,30 @@ export default function ManifestPage() {
 
   useEffect(() => {
     const stored = localStorage.getItem("architecture");
-    if (stored) {
-      const arch: ArchitectureRecommendation = JSON.parse(stored);
-      setArchitecture(arch);
+    if (!stored) return;
 
-      const generatedManifest: Manifest = {
-        infrastructure: arch.infrastructure,
-        etl: arch.etl,
-        governance: arch.governance,
-        bi: arch.bi,
-      };
+    const arch: ArchitectureRecommendation = JSON.parse(stored);
+    setArchitecture(arch);
 
-      setManifest(generatedManifest);
+    // SAFELY normalise to backend-required manifest structure
+    const generatedManifest: Manifest = {
+      infrastructure: arch.infrastructure ?? {},
+      etl: {
+        tool: arch.etl?.tool ?? "unknown", // required by backend
+      },
+      governance: {
+        rules: arch.governance?.rules ?? [], // required by backend
+      },
+      bi: arch.bi ?? {},
+    };
 
-      localStorage.setItem(
-        "terraform_manifest",
-        JSON.stringify(generatedManifest)
-      );
-    }
+    setManifest(generatedManifest);
+
+    // Persist for deploy step
+    localStorage.setItem(
+      "terraform_manifest",
+      JSON.stringify(generatedManifest)
+    );
   }, []);
 
   if (!architecture) {
