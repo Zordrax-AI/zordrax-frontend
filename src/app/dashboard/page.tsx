@@ -22,7 +22,8 @@ interface RetryResponse {
   url?: string;
 }
 
-type ManifestData = unknown;
+type ManifestData = any;
+
 
 export default function DashboardPage() {
   const [runs, setRuns] = useState<PipelineRun[]>([]);
