@@ -53,12 +53,17 @@ export default function QuestionsPage() {
 
       const data: NextQuestionResponse = await res.json();
 
-      if (data.done) {
-        // Finished: persist answers and go to review
-        localStorage.setItem("onboarding_answers", JSON.stringify(prevAnswers));
-        router.push("/wizard/review");
-        return;
-      }
+if (data.done) {
+  const enriched = {
+    ...prevAnswers,
+    industry, // e.g. "fleet" | "finance" | "retail" | "general"
+  };
+
+  localStorage.setItem("onboarding_answers", JSON.stringify(enriched));
+  router.push("/wizard/review");
+  return;
+}
+
 
       if (!data.id || !data.text) {
         throw new Error("Invalid question payload from backend");
