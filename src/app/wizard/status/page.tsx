@@ -1,72 +1,64 @@
-// src/app/wizard/status/page.tsx
 "use client";
 
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
 
 interface PipelineStatus {
-  id?: number;
+  run_id?: number;
   status?: string;
-  result?: string;
+  stage?: string;
+  message?: string;
   url?: string;
-  [key: string]: unknown;
 }
 
-export default function StatusPage() {
+function StatusContent() {
   const params = useSearchParams();
   const runId = params.get("run");
 
-  const [status, setStatus] = useState<PipelineStatus | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [details, setDetails] = useState<PipelineStatus | null>(null);
+  const [status, setStatus] = useState("loading");
 
   useEffect(() => {
     if (!runId) return;
 
     async function fetchStatus() {
-      setLoading(true);
-      setError(null);
-
       try {
         const res = await fetch(
           `${process.env.NEXT_PUBLIC_ONBOARDING_API_URL}/onboarding/deploy-status/${runId}`
         );
 
-        if (!res.ok) {
-          throw new Error(`Backend returned ${res.status}`);
-        }
-
-        const data = (await res.json()) as PipelineStatus;
-        setStatus(data);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "Failed to load status"
-        );
-      } finally {
-        setLoading(false);
+        const data = await res.json();
+        setDetails(data);
+        setStatus(data?.status ?? "unknown");
+      } catch {
+        setStatus("error");
       }
     }
 
     fetchStatus();
+    const interval = setInterval(fetchStatus, 5000);
+    return () => clearInterval(interval);
   }, [runId]);
 
-  if (!runId) {
-    return <div className="p-6">Missing run id.</div>;
-  }
+  if (!runId) return <p>No pipeline run ID found.</p>;
 
   return (
-    <div className="p-6 space-y-4 max-w-3xl mx-auto">
-      <h1 className="text-xl font-bold">Deployment Status</h1>
-      <p className="text-sm text-gray-600">Run ID: {runId}</p>
+    <div className="p-6 space-y-4">
+      <h1 className="text-xl font-bold">Pipeline Status</h1>
 
-      {loading && <p>Loading status…</p>}
-      {error && <p className="text-sm text-red-500">Error: {error}</p>}
+      <pre className="bg-gray-900 text-white p-3 rounded text-sm overflow-auto">
+        {JSON.stringify(details, null, 2)}
+      </pre>
 
-      {status && (
-        <pre className="bg-gray-900 text-white text-sm p-4 rounded overflow-auto">
-          {JSON.stringify(status, null, 2)}
-        </pre>
-      )}
+      <p>Status: {status}</p>
     </div>
+  );
+}
+
+export default function StatusPage() {
+  return (
+    <Suspense fallback={<p>Loading status…</p>}>
+      <StatusContent />
+    </Suspense>
   );
 }
