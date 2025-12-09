@@ -22,7 +22,8 @@ interface RetryResponse {
   url?: string;
 }
 
-type ManifestData = Record<string, any> | any[] | null;   // ✅ FIXED TYPE
+type ManifestData = Record<string, unknown> | unknown[] | null;
+
 
 export default function DashboardPage() {
   const [runs, setRuns] = useState<PipelineRun[]>([]);
