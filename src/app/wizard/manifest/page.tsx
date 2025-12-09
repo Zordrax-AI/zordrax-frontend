@@ -3,27 +3,30 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import type {
-  ArchitectureRecommendation,
-  Manifest
-} from "@/types/onboarding";
+import type { ArchitectureRecommendation } from "@/types/onboarding";
+
+// Define a lightweight manifest type here
+type Manifest = {
+  infrastructure: any;
+  etl: any;
+  governance: any;
+  bi: any;
+};
 
 export default function ManifestPage() {
   const router = useRouter();
 
-  const [architecture, setArchitecture] = useState<ArchitectureRecommendation | null>(null);
+  const [architecture, setArchitecture] =
+    useState<ArchitectureRecommendation | null>(null);
+
   const [manifest, setManifest] = useState<Manifest | null>(null);
 
-  // ------------------------------------------------------------
-  // Load the AI-generated architecture from storage
-  // ------------------------------------------------------------
   useEffect(() => {
     const stored = localStorage.getItem("architecture");
     if (stored) {
       const arch: ArchitectureRecommendation = JSON.parse(stored);
       setArchitecture(arch);
 
-      // Convert architecture → manifest
       const generatedManifest: Manifest = {
         infrastructure: arch.infrastructure,
         etl: arch.etl,
@@ -33,8 +36,10 @@ export default function ManifestPage() {
 
       setManifest(generatedManifest);
 
-      // Persist for deploy step
-      localStorage.setItem("terraform_manifest", JSON.stringify(generatedManifest));
+      localStorage.setItem(
+        "terraform_manifest",
+        JSON.stringify(generatedManifest)
+      );
     }
   }, []);
 
@@ -46,7 +51,6 @@ export default function ManifestPage() {
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold">Generated Terraform Manifest</h1>
 
-      {/* Architecture Preview */}
       <div>
         <h2 className="text-lg font-semibold mb-2">Architecture Recommendation</h2>
         <pre className="bg-gray-900 text-white text-sm p-4 rounded overflow-auto">
@@ -54,7 +58,6 @@ export default function ManifestPage() {
         </pre>
       </div>
 
-      {/* Manifest Preview */}
       <div>
         <h2 className="text-lg font-semibold mb-2">Terraform Manifest</h2>
         <pre className="bg-gray-900 text-white text-sm p-4 rounded overflow-auto">
