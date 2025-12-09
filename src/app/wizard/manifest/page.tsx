@@ -5,20 +5,17 @@ import { useRouter } from "next/navigation";
 
 import type { ArchitectureRecommendation } from "@/types/onboarding";
 
-// Define a lightweight manifest type here
-type Manifest = {
-  infrastructure: any;
-  etl: any;
-  governance: any;
-  bi: any;
-};
+// Manifest = just the infra/etl/governance/bi slice of the recommendation
+type Manifest = Pick<
+  ArchitectureRecommendation,
+  "infrastructure" | "etl" | "governance" | "bi"
+>;
 
 export default function ManifestPage() {
   const router = useRouter();
 
   const [architecture, setArchitecture] =
     useState<ArchitectureRecommendation | null>(null);
-
   const [manifest, setManifest] = useState<Manifest | null>(null);
 
   useEffect(() => {
@@ -44,20 +41,28 @@ export default function ManifestPage() {
   }, []);
 
   if (!architecture) {
-    return <div className="p-6">No architecture found — complete onboarding first.</div>;
+    return (
+      <div className="p-6">
+        No architecture found — complete onboarding first.
+      </div>
+    );
   }
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold">Generated Terraform Manifest</h1>
 
+      {/* Architecture Preview */}
       <div>
-        <h2 className="text-lg font-semibold mb-2">Architecture Recommendation</h2>
+        <h2 className="text-lg font-semibold mb-2">
+          Architecture Recommendation
+        </h2>
         <pre className="bg-gray-900 text-white text-sm p-4 rounded overflow-auto">
           {JSON.stringify(architecture, null, 2)}
         </pre>
       </div>
 
+      {/* Manifest Preview */}
       <div>
         <h2 className="text-lg font-semibold mb-2">Terraform Manifest</h2>
         <pre className="bg-gray-900 text-white text-sm p-4 rounded overflow-auto">
