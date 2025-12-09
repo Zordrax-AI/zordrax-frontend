@@ -38,8 +38,8 @@ export default function ManifestPage() {
       infrastructure: arch.infrastructure ?? {},
 
       etl: {
-        tool: arch.etl?.tool ?? "unknown",
-        ...arch.etl,
+        ...arch.etl,                            // Spread FIRST
+        tool: arch.etl?.tool ?? "unknown",      // Override LAST (no duplicate)
       },
 
       governance: {
@@ -47,9 +47,8 @@ export default function ManifestPage() {
       },
 
       bi: {
-        tool: arch.bi?.tool ?? "none",
-        model: arch.bi?.model,
-        kpis: arch.bi?.kpis,
+        ...arch.bi,                             // Spread FIRST
+        tool: arch.bi?.tool ?? "none",          // Override LAST (no duplicate)
       },
     };
 
