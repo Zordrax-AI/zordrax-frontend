@@ -1,55 +1,39 @@
-export interface Infrastructure {
-  azure: Record<string, boolean>;
+export interface InfrastructureSpec {
+  [key: string]: unknown;
 }
 
-export interface EtlConfig {
+export interface EtlSpec {
   tool: string;
+  [key: string]: unknown;
 }
 
-export interface GovernanceConfig {
-  rules: string;
+export interface GovernanceSpec {
+  rules: string[];
 }
 
-export interface BiConfig {
+export interface BiSpec {
   tool: string;
-}
-
-export interface Architecture {
-  infrastructure: Infrastructure;
-  etl: EtlConfig;
-  governance: GovernanceConfig;
-  bi: BiConfig;
-}
-
-export interface Manifest {
-  infrastructure: Infrastructure;
-  etl: EtlConfig;
-  governance: GovernanceConfig;
-  bi: BiConfig;
-}
-
-export interface DeployResponse {
-  pipeline_run?: {
-    id?: number;
-    url?: string;
-  };
-  status?: string;
-  project_name?: string;
-  error?: string;
-}
-
-export interface OnboardingQuestion {
-  id: string;
-  text: string;
-  type: "select" | "text";
-  options: string[];
+  model?: string;
+  kpis?: string[];
 }
 
 export interface ArchitectureRecommendation {
   project_name?: string;
   description?: string;
-  infrastructure: any;
-  etl: any;
-  governance: any;
-  bi: any;
+
+  infrastructure: InfrastructureSpec;
+  etl: EtlSpec;
+  governance: GovernanceSpec;
+  bi: BiSpec;
+}
+
+export interface DeployPipelineInfo {
+  id?: number;
+  url?: string;
+}
+
+export interface DeployResponse {
+  status?: string;
+  pipeline_run?: DeployPipelineInfo;
+  error?: string;
 }
