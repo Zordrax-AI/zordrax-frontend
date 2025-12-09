@@ -1,33 +1,28 @@
-// NO "use server" — this is just a shared client helper
+"use server";
 
-export type DeploymentRequirements = {
-  environment: string;
-  region: string;
-};
-
-export type DeploymentPayload = {
+export interface DeploymentPayload {
   project_name: string;
   description: string;
-  requirements: DeploymentRequirements;
-};
+  requirements: {
+    environment: string;
+    region: string;
+  };
+  infrastructure: Record<string, any>;
+  etl: Record<string, any>;
+  governance: Record<string, any>;
+  bi: Record<string, any>;
+}
 
-export async function deployArchitecture(
-  payload: DeploymentPayload
-): Promise<unknown> {
-  const backend = process.env.NEXT_PUBLIC_BACKEND_URL;
-
-  if (!backend) {
-    return {
-      status: "error",
-      message: "NEXT_PUBLIC_BACKEND_URL is not configured. API calls will fail.",
-    };
-  }
-
-  const response = await fetch(`${backend}/onboarding/ai-and-deploy`, {
+export async function deployArchitecture(payload: DeploymentPayload) {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/deploy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 
-  return response.json();
+  if (!res.ok) {
+    throw new Error(`Deployment failed: ${res.status}`);
+  }
+
+  return res.json();
 }

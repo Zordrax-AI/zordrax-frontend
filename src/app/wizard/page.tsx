@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { DeploymentPayload } from "./actions/deploy";
-import { deployArchitecture } from "./actions/deploy";
+import { deployArchitecture, DeploymentPayload } from "./actions/deploy";
 
 interface DeployResponse {
   pipeline_run?: {
@@ -15,11 +14,22 @@ interface DeployResponse {
 }
 
 export default function Wizard() {
-  const [result, setResult] = useState<unknown | null>(null);
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [manifest, setManifest] = useState<any>(null);
+  const [result, setResult] = useState<any>(null);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("terraform_manifest");
+    if (stored) setManifest(JSON.parse(stored));
+  }, []);
 
   async function handleDeploy() {
+    if (!manifest) {
+      alert("Manifest missing — complete onboarding first.");
+      return;
+    }
+
     setLoading(true);
 
     const payload: DeploymentPayload = {
@@ -29,6 +39,10 @@ export default function Wizard() {
         environment: "dev",
         region: "westeurope",
       },
+      infrastructure: manifest.infrastructure,
+      etl: manifest.etl,
+      governance: manifest.governance,
+      bi: manifest.bi,
     };
 
     try {
@@ -36,36 +50,36 @@ export default function Wizard() {
       setResult(data);
 
       const runId = data.pipeline_run?.id;
-      if (runId) {
-        router.push(`/wizard/status?run=${runId}`);
-      }
+      if (runId) router.push(`/wizard/status?run=${runId}`);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Unknown error during deployment";
-      console.error("DEPLOY FAILED:", message);
-      setResult({ error: message });
+      console.error("DEPLOY FAILED:", err);
+      setResult({ error: String(err) });
     } finally {
       setLoading(false);
     }
   }
 
-  const renderResult = (value: unknown) => (
-    <pre className="rounded bg-gray-900 p-3 text-sm text-white">
-      {JSON.stringify(value, null, 2)}
-    </pre>
-  );
-
   return (
     <div className="space-y-4 p-6">
+      <h1 className="text-xl font-bold">Ready to Deploy</h1>
+
+      <pre className="rounded bg-gray-800 p-3 text-sm text-white overflow-auto">
+        {JSON.stringify(manifest, null, 2)}
+      </pre>
+
       <button
         onClick={handleDeploy}
         disabled={loading}
-        className="px-4 py-2 rounded bg-blue-600 text-white disabled:opacity-50"
+        className="px-4 py-2 rounded bg-green-600 text-white disabled:opacity-50"
       >
-        {loading ? "Deploying..." : "Deploy Architecture"}
+        {loading ? "Deploying..." : "Deploy Infrastructure"}
       </button>
 
-      {result !== null && renderResult(result)}
+      {result && (
+        <pre className="rounded bg-gray-900 p-3 text-sm text-white">
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }
