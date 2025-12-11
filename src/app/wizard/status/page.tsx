@@ -4,41 +4,41 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getDeployStatus } from "@/lib/onboardingConsoleApi";
 
-interface PipelineStatus {
-  run_id?: number;
-  status?: string;
-  stage?: string;
-  message?: string;
-  url?: string;
+export default function StatusPage() {
+  return (
+    <Suspense fallback={<p>Loading status…</p>}>
+      <StatusContent />
+    </Suspense>
+  );
 }
 
 function StatusContent() {
   const params = useSearchParams();
   const runId = params.get("run");
 
-  const [details, setDetails] = useState<PipelineStatus | null>(null);
+  const [details, setDetails] = useState<any>(null);
   const [status, setStatus] = useState("loading");
 
-  useEffect(() => {
-    if (!runId) return;
+  // ---- FIX: ensure runId is string, not null ----
+  if (!runId) {
+    return <p>No pipeline run ID found.</p>;
+  }
 
+  useEffect(() => {
     async function load() {
       try {
-        const data = await getDeployStatus(runId);
+        const data = await getDeployStatus(runId as string); // FIX
         setDetails(data);
         setStatus(data?.status ?? "unknown");
-      } catch (err) {
-        console.error("Error fetching status:", err);
+      } catch {
         setStatus("error");
       }
     }
 
     load();
-    const interval = setInterval(load, 3000);
+    const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
   }, [runId]);
-
-  if (!runId) return <p>No pipeline run ID found.</p>;
 
   return (
     <div className="p-6 space-y-4">
@@ -48,20 +48,7 @@ function StatusContent() {
         {JSON.stringify(details, null, 2)}
       </pre>
 
-      <p className="font-semibold text-lg">
-        Status:{" "}
-        <span className="px-2 py-1 rounded bg-blue-600 text-white">
-          {status}
-        </span>
-      </p>
+      <p>Status: {status}</p>
     </div>
-  );
-}
-
-export default function StatusPage() {
-  return (
-    <Suspense fallback={<p>Loading status…</p>}>
-      <StatusContent />
-    </Suspense>
   );
 }
