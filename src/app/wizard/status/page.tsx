@@ -4,14 +4,6 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getDeployStatus } from "@/lib/onboardingConsoleApi";
 
-interface PipelineStatus {
-  run_id?: number;
-  status?: string;
-  stage?: string;
-  message?: string;
-  url?: string;
-}
-
 export default function StatusPage() {
   return (
     <Suspense fallback={<p>Loading status…</p>}>
@@ -22,26 +14,21 @@ export default function StatusPage() {
 
 function StatusContent() {
   const params = useSearchParams();
-  const runId = params.get("run");
+  const runIdParam = params.get("run");
+  const runId = runIdParam ?? ""; // always a string for the API
+  const isMissingRunId = !runIdParam;
 
-  const [details, setDetails] = useState<PipelineStatus | null>(null);
+  const [details, setDetails] = useState<Record<string, unknown> | null>(null);
   const [status, setStatus] = useState("loading");
 
-  // --- REQUIRED TYPE FIX ---
-  // Safely convert to string or return before the hook uses it.
-  if (runId === null) {
-    return <p>No pipeline run ID found.</p>;
-  }
-
-  // Now runId is guaranteed to be a string
-  const safeRunId: string = runId;
-
   useEffect(() => {
+    if (!runId) return;
+
     async function load() {
       try {
-        const data = await getDeployStatus(safeRunId);
-        setDetails(data);
-        setStatus(data?.status ?? "unknown");
+        const data = await getDeployStatus(runId);
+        setDetails(data as unknown as Record<string, unknown>);
+        setStatus((data as { status?: string }).status ?? "unknown");
       } catch {
         setStatus("error");
       }
@@ -50,7 +37,11 @@ function StatusContent() {
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, [safeRunId]);
+  }, [runId]);
+
+  if (isMissingRunId) {
+    return <p>No pipeline run ID found.</p>;
+  }
 
   return (
     <div className="p-6 space-y-4">
