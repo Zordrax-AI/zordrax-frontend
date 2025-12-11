@@ -3,18 +3,21 @@
 import { useEffect, useState } from "react";
 import { fetchSession, SessionDetail } from "@/lib/onboardingConsoleApi";
 
-const LOCAL_KEY = "zordrax:lastSessionId";
+// -----------------------------------------------------
+// Exported storage helpers (required by useDeploymentWorkflow)
+// -----------------------------------------------------
+export const LOCAL_KEY = "zordrax:lastSessionId";
 
-function saveLastSessionId(id: string) {
+export function saveLastSessionId(id: string) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(LOCAL_KEY, id);
   } catch {
-    // ignore storage errors in CI / private browsing
+    // ignore storage errors (CI, private mode, etc.)
   }
 }
 
-function loadLastSessionId(): string | null {
+export function loadLastSessionId(): string | null {
   if (typeof window === "undefined") return null;
   try {
     return localStorage.getItem(LOCAL_KEY);
@@ -23,6 +26,9 @@ function loadLastSessionId(): string | null {
   }
 }
 
+// -----------------------------------------------------
+// Main hook
+// -----------------------------------------------------
 export function useOnboardingSession(initialSessionId?: string) {
   const [sessionId, setSessionId] = useState<string | null>(
     initialSessionId ?? null
@@ -31,20 +37,22 @@ export function useOnboardingSession(initialSessionId?: string) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // On first load, if we don't have a sessionId use the last one from localStorage
+  // Load previous session on first render
   useEffect(() => {
     if (sessionId) return;
+
     const remembered = loadLastSessionId();
     if (remembered) {
       setSessionId(remembered);
     }
   }, [sessionId]);
 
-  // Whenever sessionId changes, fetch details
+  // Fetch session whenever ID changes
   useEffect(() => {
     if (!sessionId) return;
 
     let cancelled = false;
+
     async function load() {
       setLoading(true);
       setError(null);
@@ -61,9 +69,7 @@ export function useOnboardingSession(initialSessionId?: string) {
           );
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     }
 

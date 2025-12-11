@@ -95,9 +95,11 @@ export function fetchGovernanceResults(
 // -----------------------------------------------------
 // Manifest Fetch
 // -----------------------------------------------------
-export function fetchManifest(sessionId: string): Promise<ManifestData> {
-  return callAPI<ManifestData>(`/manifest/${sessionId}`);
+export function fetchManifest(sessionId: string, source?: "ai" | "manual") {
+  const suffix = source ? `?source=${source}` : "";
+  return callAPI<ManifestData>(`/manifest/${sessionId}${suffix}`);
 }
+
 
 // -----------------------------------------------------
 // Accept Merged Manifest

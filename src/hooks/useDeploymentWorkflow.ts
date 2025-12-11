@@ -26,7 +26,6 @@ function extractRunId(data: DeploymentResponse): number | null {
     return data.pipeline_run.run_id;
   }
 
-  // Some mocked pipelines return `run_id` top-level in v5 mock mode
   if (typeof data.run_id === "number") {
     return data.run_id;
   }
@@ -34,7 +33,6 @@ function extractRunId(data: DeploymentResponse): number | null {
   return null;
 }
 
-// Default payload used by Deploy Console
 const defaultPayload = {
   requirements: {
     environment: "dev",
@@ -61,9 +59,6 @@ export function useDeploymentWorkflow(
 
   const pollingActive = useRef(false);
 
-  // ---------------------------------------------------------------------------
-  //                              DEPLOY HANDLER
-  // ---------------------------------------------------------------------------
   const handleDeploy = useCallback(async () => {
     setLoading(true);
     setStatus({ variant: "info", message: "Deploying..." });
@@ -88,25 +83,18 @@ export function useDeploymentWorkflow(
         linkLabel: linkHref ? "View build details" : undefined,
       });
 
-      // AI mode returns recommendations; manual mode does not
       setRecommendations(data.recommendations ?? null);
 
-      // run_id comes from Azure DevOps
       const newRunId = extractRunId(data);
       setRunId(newRunId);
 
-      // ---------------------------------------------------------------------
-      // ⭐⭐ 100% CORRECT V5 LOGIC: session_id ALWAYS top-level
-      // ---------------------------------------------------------------------
       const sessionId = data.session_id;
 
       if (!sessionId || typeof sessionId !== "string") {
         throw new Error("Backend did not return a valid session_id");
       }
 
-      // Save for downstream pages (merge / governance / history)
       saveLastSessionId(sessionId);
-
     } catch (error: unknown) {
       const message =
         error instanceof Error
@@ -120,9 +108,6 @@ export function useDeploymentWorkflow(
     }
   }, [endpoint, payload]);
 
-  // ---------------------------------------------------------------------------
-  //                                POLLING
-  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!runId) {
       pollingActive.current = false;
@@ -182,9 +167,6 @@ export function useDeploymentWorkflow(
     };
   }, [runId]);
 
-  // ---------------------------------------------------------------------------
-  //                                  RETURN
-  // ---------------------------------------------------------------------------
   return {
     status,
     loading,
