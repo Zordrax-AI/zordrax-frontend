@@ -1,7 +1,7 @@
 export function Topbar() {
   return (
-    <header className="h-14 flex items-center justify-between px-6 border-b border-slate-800 bg-slate-950/80 backdrop-blur">
-      <div className="text-sm text-slate-400">
+    <header className="h-14 bg-slate-900/80 backdrop-blur border-b border-slate-800 flex items-center px-6">
+      <div className="text-sm text-slate-300">
         Unified Infra → ETL → Governance → BI Console
       </div>
     </header>

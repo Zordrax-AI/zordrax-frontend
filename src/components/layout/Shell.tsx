@@ -4,11 +4,19 @@ import { Topbar } from "./Topbar";
 
 export function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex">
+      {/* Sidebar */}
       <Sidebar />
-      <div className="flex-1 flex flex-col border-l border-slate-800">
+
+      {/* Main content area */}
+      <div className="flex flex-col flex-1">
+        {/* Top bar */}
         <Topbar />
-        <main className="flex-1 p-6 overflow-y-auto">{children}</main>
+
+        {/* Page container */}
+        <main className="flex-1 p-8 overflow-y-auto">
+          <div className="max-w-6xl mx-auto">{children}</div>
+        </main>
       </div>
     </div>
   );
