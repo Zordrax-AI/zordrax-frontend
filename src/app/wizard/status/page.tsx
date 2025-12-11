@@ -24,20 +24,22 @@ function StatusContent() {
   const params = useSearchParams();
   const runId = params.get("run");
 
-  // ❌ Cannot use `any`
-  // ✔ Use a proper type or null
   const [details, setDetails] = useState<PipelineStatus | null>(null);
   const [status, setStatus] = useState("loading");
 
-  // We CANNOT early-return before hooks
-  const isMissingRunId = !runId;
+  // --- REQUIRED TYPE FIX ---
+  // Safely convert to string or return before the hook uses it.
+  if (runId === null) {
+    return <p>No pipeline run ID found.</p>;
+  }
+
+  // Now runId is guaranteed to be a string
+  const safeRunId: string = runId;
 
   useEffect(() => {
-    if (!runId) return;
-
     async function load() {
       try {
-        const data = await getDeployStatus(runId);
+        const data = await getDeployStatus(safeRunId);
         setDetails(data);
         setStatus(data?.status ?? "unknown");
       } catch {
@@ -48,12 +50,7 @@ function StatusContent() {
     load();
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
-  }, [runId]);
-
-  // ✔ Now we return AFTER all hooks have run
-  if (isMissingRunId) {
-    return <p>No pipeline run ID found.</p>;
-  }
+  }, [safeRunId]);
 
   return (
     <div className="p-6 space-y-4">
