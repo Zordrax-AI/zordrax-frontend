@@ -31,10 +31,6 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   );
 });
 
-// -----------------------------
-// FIXED: Separate LinkButton component
-// -----------------------------
-
 export function LinkButton({
   href,
   children,
