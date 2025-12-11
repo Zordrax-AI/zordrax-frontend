@@ -1,0 +1,1 @@
+export default function Visual() { return <div>Visual Onboard</div>; }
