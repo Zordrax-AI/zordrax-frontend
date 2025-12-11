@@ -1,58 +1,62 @@
-import { getBackendBaseUrl } from "./config";
-import type {
-  AiRecommendationRequest,
-  AiRecommendationResponse,
-  OnboardingSession,
-  DeployRun,
-  PipelineStatus
-} from "./types";
+// src/lib/api.ts
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const base = getBackendBaseUrl();
-  if (!base) {
-    throw new Error("Backend URL not set. Missing NEXT_PUBLIC_ONBOARDING_API_URL.");
-  }
+const BASE_URL = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
 
-  const res = await fetch(`${base}${path}`, {
-    ...options,
+if (!BASE_URL) {
+  console.warn("❗ NEXT_PUBLIC_ONBOARDING_API_URL is NOT set!");
+}
+
+/**
+ * Generic request wrapper for all backend calls.
+ */
+export async function request(
+  path: string,
+  options: RequestInit = {}
+): Promise<any> {
+  const url = `${BASE_URL}${path}`;
+
+  const res = await fetch(url, {
     headers: {
       "Content-Type": "application/json",
-      ...(options?.headers || {})
     },
-    cache: "no-store"
+    ...options,
   });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`HTTP ${res.status}: ${text}`);
+    const msg = await res.text();
+    throw new Error(`HTTP ${res.status}: ${msg}`);
   }
 
-  return (await res.json()) as T;
+  return res.json();
 }
 
-// ---------------- AI ----------------
-
-export function aiRecommendStack(
-  body: AiRecommendationRequest
-): Promise<AiRecommendationResponse> {
-  return request("/ai/recommend-stack", {
+/* --------------------------------------------------
+   AI Recommendation (POST /ai/recommend)
+-------------------------------------------------- */
+export async function aiRecommendStack(goal: string) {
+  return request("/ai/recommend", {
     method: "POST",
-    body: JSON.stringify(body)
+    body: JSON.stringify({ goal }),
   });
 }
 
-// ---------------- Sessions ----------------
-
-export function fetchSessions(): Promise<OnboardingSession[]> {
-  return request("/onboarding/sessions");
+/* --------------------------------------------------
+   Sessions (GET /sessions)
+-------------------------------------------------- */
+export async function fetchSessions() {
+  return request("/sessions", { method: "GET" });
 }
 
-// ---------------- Deployments ----------------
-
-export function fetchRuns(): Promise<DeployRun[]> {
-  return request("/deploy/runs");
+/* --------------------------------------------------
+   Runs (GET /runs)
+-------------------------------------------------- */
+export async function fetchRuns() {
+  return request("/runs", { method: "GET" });
 }
 
-export function fetchStatus(runId: string): Promise<PipelineStatus> {
-  return request(`/deploy/status?run=${encodeURIComponent(runId)}`);
+/* --------------------------------------------------
+   Run Status (GET /runs/{runId})
+-------------------------------------------------- */
+export async function fetchRunStatus(runId: string) {
+  return request(`/runs/${runId}`, { method: "GET" });
 }

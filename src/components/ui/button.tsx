@@ -1,50 +1,45 @@
 "use client";
 
-import { ButtonHTMLAttributes, forwardRef, ReactNode } from "react";
-import clsx from "clsx";
 import Link from "next/link";
 
-type Variant = "primary" | "ghost" | "outline";
-
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: Variant;
-  children: ReactNode;
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "primary" | "outline" | "default";
 }
 
-const base =
-  "inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-xl border transition disabled:opacity-50 disabled:cursor-not-allowed";
+export function Button({ variant = "default", className = "", ...props }: ButtonProps) {
+  const base =
+    "px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150";
 
-const variants: Record<Variant, string> = {
-  primary: "bg-sky-500 text-black border-sky-500 hover:bg-sky-400",
-  outline: "bg-transparent border-slate-700 text-slate-100 hover:bg-slate-900",
-  ghost: "bg-transparent border-transparent text-slate-300 hover:bg-slate-900"
-};
+  const styles = {
+    default: "bg-slate-700 hover:bg-slate-600 text-white",
+    primary: "bg-sky-600 hover:bg-sky-500 text-white",
+    outline: "border border-slate-600 text-slate-300 hover:bg-slate-700"
+  };
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "primary", className, children, ...props },
-  ref
-) {
-  return (
-    <button ref={ref} className={clsx(base, variants[variant], className)} {...props}>
-      {children}
-    </button>
-  );
-});
+  return <button {...props} className={`${base} ${styles[variant]} ${className}`} />;
+}
 
-export function LinkButton({
+Button.Link = function ButtonLink({
   href,
-  children,
-  variant = "outline",
-  className
+  variant = "default",
+  children
 }: {
   href: string;
-  children: ReactNode;
-  variant?: Variant;
-  className?: string;
+  variant?: "primary" | "outline" | "default";
+  children: React.ReactNode;
 }) {
+  const base =
+    "block text-center px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150";
+
+  const styles = {
+    default: "bg-slate-700 hover:bg-slate-600 text-white",
+    primary: "bg-sky-600 hover:bg-sky-500 text-white",
+    outline: "border border-slate-600 text-slate-300 hover:bg-slate-700"
+  };
+
   return (
-    <Link href={href} className={clsx(base, variants[variant], className)}>
+    <Link href={href} className={`${base} ${styles[variant]}`}>
       {children}
     </Link>
   );
-}
+};
