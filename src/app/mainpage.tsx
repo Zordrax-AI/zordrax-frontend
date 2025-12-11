@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+import { Button, LinkButton } from "@/components/ui/Button";
 
 export default function MainPage() {
   return (
@@ -12,35 +12,38 @@ export default function MainPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
+        {/* Onboarding */}
         <Card>
           <div className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-slate-100">Start Onboarding</h2>
             <p className="text-xs text-slate-400">
               Use AI, guided wizard, or visual designer.
             </p>
-            <Button.Link href="/onboarding" variant="primary">
+            <LinkButton href="/onboarding" variant="primary">
               Open Onboarding
-            </Button.Link>
+            </LinkButton>
           </div>
         </Card>
 
+        {/* Sessions */}
         <Card>
           <div className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-slate-100">Sessions</h2>
             <p className="text-xs text-slate-400">View saved onboarding sessions.</p>
-            <Button.Link href="/sessions" variant="outline">
+            <LinkButton href="/sessions" variant="outline">
               View Sessions
-            </Button.Link>
+            </LinkButton>
           </div>
         </Card>
 
+        {/* Runs */}
         <Card>
           <div className="flex flex-col gap-3">
             <h2 className="text-sm font-semibold text-slate-100">Deployments</h2>
             <p className="text-xs text-slate-400">Terraform & pipeline history.</p>
-            <Button.Link href="/runs" variant="outline">
+            <LinkButton href="/runs" variant="outline">
               View Runs
-            </Button.Link>
+            </LinkButton>
           </div>
         </Card>
       </div>

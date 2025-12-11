@@ -20,36 +20,35 @@ const variants: Record<Variant, string> = {
   ghost: "bg-transparent border-transparent text-slate-300 hover:bg-slate-900"
 };
 
-function ButtonInner(
-  { variant = "primary", className, children, ...props }: ButtonProps,
-  ref: React.Ref<HTMLButtonElement>
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  { variant = "primary", className, children, ...props },
+  ref
 ) {
-  const cls = clsx(base, variants[variant], className);
   return (
-    <button ref={ref} className={cls} {...props}>
+    <button ref={ref} className={clsx(base, variants[variant], className)} {...props}>
       {children}
     </button>
   );
-}
+});
 
-const ButtonComp = forwardRef<HTMLButtonElement, ButtonProps>(ButtonInner);
-ButtonComp.displayName = "Button";
+// -----------------------------
+// FIXED: Separate LinkButton component
+// -----------------------------
 
-(ButtonComp as any).Link = function ButtonLink({
+export function LinkButton({
   href,
   children,
-  variant = "outline"
+  variant = "outline",
+  className
 }: {
   href: string;
   children: ReactNode;
   variant?: Variant;
+  className?: string;
 }) {
-  const cls = clsx(base, variants[variant]);
   return (
-    <Link href={href} className={cls}>
+    <Link href={href} className={clsx(base, variants[variant], className)}>
       {children}
     </Link>
   );
-};
-
-export { ButtonComp as Button };
+}

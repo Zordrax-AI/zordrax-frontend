@@ -13,7 +13,9 @@ export default function ListDeployPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchRuns().then(setRuns).catch((e) => setError(e.message));
+    fetchRuns()
+      .then(setRuns)
+      .catch((e) => setError(e.message));
   }, []);
 
   return (
@@ -22,41 +24,44 @@ export default function ListDeployPage() {
 
       <Card>
         {!runs && !error && (
-          <div className="flex gap-2 text-sm">
-            <Spinner /> Loading runs...
+          <div className="flex items-center gap-2 text-sm">
+            <Spinner /> Loading deployment runs...
           </div>
         )}
 
-        {error && <p className="text-rose-400 text-sm">{error}</p>}
+        {error && <p className="text-sm text-rose-400">{error}</p>}
 
         {runs && runs.length === 0 && (
-          <p className="text-slate-400 text-sm">No deployment runs found.</p>
+          <p className="text-sm text-slate-400">No deployment runs found.</p>
         )}
 
         {runs && runs.length > 0 && (
-          <table className="w-full text-xs">
+          <table className="w-full text-xs mt-2">
             <thead className="text-slate-400">
               <tr>
-                <th className="py-2 text-left">Run</th>
+                <th className="py-2 text-left">Run ID</th>
                 <th className="py-2 text-left">Project</th>
                 <th className="py-2 text-left">Status</th>
                 <th className="py-2 text-left">Stage</th>
+                <th className="py-2 text-left">Created</th>
               </tr>
             </thead>
 
             <tbody className="text-slate-200">
-              {runs.map((run) => (
-                <tr key={run.run_id} className="border-t border-slate-800">
+              {runs.map((r) => (
+                <tr key={r.run_id} className="border-t border-slate-800">
                   <td className="py-2">
-                    <Link href={`/wizard/status?run=${run.run_id}`} className="text-sky-300 underline">
-                      {run.run_id}
+                    <Link
+                      href={`/wizard/status?run=${r.run_id}`}
+                      className="text-sky-300 underline"
+                    >
+                      {r.run_id}
                     </Link>
                   </td>
-                  <td className="py-2">{run.project_name}</td>
-                  <td className="py-2">
-                    <Badge>{run.status}</Badge>
-                  </td>
-                  <td className="py-2">{run.stage}</td>
+                  <td className="py-2">{r.project_name}</td>
+                  <td className="py-2"><Badge>{r.status}</Badge></td>
+                  <td className="py-2">{r.stage}</td>
+                  <td className="py-2">{new Date(r.created_at).toLocaleString()}</td>
                 </tr>
               ))}
             </tbody>

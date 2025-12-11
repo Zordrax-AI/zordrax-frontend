@@ -24,7 +24,6 @@ export default function PipRunStatusPage() {
   const runId = params.get("run");
 
   const [details, setDetails] = useState<PipelineStatus | null>(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -34,59 +33,57 @@ export default function PipRunStatusPage() {
       try {
         const data = await fetchStatus(runId);
         setDetails(data);
-        setLoading(false);
       } catch (e: any) {
         setError(e.message);
-        setLoading(false);
       }
     }
 
     load();
-    const id = setInterval(load, 5000);
-    return () => clearInterval(id);
+    const interval = setInterval(load, 5000);
+    return () => clearInterval(interval);
   }, [runId]);
 
-  if (!runId) return <p className="text-sm text-slate-400">Missing ?run= parameter.</p>;
+  if (!runId)
+    return <p className="text-slate-400 text-sm">Missing ?run= query parameter.</p>;
 
-  if (loading) {
+  if (!details && !error)
     return (
       <div className="flex gap-2 text-sm">
         <Spinner /> Loading pipeline status...
       </div>
     );
-  }
 
-  if (error) {
-    return <p className="text-rose-400 text-sm">{error}</p>;
-  }
+  if (error)
+    return <p className="text-sm text-rose-400">{error}</p>;
 
   const currentStage = (details?.stage || "").toLowerCase();
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Pipeline Status</h1>
+      <h1 className="text-xl font-semibold">Deployment Status</h1>
       <p className="text-xs text-slate-400">Run #{runId}</p>
 
       <Card className="space-y-4">
-        <div className="flex justify-between items-center">
-          <p className="text-sm">{details?.message || "Processing..."}</p>
-          <Badge>{details?.status || details?.stage}</Badge>
+        <div className="flex justify-between">
+          <p className="text-sm">{details?.message}</p>
+          <Badge>{details?.status}</Badge>
         </div>
 
         <div className="flex flex-wrap gap-2">
           {STAGES.map((stage) => {
             const active = currentStage === stage;
-            const completed = STAGES.indexOf(stage) <= STAGES.indexOf(currentStage);
+            const completed =
+              STAGES.indexOf(stage) <= STAGES.indexOf(currentStage);
 
             return (
               <div
                 key={stage}
                 className={`px-2 py-1 rounded-full text-xs border ${
                   active
-                    ? "border-sky-500 bg-sky-500/10 text-sky-300"
+                    ? "bg-sky-500/10 text-sky-300 border-sky-500"
                     : completed
-                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-300"
-                    : "border-slate-700 bg-slate-900 text-slate-400"
+                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500"
+                    : "bg-slate-900 text-slate-400 border-slate-700"
                 }`}
               >
                 {stage}
@@ -101,7 +98,7 @@ export default function PipRunStatusPage() {
             target="_blank"
             className="text-sky-300 underline text-xs"
           >
-            View logs
+            View Pipeline Logs
           </a>
         )}
       </Card>

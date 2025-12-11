@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
 import { Badge } from "@/components/ui/Badge";
 import { aiRecommendStack } from "@/lib/api";
@@ -40,7 +41,8 @@ export default function OnboardingVisualPage() {
   );
 }
 
-/* ------------------- AI MODE ------------------- */
+// --------------------- AI MODE ---------------------
+
 function AiMode() {
   const [goal, setGoal] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,26 +55,24 @@ function AiMode() {
     try {
       const res = await aiRecommendStack({ goal });
       setSummary(res.summary);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    } catch (e: any) {
+      setError(e.message);
     }
+    setLoading(false);
   }
 
   return (
     <Card className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-sm font-semibold">AI Stack Recommendation</h2>
+      <div className="flex justify-between">
+        <h2 className="text-sm font-semibold text-slate-100">AI Recommendation</h2>
         <Badge tone="success">AI Mode</Badge>
       </div>
 
       <textarea
         value={goal}
         onChange={(e) => setGoal(e.target.value)}
-        placeholder="Describe your project goal..."
         className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
-        rows={3}
+        placeholder="Describe your project goal..."
       />
 
       <Button onClick={onSubmit} disabled={!goal || loading}>
@@ -82,7 +82,7 @@ function AiMode() {
       {error && <p className="text-rose-400 text-xs">{error}</p>}
 
       {summary && (
-        <pre className="text-xs bg-slate-900 rounded-xl p-3 border border-slate-700 whitespace-pre-wrap">
+        <pre className="text-xs whitespace-pre-wrap bg-slate-900 border border-slate-700 p-3 rounded-xl">
           {summary}
         </pre>
       )}
@@ -90,23 +90,25 @@ function AiMode() {
   );
 }
 
-/* ------------------- GUIDED MODE ------------------- */
+// --------------------- GUIDED ---------------------
+
 function GuidedMode() {
   return (
     <Card>
-      <h2 className="text-sm font-semibold">Guided Builder</h2>
-      <p className="text-xs text-slate-400 mt-1">Multi-step wizard coming next.</p>
+      <h2 className="text-sm font-semibold text-slate-100">Guided Builder</h2>
+      <p className="text-xs text-slate-400 mt-1">Multi-step wizard coming soon.</p>
     </Card>
   );
 }
 
-/* ------------------- VISUAL MODE ------------------- */
+// --------------------- VISUAL ---------------------
+
 function VisualMode() {
   return (
     <Card>
-      <h2 className="text-sm font-semibold">Visual Designer</h2>
+      <h2 className="text-sm font-semibold text-slate-100">Visual Designer</h2>
       <p className="text-xs text-slate-400 mt-1">
-        Drag-and-drop ETL designer coming next.
+        Drag-and-drop ETL designer coming soon.
       </p>
     </Card>
   );
