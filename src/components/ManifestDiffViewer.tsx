@@ -5,59 +5,92 @@ import {
   fetchManifest,
   acceptMergedManifest,
   ManifestData,
+  AcceptResponse,
 } from "@/lib/onboardingConsoleApi";
 
+// Props
 type ManifestDiffViewerProps = {
   sessionId: string;
 };
 
 export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
   const [aiManifest, setAiManifest] = useState<ManifestData | null>(null);
-  const [manualManifest, setManualManifest] = useState<ManifestData | null>(null);
-  const [mergedManifest, setMergedManifest] = useState<ManifestData | null>(null);
+  const [manualManifest, setManualManifest] = useState<ManifestData | null>(
+    null
+  );
+  const [mergedManifest, setMergedManifest] = useState<ManifestData | null>(
+    null
+  );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // -----------------------------------------------------
+  // Load AI + manual manifests
+  // -----------------------------------------------------
   useEffect(() => {
     let cancelled = false;
+
     async function load() {
       try {
         const [ai, manual] = await Promise.all([
           fetchManifest(sessionId, "ai"),
           fetchManifest(sessionId, "manual"),
         ]);
+
         if (cancelled) return;
+
         setAiManifest(ai);
         setManualManifest(manual);
-        setMergedManifest({ ...(ai || {}), ...(manual || {}) });
+
+        // Combine them into the editable merged manifest
+        setMergedManifest({
+          ...(ai || {}),
+          ...(manual || {}),
+        });
+
         setError(null);
       } catch (err: unknown) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : "Failed to load manifests";
-        setError(message || "Failed to load manifests");
+        const msg =
+          err instanceof Error ? err.message : "Failed to load manifests.";
+        setError(msg);
       }
     }
+
     load();
     return () => {
       cancelled = true;
     };
   }, [sessionId]);
 
+  // -----------------------------------------------------
+  // Save merged manifest
+  // -----------------------------------------------------
   async function handleSaveMerged() {
     if (!mergedManifest) return;
+
     setSaving(true);
     try {
-      const res = await acceptMergedManifest(sessionId, mergedManifest);
-      setMessage(res.message || "Merged manifest saved.");
+      const res: AcceptResponse = await acceptMergedManifest(
+        sessionId,
+        mergedManifest
+      );
+
+      // res.message is guaranteed by AcceptResponse
+      setMessage(res.message);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to save merged manifest.";
-      setMessage(message || "Failed to save merged manifest.");
+      const msg =
+        err instanceof Error ? err.message : "Failed to save merged manifest.";
+      setMessage(msg);
     } finally {
       setSaving(false);
     }
   }
 
+  // -----------------------------------------------------
+  // UI Rendering
+  // -----------------------------------------------------
   if (error) {
     return <p className="text-sm text-red-600">{error}</p>;
   }
@@ -69,7 +102,9 @@ export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
   return (
     <div className="grid gap-4 md:grid-cols-3">
       <ManifestColumn title="AI Recommendation" manifest={aiManifest} />
+
       <ManifestColumn title="Manual Overrides" manifest={manualManifest} />
+
       <div className="flex flex-col gap-3">
         <ManifestColumn
           title="Merged Manifest (Effective)"
@@ -77,6 +112,7 @@ export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
           editable
           onChange={setMergedManifest}
         />
+
         <div className="mt-2 flex flex-col gap-1">
           <button
             type="button"
@@ -86,6 +122,7 @@ export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
           >
             {saving ? "Saving…" : "Save merged manifest"}
           </button>
+
           {message && (
             <p className="text-xs text-gray-600">
               {message}
@@ -97,6 +134,9 @@ export function ManifestDiffViewer({ sessionId }: ManifestDiffViewerProps) {
   );
 }
 
+// -----------------------------------------------------
+// Manifest Column Component
+// -----------------------------------------------------
 type ManifestColumnProps = {
   title: string;
   manifest: ManifestData | null;
@@ -117,6 +157,7 @@ function ManifestColumn({
       <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
         {title}
       </h3>
+
       <textarea
         className="mt-2 flex-1 rounded border border-gray-200 bg-gray-50 p-2 font-mono text-xs leading-tight text-gray-800"
         defaultValue={value}
@@ -128,7 +169,7 @@ function ManifestColumn({
                   const parsed = JSON.parse(e.target.value) as ManifestData;
                   onChange(parsed);
                 } catch {
-                  // ignore parse errors while typing
+                  // ignore JSON parse errors while typing
                 }
               }
             : undefined

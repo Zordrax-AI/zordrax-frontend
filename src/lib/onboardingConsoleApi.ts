@@ -113,7 +113,7 @@ export function acceptMergedManifest(
     body: JSON.stringify({ merged }),
   });
 }
-
+acceptMergedManifest
 // -----------------------------------------------------
 // Retry a Failed Deployment
 // -----------------------------------------------------
