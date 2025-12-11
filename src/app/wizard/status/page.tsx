@@ -4,6 +4,14 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getDeployStatus } from "@/lib/onboardingConsoleApi";
 
+interface PipelineStatus {
+  run_id?: number;
+  status?: string;
+  stage?: string;
+  message?: string;
+  url?: string;
+}
+
 export default function StatusPage() {
   return (
     <Suspense fallback={<p>Loading status…</p>}>
@@ -16,18 +24,20 @@ function StatusContent() {
   const params = useSearchParams();
   const runId = params.get("run");
 
-  const [details, setDetails] = useState<any>(null);
+  // ❌ Cannot use `any`
+  // ✔ Use a proper type or null
+  const [details, setDetails] = useState<PipelineStatus | null>(null);
   const [status, setStatus] = useState("loading");
 
-  // ---- FIX: ensure runId is string, not null ----
-  if (!runId) {
-    return <p>No pipeline run ID found.</p>;
-  }
+  // We CANNOT early-return before hooks
+  const isMissingRunId = !runId;
 
   useEffect(() => {
+    if (!runId) return;
+
     async function load() {
       try {
-        const data = await getDeployStatus(runId as string); // FIX
+        const data = await getDeployStatus(runId);
         setDetails(data);
         setStatus(data?.status ?? "unknown");
       } catch {
@@ -39,6 +49,11 @@ function StatusContent() {
     const interval = setInterval(load, 5000);
     return () => clearInterval(interval);
   }, [runId]);
+
+  // ✔ Now we return AFTER all hooks have run
+  if (isMissingRunId) {
+    return <p>No pipeline run ID found.</p>;
+  }
 
   return (
     <div className="p-6 space-y-4">
