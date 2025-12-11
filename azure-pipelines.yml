@@ -1,1 +1,66 @@
-# pipeline placeholder
+# Zordrax-Analytica | Frontend CI/CD (clean)
+
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: "ubuntu-latest"
+
+variables:
+- group: zordrax-analytica-dev-secrets
+- name: appName
+  value: "zordrax-frontend"
+- name: environment
+  value: "dev"
+- name: SERVICE_CONNECTION
+  value: "zordrax-analytica-dev-spn"
+
+stages:
+- stage: Build
+  displayName: Build frontend
+  jobs:
+  - job: Build
+    steps:
+    - task: NodeTool@0
+      inputs:
+        versionSpec: "20.x"
+      displayName: "Use Node.js 20"
+
+    - script: |
+        npm ci
+        npm run build
+      displayName: "Install & build"
+
+    - task: ArchiveFiles@2
+      inputs:
+        rootFolderOrFile: "$(System.DefaultWorkingDirectory)"
+        includeRootFolder: false
+        archiveType: "zip"
+        archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+      displayName: "Archive build"
+
+    - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+      artifact: drop
+
+- stage: Deploy
+  displayName: Deploy to Azure Web App
+  dependsOn: Build
+  jobs:
+  - deployment: DeployWeb
+    environment: "$(environment)"
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: drop
+
+          - task: AzureWebApp@1
+            displayName: "Deploy to $(appName)"
+            inputs:
+              azureSubscription: "$(SERVICE_CONNECTION)"
+              appType: "webAppLinux"
+              appName: "$(appName)"
+              package: "$(Pipeline.Workspace)/drop/frontend.zip"
