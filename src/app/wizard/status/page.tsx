@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { getDeployStatus } from "@/lib/onboardingConsoleApi";
 
 interface PipelineStatus {
   run_id?: number;
@@ -21,22 +22,19 @@ function StatusContent() {
   useEffect(() => {
     if (!runId) return;
 
-    async function fetchStatus() {
+    async function load() {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_ONBOARDING_API_URL}/onboarding/deploy-status/${runId}`
-        );
-
-        const data = await res.json();
+        const data = await getDeployStatus(runId);
         setDetails(data);
         setStatus(data?.status ?? "unknown");
-      } catch {
+      } catch (err) {
+        console.error("Error fetching status:", err);
         setStatus("error");
       }
     }
 
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 5000);
+    load();
+    const interval = setInterval(load, 3000);
     return () => clearInterval(interval);
   }, [runId]);
 
@@ -50,7 +48,12 @@ function StatusContent() {
         {JSON.stringify(details, null, 2)}
       </pre>
 
-      <p>Status: {status}</p>
+      <p className="font-semibold text-lg">
+        Status:{" "}
+        <span className="px-2 py-1 rounded bg-blue-600 text-white">
+          {status}
+        </span>
+      </p>
     </div>
   );
 }

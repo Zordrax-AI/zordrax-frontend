@@ -1,174 +1,33 @@
-// ============================================================================
-//  v5 Onboarding Console API – Strict Typed, No `any`, No empty interfaces
-// ============================================================================
+const API_BASE = process.env.NEXT_PUBLIC_ONBOARDING_API;
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_ONBOARDING_API_URL ?? "http://localhost:8000/api/v5";
-
-// ---------------------------------------------------------------------------
-// Generic JSON-safe types (strict-mode compatible)
-// ---------------------------------------------------------------------------
-
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonObject
-  | JsonArray;
-
-export interface JsonObject {
-  [key: string]: JsonValue;
-}
-
-// use type alias → avoids empty-interface rule
-export type JsonArray = JsonValue[];
-
-export type ManifestData = JsonObject;
-
-// ---------------------------------------------------------------------------
-// Session, governance & pipeline types
-// ---------------------------------------------------------------------------
-
-export type SessionStatus = "pending" | "running" | "failed" | "succeeded";
-
-export type SessionSummary = {
-  session_id: string;
-  created_at: string;
-  project_name: string;
-  environment: string;
-  status: SessionStatus;
-  last_run_id?: number;
-};
-
-export type GovernanceSeverity = "low" | "medium" | "high";
-
-export type GovernanceIssue = {
-  id: string;
-  type: "schema" | "null_check" | "reconciliation" | "pii" | "other";
-  severity: GovernanceSeverity;
-  message: string;
-  dataset?: string;
-};
-
-export type BuildRunStatus = "queued" | "running" | "failed" | "succeeded";
-
-export type BuildRun = {
-  run_id: number | string;
-  status: BuildRunStatus;
-  started_at?: string;
-  completed_at?: string | null;
-  details_url?: string | null;
-};
-
-export type SessionDetail = SessionSummary & {
-  ai_manifest?: ManifestData;
-  manual_manifest?: ManifestData;
-  merged_manifest?: ManifestData;
-  governance_status?: "pending" | "running" | "failed" | "passed";
-  governance_issues?: GovernanceIssue[];
-  runs?: BuildRun[];
-};
-
-// ---------------------------------------------------------------------------
-// Helper: Typed fetch wrapper
-// ---------------------------------------------------------------------------
-
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
-
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options?.headers ?? {}),
-    },
-    cache: "no-store",
+// -----------------------------
+// Start onboarding pipeline
+// -----------------------------
+export async function startOnboarding(payload: any) {
+  const res = await fetch(`${API_BASE}/onboarding/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
-    let message = `Request failed with status ${res.status}`;
-    try {
-      const body = await res.json();
-      if (typeof body?.detail === "string") message = body.detail;
-      else if (typeof body?.message === "string") message = body.message;
-    } catch {
-      /* ignore json parse errors */
-    }
-    throw new Error(message);
+    const text = await res.text();
+    throw new Error(`Onboarding failed: ${res.status} - ${text}`);
   }
 
-  if (res.status === 204) {
-    // No content
-    return undefined as unknown as T;
+  return res.json(); // expected: { run_id, status }
+}
+
+// -----------------------------
+// Get pipeline run status
+// -----------------------------
+export async function getDeployStatus(runId: string) {
+  const res = await fetch(`${API_BASE}/deploy/status/${runId}`);
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Status fetch failed: ${res.status} - ${text}`);
   }
 
-  return (await res.json()) as T;
-}
-
-// ---------------------------------------------------------------------------
-// API: Sessions
-// ---------------------------------------------------------------------------
-
-export async function fetchSessions(): Promise<SessionSummary[]> {
-  return request<SessionSummary[]>("/onboarding/sessions");
-}
-
-export async function fetchSession(
-  sessionId: string
-): Promise<SessionDetail> {
-  return request<SessionDetail>(
-    `/onboarding/sessions/${encodeURIComponent(sessionId)}`
-  );
-}
-
-// ---------------------------------------------------------------------------
-// API: Manifest
-// ---------------------------------------------------------------------------
-
-export async function fetchManifest(
-  sessionId: string,
-  source: "ai" | "manual" | "merged"
-): Promise<ManifestData> {
-  return request<ManifestData>(
-    `/onboarding/sessions/${encodeURIComponent(sessionId)}/manifest?source=${source}`
-  );
-}
-
-export async function acceptMergedManifest(
-  sessionId: string,
-  mergedManifest: ManifestData
-): Promise<{ status: string; message?: string }> {
-  return request<{ status: string; message?: string }>(
-    `/onboarding/sessions/${encodeURIComponent(sessionId)}/manifest/accept`,
-    {
-      method: "POST",
-      body: JSON.stringify({ merged_manifest: mergedManifest }),
-    }
-  );
-}
-
-// ---------------------------------------------------------------------------
-// API: Governance
-// ---------------------------------------------------------------------------
-
-export async function fetchGovernanceResults(
-  sessionId: string
-): Promise<GovernanceIssue[]> {
-  return request<GovernanceIssue[]>(
-    `/onboarding/sessions/${encodeURIComponent(sessionId)}/governance`
-  );
-}
-
-// ---------------------------------------------------------------------------
-// API: Retry deployment
-// ---------------------------------------------------------------------------
-
-export async function retryDeployment(
-  sessionId: string
-): Promise<{ status: string; message?: string }> {
-  return request<{ status: string; message?: string }>(
-    `/onboarding/sessions/${encodeURIComponent(sessionId)}/retry`,
-    { method: "POST" }
-  );
+  return res.json(); // expected: { run_id, status, stage, message }
 }
