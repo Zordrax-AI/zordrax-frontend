@@ -1,45 +1,67 @@
+// src/components/ui/Button.tsx
 "use client";
 
 import Link from "next/link";
+import clsx from "clsx";
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "outline" | "default";
+export function Button({
+  children,
+  onClick,
+  variant = "primary",
+  className,
+  ...props
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: "primary" | "outline";
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={clsx(
+        "px-4 py-2 rounded-lg text-sm font-semibold transition",
+        variant === "primary"
+          ? "bg-sky-600 text-white hover:bg-sky-500"
+          : "border border-slate-600 text-slate-300 hover:bg-slate-800",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </button>
+  );
 }
 
-export function Button({ variant = "default", className = "", ...props }: ButtonProps) {
-  const base =
-    "px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150";
-
-  const styles = {
-    default: "bg-slate-700 hover:bg-slate-600 text-white",
-    primary: "bg-sky-600 hover:bg-sky-500 text-white",
-    outline: "border border-slate-600 text-slate-300 hover:bg-slate-700"
-  };
-
-  return <button {...props} className={`${base} ${styles[variant]} ${className}`} />;
-}
-
-Button.Link = function ButtonLink({
+/* --------------------------------------------------
+   LINK BUTTON (used everywhere in your app)
+-------------------------------------------------- */
+export function LinkButton({
   href,
-  variant = "default",
-  children
+  children,
+  variant = "primary",
+  className
 }: {
   href: string;
-  variant?: "primary" | "outline" | "default";
   children: React.ReactNode;
+  variant?: "primary" | "outline";
+  className?: string;
 }) {
-  const base =
-    "block text-center px-4 py-2 rounded-md text-sm font-medium transition-colors duration-150";
-
-  const styles = {
-    default: "bg-slate-700 hover:bg-slate-600 text-white",
-    primary: "bg-sky-600 hover:bg-sky-500 text-white",
-    outline: "border border-slate-600 text-slate-300 hover:bg-slate-700"
-  };
-
   return (
-    <Link href={href} className={`${base} ${styles[variant]}`}>
+    <Link
+      href={href}
+      className={clsx(
+        "px-4 py-2 rounded-lg text-sm font-semibold transition block text-center",
+        variant === "primary"
+          ? "bg-sky-600 text-white hover:bg-sky-500"
+          : "border border-slate-600 text-slate-300 hover:bg-slate-800",
+        className
+      )}
+    >
       {children}
     </Link>
   );
-};
+}
+
+// BACKWARD COMPATIBILITY
+Button.Link = LinkButton;
