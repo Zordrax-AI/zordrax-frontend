@@ -1,4 +1,4 @@
-# Zordrax-Analytica | Frontend CI/CD
+# Zordrax-Analytica | Frontend CI/CD (clean)
 
 trigger:
   branches:
@@ -9,7 +9,7 @@ pool:
   vmImage: "ubuntu-latest"
 
 variables:
-- group: azure-static-web-apps-orange-moss-0f5ea9e03-variable-group
+- group: zordrax-analytica-dev-secrets
 - name: appName
   value: "zordrax-frontend"
 - name: environment
@@ -19,23 +19,17 @@ variables:
 
 stages:
 - stage: Build
-  displayName: Build frontend
   jobs:
   - job: Build
-    displayName: Build
     steps:
     - task: NodeTool@0
       inputs:
         versionSpec: "20.x"
-      displayName: "Use Node.js 20"
 
     - script: |
-        npm install
-        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" >> $GITHUB_ENV
+        npm ci
         npm run build
-      displayName: "Install & build"
-      env:
-        NEXT_PUBLIC_ONBOARDING_API_URL: $(NEXT_PUBLIC_ONBOARDING_API_URL)
+      displayName: "Install & Build"
 
     - task: ArchiveFiles@2
       inputs:
@@ -43,13 +37,11 @@ stages:
         includeRootFolder: false
         archiveType: "zip"
         archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
-      displayName: "Archive build"
 
     - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
       artifact: drop
 
 - stage: Deploy
-  displayName: Deploy to Azure Web App
   dependsOn: Build
   jobs:
   - deployment: DeployWeb
@@ -62,9 +54,8 @@ stages:
             artifact: drop
 
           - task: AzureWebApp@1
-            displayName: "Deploy to $(appName)"
             inputs:
               azureSubscription: "$(SERVICE_CONNECTION)"
-              appType: "webAppLinux"
+              appType: webAppLinux
               appName: "$(appName)"
               package: "$(Pipeline.Workspace)/drop/frontend.zip"
