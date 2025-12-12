@@ -1,62 +1,46 @@
-// src/lib/api.ts
+const BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
 
-const BASE_URL = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
-
-if (!BASE_URL) {
-  console.warn("❗ NEXT_PUBLIC_ONBOARDING_API_URL is NOT set!");
+function url(path: string) {
+  return `${BASE}/onboarding${path}`;
 }
 
-/**
- * Generic request wrapper for all backend calls.
- */
-export async function request(
-  path: string,
-  options: RequestInit = {}
-): Promise<any> {
-  const url = `${BASE_URL}${path}`;
-
-  const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-    },
+async function request(path: string, options: RequestInit = {}) {
+  const res = await fetch(url(path), {
     ...options,
+    headers: {
+      "Content-Type": "application/json"
+    }
   });
 
   if (!res.ok) {
-    const msg = await res.text();
-    throw new Error(`HTTP ${res.status}: ${msg}`);
+    const body = await res.text();
+    throw new Error(`HTTP ${res.status}: ${body}`);
   }
 
   return res.json();
 }
 
-/* --------------------------------------------------
-   AI Recommendation (POST /ai/recommend)
--------------------------------------------------- */
+/* ===============================
+   SESSION / RUN FETCHERS
+================================ */
+export async function fetchSessions() {
+  return request("/sessions");
+}
+
+export async function fetchRuns() {
+  return request("/runs");
+}
+
+export async function fetchRunStatus(runId: string) {
+  return request(`/runs/${runId}`);
+}
+
+/* ===============================
+   AI RECOMMENDATION
+================================ */
 export async function aiRecommendStack(goal: string) {
   return request("/ai/recommend", {
     method: "POST",
-    body: JSON.stringify({ goal }),
+    body: JSON.stringify({ goal })
   });
-}
-
-/* --------------------------------------------------
-   Sessions (GET /sessions)
--------------------------------------------------- */
-export async function fetchSessions() {
-  return request("/sessions", { method: "GET" });
-}
-
-/* --------------------------------------------------
-   Runs (GET /runs)
--------------------------------------------------- */
-export async function fetchRuns() {
-  return request("/runs", { method: "GET" });
-}
-
-/* --------------------------------------------------
-   Run Status (GET /runs/{runId})
--------------------------------------------------- */
-export async function fetchRunStatus(runId: string) {
-  return request(`/runs/${runId}`, { method: "GET" });
 }

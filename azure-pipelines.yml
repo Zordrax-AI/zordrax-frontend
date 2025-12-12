@@ -12,8 +12,6 @@ variables:
 - group: zordrax-analytica-dev-secrets
 - name: appName
   value: "zordrax-frontend"
-- name: environment
-  value: "dev"
 - name: SERVICE_CONNECTION
   value: "zordrax-analytica-dev-spn"
 
@@ -22,16 +20,19 @@ stages:
   displayName: Build frontend
   jobs:
   - job: BuildJob
-    displayName: Build job
     steps:
     - task: NodeTool@0
       inputs:
         versionSpec: "20.x"
 
     - script: |
+        echo "NEXT_PUBLIC_BACKEND_URL=$(NEXT_PUBLIC_BACKEND_URL)" >> .env.local
+        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" >> .env.local
+        echo "NEXT_PUBLIC_CLIENT_ID=$(NEXT_PUBLIC_CLIENT_ID)" >> .env.local
+        echo "NEXT_PUBLIC_AUTH_URL=$(NEXT_PUBLIC_AUTH_URL)" >> .env.local
         npm ci
         npm run build
-      displayName: "Install & Build"
+      displayName: "Inject Environment Vars & Build"
 
     - task: ArchiveFiles@2
       inputs:
@@ -48,8 +49,7 @@ stages:
   dependsOn: Build
   jobs:
   - deployment: DeployWeb
-    displayName: Deploy Web App
-    environment: dev     # FIXED — must be literal or an existing env
+    environment: dev
     strategy:
       runOnce:
         deploy:
