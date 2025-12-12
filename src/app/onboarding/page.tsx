@@ -55,7 +55,8 @@ function AiMode() {
     try {
       const res = await aiRecommendStack(goal);
 
-      setSummary(res.summary);
+      setSummary(res.summary ?? null);
+
     } catch (e: any) {
       setError(e.message);
     }

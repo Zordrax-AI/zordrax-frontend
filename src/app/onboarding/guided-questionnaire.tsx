@@ -1,57 +1,95 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import type { OnboardingQuestion } from "@/lib/types";
+import { fetchNextQuestion } from "@/lib/api";
 
-export default function GuidedWizard() {
-  const [questions, setQuestions] = useState([]);
-  const [current, setCurrent] = useState(null);
-  const [answers, setAnswers] = useState({});
+// -------------------------------
+// Define shape for answers
+// -------------------------------
+interface GuidedAnswers {
+  [key: string]: any;
+  industry?: string;
+}
 
-  useEffect(() => {
-    async function load() {
-      const res = await fetch(process.env.NEXT_PUBLIC_ONBOARDING_API_URL + "/ai/questions");
-      const json = await res.json();
-      setQuestions(json);
-      setCurrent(json[0]);
+export default function GuidedQuestionnaire() {
+  const [answers, setAnswers] = useState<GuidedAnswers>({});
+  const [currentQuestion, setCurrentQuestion] =
+    useState<OnboardingQuestion | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  // -------------------------------
+  // Load next question
+  // -------------------------------
+  const loadNextQuestion = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchNextQuestion(
+        answers,
+        answers.industry ?? null
+      );
+      setCurrentQuestion(data);
+    } finally {
+      setLoading(false);
     }
-    load();
-  }, []);
+  }, [answers]);
 
-  async function next() {
-    const res = await fetch(process.env.NEXT_PUBLIC_ONBOARDING_API_URL + "/ai/next-question", {
-      method: "POST",
-      body: JSON.stringify({
-        previous_answers: answers,
-        industry: answers.industry || null
-      }),
-      headers: { "Content-Type": "application/json" }
-    });
+  // -------------------------------
+  // Load first question on mount
+  // -------------------------------
+  useEffect(() => {
+    loadNextQuestion();
+  }, [loadNextQuestion]);
 
-    const nextQ = await res.json();
-    setCurrent(nextQ);
+  // -------------------------------
+  // Handle answer selection
+  // -------------------------------
+  function handleAnswer(value: string) {
+    if (!currentQuestion) return;
+
+    setAnswers((prev) => ({
+      ...prev,
+      [currentQuestion.id]: value,
+    }));
   }
-
-  function answerSelected(val: string) {
-    setAnswers(prev => ({ ...prev, [current.id]: val }));
-    next();
-  }
-
-  if (!current) return <p>Loading...</p>;
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg">{current.text}</h2>
-      <div className="flex flex-col gap-2">
-        {current.options.map(opt =>
-          <button
-            key={opt}
-            onClick={() => answerSelected(opt)}
-            className="px-3 py-2 bg-slate-800 rounded"
-          >
-            {opt}
-          </button>
+      <Card className="p-6 space-y-4">
+        {loading && (
+          <p className="text-sm text-slate-400">Loading...</p>
         )}
-      </div>
+
+        {!loading && currentQuestion && (
+          <>
+            <h2 className="text-lg font-semibold">
+              {currentQuestion.text}
+            </h2>
+
+            <div className="flex flex-col gap-2">
+              {currentQuestion.options?.map((opt) => (
+                <Button
+                  key={opt}
+                  variant="outline"
+                  onClick={() => handleAnswer(opt)}
+                >
+                  {opt}
+                </Button>
+              ))}
+            </div>
+
+            <Button onClick={loadNextQuestion}>
+              Next →
+            </Button>
+          </>
+        )}
+      </Card>
+
+      <pre className="text-xs text-slate-400">
+        {JSON.stringify(answers, null, 2)}
+      </pre>
     </div>
   );
 }
