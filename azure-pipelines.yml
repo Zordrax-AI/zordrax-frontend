@@ -1,20 +1,3 @@
-# Zordrax-Analytica | Frontend CI/CD (clean)
-
-trigger:
-  branches:
-    include:
-      - main
-
-pool:
-  vmImage: "ubuntu-latest"
-
-variables:
-- group: zordrax-analytica-dev-secrets
-- name: appName
-  value: "zordrax-frontend"
-- name: SERVICE_CONNECTION
-  value: "zordrax-analytica-dev-spn"
-
 stages:
 - stage: Build
   displayName: Build frontend
@@ -25,15 +8,14 @@ stages:
       inputs:
         versionSpec: "20.x"
 
-  - script: |
-      echo "NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL" >> .env.local
-      echo "NEXT_PUBLIC_ONBOARDING_API_URL=$NEXT_PUBLIC_ONBOARDING_API_URL" >> .env.local
-      echo "NEXT_PUBLIC_CLIENT_ID=$NEXT_PUBLIC_CLIENT_ID" >> .env.local
-      echo "NEXT_PUBLIC_AUTH_URL=$NEXT_PUBLIC_AUTH_URL" >> .env.local
-      npm ci
-      npm run build
-    displayName: "Inject Environment Vars & Build"
-
+    - script: |
+        echo "NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL" >> .env.local
+        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$NEXT_PUBLIC_ONBOARDING_API_URL" >> .env.local
+        echo "NEXT_PUBLIC_CLIENT_ID=$NEXT_PUBLIC_CLIENT_ID" >> .env.local
+        echo "NEXT_PUBLIC_AUTH_URL=$NEXT_PUBLIC_AUTH_URL" >> .env.local
+        npm ci
+        npm run build
+      displayName: "Inject Environment Vars & Build"
 
     - task: ArchiveFiles@2
       inputs:
@@ -44,23 +26,3 @@ stages:
 
     - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
       artifact: drop
-
-- stage: Deploy
-  displayName: Deploy to Azure Web App
-  dependsOn: Build
-  jobs:
-  - deployment: DeployWeb
-    environment: dev
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - download: current
-            artifact: drop
-
-          - task: AzureWebApp@1
-            inputs:
-              azureSubscription: "$(SERVICE_CONNECTION)"
-              appType: "webAppLinux"
-              appName: "$(appName)"
-              package: "$(Pipeline.Workspace)/drop/frontend.zip"
