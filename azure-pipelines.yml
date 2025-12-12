@@ -25,14 +25,15 @@ stages:
       inputs:
         versionSpec: "20.x"
 
-    - script: |
-        echo "NEXT_PUBLIC_BACKEND_URL=$(NEXT_PUBLIC_BACKEND_URL)" >> .env.local
-        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" >> .env.local
-        echo "NEXT_PUBLIC_CLIENT_ID=$(NEXT_PUBLIC_CLIENT_ID)" >> .env.local
-        echo "NEXT_PUBLIC_AUTH_URL=$(NEXT_PUBLIC_AUTH_URL)" >> .env.local
-        npm ci
-        npm run build
-      displayName: "Inject Environment Vars & Build"
+  - script: |
+      echo "NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL" >> .env.local
+      echo "NEXT_PUBLIC_ONBOARDING_API_URL=$NEXT_PUBLIC_ONBOARDING_API_URL" >> .env.local
+      echo "NEXT_PUBLIC_CLIENT_ID=$NEXT_PUBLIC_CLIENT_ID" >> .env.local
+      echo "NEXT_PUBLIC_AUTH_URL=$NEXT_PUBLIC_AUTH_URL" >> .env.local
+      npm ci
+      npm run build
+    displayName: "Inject Environment Vars & Build"
+
 
     - task: ArchiveFiles@2
       inputs:
