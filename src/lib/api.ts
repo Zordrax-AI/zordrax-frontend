@@ -1,9 +1,11 @@
-const BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
-if (!BASE) console.error("❌ NEXT_PUBLIC_ONBOARDING_API_URL is missing!");
+// src/lib/api.ts
 
-// -------------------------------
-// Helpers
-// -------------------------------
+const BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+if (!BASE) {
+  // This will show up in the browser + build logs
+  console.error("❌ NEXT_PUBLIC_ONBOARDING_API_URL is missing!");
+}
+
 function url(path: string) {
   return `${BASE}${path}`;
 }
@@ -18,26 +20,27 @@ async function request(path: string, options: RequestInit = {}) {
   });
 
   if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`HTTP ${res.status}: ${txt}`);
+    const body = await res.text();
+    throw new Error(`HTTP ${res.status}: ${body}`);
   }
 
   return res.json();
 }
 
-// -------------------------------
-// AI Recommendation
-// -------------------------------
+/* ===============================
+   AI RECOMMENDATION
+================================ */
 export async function aiRecommendStack(goal: string) {
+  // Backend expects OnboardingAnswers with "answers" field
   return request("/ai/recommend-stack", {
     method: "POST",
     body: JSON.stringify({ answers: { goal } })
   });
 }
 
-// -------------------------------
-// Dynamic Questions
-// -------------------------------
+/* ===============================
+   QUESTIONS ENGINE
+================================ */
 export async function fetchQuestions() {
   return request("/ai/questions");
 }
@@ -49,20 +52,34 @@ export async function getNextQuestion(previous_answers: any, industry?: string) 
   });
 }
 
-// -------------------------------
-// Pipeline Status & Runs
-// -------------------------------
+/* ===============================
+   PIPELINE STATUS & HISTORY
+================================ */
 export async function fetchRuns() {
+  // Returns { count, items: PipelineRun[] }
   return request("/pipeline/history");
 }
 
-export async function fetchRunStatus(id: string) {
-  return request(`/pipeline/status/${id}`);
+export async function fetchRunStatus(runId: string) {
+  return request(`/pipeline/status/${runId}`);
 }
 
-// -------------------------------
-// Sessions (NOT IMPLEMENTED ON BACKEND → return empty list)
-// -------------------------------
+/* ===============================
+   OBSERVABILITY
+================================ */
+export async function fetchObservabilityOverview() {
+  return request("/observability/overview");
+}
+
+export async function fetchObservabilityTimeline() {
+  return request("/observability/timeline");
+}
+
+/* ===============================
+   SESSIONS
+   (not implemented in backend yet)
+================================ */
 export async function fetchSessions() {
+  // Placeholder until sessions are implemented
   return [];
 }
