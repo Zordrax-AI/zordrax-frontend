@@ -19,8 +19,10 @@ variables:
 
 stages:
 - stage: Build
+  displayName: Build frontend
   jobs:
-  - job: Build
+  - job: BuildJob
+    displayName: Build job
     steps:
     - task: NodeTool@0
       inputs:
@@ -35,17 +37,19 @@ stages:
       inputs:
         rootFolderOrFile: "$(System.DefaultWorkingDirectory)"
         includeRootFolder: false
-        archiveType: "zip"
+        archiveType: zip
         archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
 
     - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
       artifact: drop
 
 - stage: Deploy
+  displayName: Deploy to Azure Web App
   dependsOn: Build
   jobs:
   - deployment: DeployWeb
-    environment: "$(environment)"
+    displayName: Deploy Web App
+    environment: dev     # FIXED — must be literal or an existing env
     strategy:
       runOnce:
         deploy:
@@ -56,6 +60,6 @@ stages:
           - task: AzureWebApp@1
             inputs:
               azureSubscription: "$(SERVICE_CONNECTION)"
-              appType: webAppLinux
+              appType: "webAppLinux"
               appName: "$(appName)"
               package: "$(Pipeline.Workspace)/drop/frontend.zip"
