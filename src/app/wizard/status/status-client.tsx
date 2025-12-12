@@ -6,15 +6,29 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { fetchRunStatus } from "@/lib/api";
+
 import type { PipelineStatus } from "@/lib/types";
 
-export default function StatusPageInner() {
-  const params = useSearchParams();
-  const runId = params.get("run");
+const STAGES = [
+  "queued",
+  "initializing",
+  "provisioning",
+  "terraform_plan",
+  "terraform_apply",
+  "finalizing",
+  "completed",
+  "failed",
+];
 
+export default function StatusClient() {
+  const params = useSearchParams();
+  const runId = params.get("run") ?? ""; // ALWAYS A STRING
+
+  // HOOKS MUST ALWAYS RUN — EVEN IF runId IS EMPTY
   const [details, setDetails] = useState<PipelineStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch only when runId exists
   useEffect(() => {
     if (!runId) return;
 
@@ -32,14 +46,24 @@ export default function StatusPageInner() {
     return () => clearInterval(interval);
   }, [runId]);
 
-  if (!runId) return <p className="text-slate-400 text-sm">Missing ?run.</p>;
-  if (!details && !error)
+  // ---------- RENDER ----------
+  if (!runId) {
+    return <p className="text-slate-400 text-sm">Missing ?run parameter.</p>;
+  }
+
+  if (error) {
+    return <p className="text-sm text-rose-400">{error}</p>;
+  }
+
+  if (!details) {
     return (
       <div className="flex gap-2 text-sm">
-        <Spinner /> Loading pipeline status...
+        <Spinner /> Loading pipeline status…
       </div>
     );
-  if (error) return <p className="text-sm text-rose-400">{error}</p>;
+  }
+
+  const currentStage = details.stage?.toLowerCase() ?? "";
 
   return (
     <div className="space-y-4">
@@ -48,9 +72,41 @@ export default function StatusPageInner() {
 
       <Card className="space-y-4">
         <div className="flex justify-between">
-          <p className="text-sm">{details?.message}</p>
-          <Badge>{details?.status}</Badge>
+          <p className="text-sm">{details.message}</p>
+          <Badge>{details.status}</Badge>
         </div>
+
+        <div className="flex flex-wrap gap-2">
+          {STAGES.map((stage) => {
+            const active = currentStage === stage;
+            const completed = STAGES.indexOf(stage) <= STAGES.indexOf(currentStage);
+
+            return (
+              <div
+                key={stage}
+                className={`px-2 py-1 rounded-full text-xs border ${
+                  active
+                    ? "bg-sky-500/10 text-sky-300 border-sky-500"
+                    : completed
+                    ? "bg-emerald-500/10 text-emerald-300 border-emerald-500"
+                    : "bg-slate-900 text-slate-400 border-slate-700"
+                }`}
+              >
+                {stage}
+              </div>
+            );
+          })}
+        </div>
+
+        {details.url && (
+          <a
+            href={details.url}
+            target="_blank"
+            className="text-sky-300 underline text-xs"
+          >
+            View Pipeline Logs
+          </a>
+        )}
       </Card>
     </div>
   );

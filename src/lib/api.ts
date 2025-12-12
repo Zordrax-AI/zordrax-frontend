@@ -1,9 +1,10 @@
-// src/lib/api.ts
-
+// ------------------------------------------
+// BASE URL
+// ------------------------------------------
 const BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+
 if (!BASE) {
-  // This will show up in the browser + build logs
-  console.error("❌ NEXT_PUBLIC_ONBOARDING_API_URL is missing!");
+  console.warn("❌ NEXT_PUBLIC_ONBOARDING_API_URL is missing!");
 }
 
 function url(path: string) {
@@ -15,8 +16,7 @@ async function request(path: string, options: RequestInit = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      ...(options.headers || {})
-    }
+    },
   });
 
   if (!res.ok) {
@@ -27,59 +27,60 @@ async function request(path: string, options: RequestInit = {}) {
   return res.json();
 }
 
-/* ===============================
-   AI RECOMMENDATION
-================================ */
+// ------------------------------------------
+// AI RECOMMENDATION (POST /ai/recommend-stack)
+// ------------------------------------------
 export async function aiRecommendStack(goal: string) {
-  // Backend expects OnboardingAnswers with "answers" field
   return request("/ai/recommend-stack", {
     method: "POST",
-    body: JSON.stringify({ answers: { goal } })
+    body: JSON.stringify({ answers: { goal } }),
   });
 }
 
-/* ===============================
-   QUESTIONS ENGINE
-================================ */
-export async function fetchQuestions() {
-  return request("/ai/questions");
+// ------------------------------------------
+// SESSIONS (placeholder until backend built)
+// ------------------------------------------
+import type { OnboardingSession } from "@/lib/types";
+
+export async function fetchSessions(): Promise<OnboardingSession[]> {
+  return [
+    {
+      id: "demo-1",
+      project_name: "Example Session",
+      created_at: new Date().toISOString(),
+      status: "completed",
+      summary: "This is a placeholder session until backend is built.",
+    },
+  ];
 }
 
-export async function getNextQuestion(previous_answers: any, industry?: string) {
-  return request("/ai/next-question", {
-    method: "POST",
-    body: JSON.stringify({ previous_answers, industry })
-  });
-}
-
-/* ===============================
-   PIPELINE STATUS & HISTORY
-================================ */
+// ------------------------------------------
+// RUNS + PIPELINE STATUS
+// ------------------------------------------
 export async function fetchRuns() {
-  // Returns { count, items: PipelineRun[] }
   return request("/pipeline/history");
 }
 
-export async function fetchRunStatus(runId: string) {
-  return request(`/pipeline/status/${runId}`);
+export async function fetchRunStatus(id: string) {
+  return request(`/pipeline/status/${id}`);
 }
 
-/* ===============================
-   OBSERVABILITY
-================================ */
+// ------------------------------------------
+// OBSERVABILITY (placeholder)
+// ------------------------------------------
 export async function fetchObservabilityOverview() {
-  return request("/observability/overview");
+  return {
+    total_runs: 0,
+    succeeded_runs: 0,
+    failed_runs: 0,
+    running_runs: 0,
+    last_run: null,
+  };
 }
 
 export async function fetchObservabilityTimeline() {
-  return request("/observability/timeline");
-}
-
-/* ===============================
-   SESSIONS
-   (not implemented in backend yet)
-================================ */
-export async function fetchSessions() {
-  // Placeholder until sessions are implemented
-  return [];
+  return {
+    count: 0,
+    items: [],
+  };
 }

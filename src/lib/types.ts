@@ -1,36 +1,52 @@
-export interface PipelineStatus {
-  run_id?: number;
-  status?: string;     // "queued", "initializing", etc.
-  stage?: string;      // active stage
-  message?: string;
-  url?: string;        // pipeline log link
-  created_at?: string;
-  updated_at?: string;
+// ---------------------------------------------
+// Single pipeline run (from /pipeline/history)
+// ---------------------------------------------
+export interface PipelineRun {
+  id: number;
+  state: string;
+  result?: string | null;
+  created: string;
+  url: string;
 }
 
+// ---------------------------------------------
+// Pipeline run history response
+// ---------------------------------------------
+export interface RunHistoryResponse {
+  count: number;
+  items: PipelineRun[];
+}
+
+// ---------------------------------------------
+// Observability (dashboard cards summary)
+// ---------------------------------------------
+export interface ObservabilityOverview {
+  total_runs: number;
+  succeeded_runs: number;
+  failed_runs: number;
+  running_runs: number;
+  last_run: PipelineRun | null;
+}
+
+// ---------------------------------------------
+// Individual run status (/pipeline/status/:id)
+// ---------------------------------------------
+export interface PipelineStatus {
+  run_id: number;
+  status: string;
+  stage?: string;
+  message?: string;
+  url?: string;
+}
+// ---------------------------------------------
+// Placeholder for onboarding sessions
+// (backend does not implement this yet)
+// ---------------------------------------------
 export interface OnboardingSession {
   id: string;
-  project_name: string;
-  status: string;        // "in_progress", "complete", etc.
   created_at: string;
-}
-
-export interface DeployRun {
-  run_id: number;
   project_name: string;
-  status: string;        // running, failed, completed
-  stage: string;         // terraform_plan, terraform_apply, etc.
-  created_at: string;
+  status?: string;       // <-- Added status so the UI stops failing
+  summary?: string;
 }
 
-export interface AiRecommendationRequest {
-  goal: string;
-  cloud_preference?: string;
-  bi_tool?: string;
-  budget?: string;
-}
-
-export interface AiRecommendationResponse {
-  manifest: unknown;
-  summary: string;
-}
