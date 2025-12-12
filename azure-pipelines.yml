@@ -3,21 +3,30 @@ stages:
   displayName: Build frontend
   jobs:
   - job: BuildJob
+    displayName: Build Next.js Frontend
     steps:
+
     - task: NodeTool@0
+      displayName: Use Node.js 20
       inputs:
         versionSpec: "20.x"
 
     - script: |
-        echo "NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL" >> .env.local
-        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$NEXT_PUBLIC_ONBOARDING_API_URL" >> .env.local
-        echo "NEXT_PUBLIC_CLIENT_ID=$NEXT_PUBLIC_CLIENT_ID" >> .env.local
-        echo "NEXT_PUBLIC_AUTH_URL=$NEXT_PUBLIC_AUTH_URL" >> .env.local
+        echo "NEXT_PUBLIC_BACKEND_URL=$(NEXT_PUBLIC_BACKEND_URL)" >> .env.local
+        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" >> .env.local
+        echo "NEXT_PUBLIC_CLIENT_ID=$(NEXT_PUBLIC_CLIENT_ID)" >> .env.local
+        echo "NEXT_PUBLIC_AUTH_URL=$(NEXT_PUBLIC_AUTH_URL)" >> .env.local
+
+        echo "---- .env.local ----"
+        cat .env.local
+        echo "--------------------"
+
         npm ci
         npm run build
-      displayName: "Inject Environment Vars & Build"
+      displayName: Inject Environment Vars & Build
 
     - task: ArchiveFiles@2
+      displayName: Archive frontend build
       inputs:
         rootFolderOrFile: "$(System.DefaultWorkingDirectory)"
         includeRootFolder: false
@@ -25,4 +34,5 @@ stages:
         archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
 
     - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+      displayName: Publish frontend artifact
       artifact: drop
