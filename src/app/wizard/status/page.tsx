@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 import { Spinner } from "@/components/ui/Spinner";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { fetchStatus } from "@/lib/api";
+import { fetchRunStatus as fetchStatus } from "@/lib/api";
+
 import type { PipelineStatus } from "@/lib/types";
 
 const STAGES = [
@@ -31,7 +32,7 @@ export default function PipRunStatusPage() {
 
     async function load() {
       try {
-        const data = await fetchStatus(runId);
+        const data = await fetchStatus(runId as string);
         setDetails(data);
       } catch (e: any) {
         setError(e.message);

@@ -53,7 +53,8 @@ function AiMode() {
     setLoading(true);
     setError(null);
     try {
-      const res = await aiRecommendStack({ goal });
+      const res = await aiRecommendStack(goal);
+
       setSummary(res.summary);
     } catch (e: any) {
       setError(e.message);
@@ -75,7 +76,12 @@ function AiMode() {
         placeholder="Describe your project goal..."
       />
 
-      <Button onClick={onSubmit} disabled={!goal || loading}>
+      <Button
+        onClick={!goal || loading ? undefined : onSubmit}
+        className={`${
+          !goal || loading ? "opacity-50 cursor-not-allowed" : ""
+        }`}
+      >
         {loading ? <Spinner /> : "Generate"}
       </Button>
 
