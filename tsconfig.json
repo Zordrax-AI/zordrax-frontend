@@ -34,7 +34,7 @@
     "src/**/*",
     "next.config.mjs",
     ".next/types/**/*.ts"
-  ],
+, "portal/onboarding", "portal/runs", "portal/sessions", "portal/wizard"  ],
   "exclude": [
     "node_modules"
   ]
