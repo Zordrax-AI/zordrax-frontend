@@ -3,11 +3,9 @@ stages:
   displayName: Build frontend
   jobs:
   - job: BuildJob
-    displayName: Build Next.js Frontend
+    displayName: Build
     steps:
-
     - task: NodeTool@0
-      displayName: Use Node.js 20
       inputs:
         versionSpec: "20.x"
 
@@ -16,17 +14,16 @@ stages:
         echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" >> .env.local
         echo "NEXT_PUBLIC_CLIENT_ID=$(NEXT_PUBLIC_CLIENT_ID)" >> .env.local
         echo "NEXT_PUBLIC_AUTH_URL=$(NEXT_PUBLIC_AUTH_URL)" >> .env.local
-
-        echo "---- .env.local ----"
+        echo "---- ENV FILE ----"
         cat .env.local
-        echo "--------------------"
+      displayName: "Inject env vars"
 
+    - script: |
         npm ci
         npm run build
-      displayName: Inject Environment Vars & Build
+      displayName: "Build Next.js"
 
     - task: ArchiveFiles@2
-      displayName: Archive frontend build
       inputs:
         rootFolderOrFile: "$(System.DefaultWorkingDirectory)"
         includeRootFolder: false
@@ -34,5 +31,4 @@ stages:
         archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
 
     - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
-      displayName: Publish frontend artifact
       artifact: drop
