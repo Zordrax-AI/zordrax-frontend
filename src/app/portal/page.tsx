@@ -1,23 +1,59 @@
-import Link from "next/link";
-
-export default function PortalHome() {
+export default function PortalEntryPage() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-16">
-      <h1 className="text-3xl font-semibold">Portal</h1>
+    <main className="min-h-screen bg-slate-950 text-slate-100">
+      <div className="mx-auto max-w-5xl px-6 py-24">
 
-      <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-3">
-        <Link href="/portal/onboarding" className="rounded border border-slate-800 p-6 hover:bg-slate-900">
-          Start Onboarding
-        </Link>
+        <h1 className="text-3xl font-semibold">
+          Start your analytics onboarding
+        </h1>
 
-        <Link href="/portal/runs" className="rounded border border-slate-800 p-6 hover:bg-slate-900">
-          Pipeline Runs
-        </Link>
+        <p className="mt-4 max-w-2xl text-slate-400">
+          Choose how you want to configure your analytics platform.
+          You can let AI recommend an optimal setup, or configure everything manually.
+        </p>
 
-        <Link href="/portal/sessions" className="rounded border border-slate-800 p-6 hover:bg-slate-900">
-          Sessions
-        </Link>
+        <div className="mt-12 grid gap-6 md:grid-cols-2">
+
+          {/* AI MODE */}
+          <a
+            href="/portal/ai"
+            className="group rounded-xl border border-slate-800 bg-slate-900/40 p-8 hover:border-sky-400"
+          >
+            <h2 className="text-xl font-semibold group-hover:text-sky-400">
+              AI-Recommended Setup
+            </h2>
+
+            <p className="mt-3 text-sm text-slate-400">
+              Answer a few questions and let AI design the optimal
+              infrastructure, pipelines, governance, and BI stack.
+            </p>
+
+            <p className="mt-6 text-xs text-slate-500">
+              Best for fast onboarding and non-technical users
+            </p>
+          </a>
+
+          {/* MANUAL MODE */}
+          <a
+            href="/portal/manual"
+            className="group rounded-xl border border-slate-800 bg-slate-900/40 p-8 hover:border-violet-400"
+          >
+            <h2 className="text-xl font-semibold group-hover:text-violet-400">
+              Manual Configuration
+            </h2>
+
+            <p className="mt-3 text-sm text-slate-400">
+              Manually select cloud, data sources, pipelines, governance
+              rules, and reporting tools step by step.
+            </p>
+
+            <p className="mt-6 text-xs text-slate-500">
+              Best for data engineers and consultants
+            </p>
+          </a>
+
+        </div>
       </div>
-    </section>
+    </main>
   );
 }
