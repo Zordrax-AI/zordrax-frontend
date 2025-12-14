@@ -1,29 +1,67 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+
 export default function AiOnboardingPage() {
+  const router = useRouter();
+  const [industry, setIndustry] = useState("");
+  const [cloud, setCloud] = useState("");
+
+  function goGenerate() {
+    const qs = new URLSearchParams({
+      mode: "ai",
+      industry,
+      cloud,
+    });
+    router.push(`/portal/generate?${qs.toString()}`);
+  }
+
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-4xl px-6 py-20">
-        <h1 className="text-2xl font-semibold">
-          AI-Recommended Onboarding
-        </h1>
+    <>
+      <h1 className="text-2xl font-semibold">AI-Recommended Onboarding</h1>
+      <p className="mt-2 text-slate-400">
+        Answer a few questions. AI will generate a recommended analytics stack.
+      </p>
 
-        <p className="mt-4 text-slate-400">
-          Answer a short set of questions. AI will generate a
-          recommended analytics architecture for review.
-        </p>
+      <div className="mt-8 space-y-6 max-w-xl">
+        <div>
+          <label className="text-sm">Industry</label>
+          <select
+            className="mt-2 w-full rounded bg-slate-900 border border-slate-700 p-2"
+            value={industry}
+            onChange={(e) => setIndustry(e.target.value)}
+          >
+            <option value="">Select</option>
+            <option>Government</option>
+            <option>Health</option>
+            <option>Agriculture</option>
+            <option>Retail</option>
+          </select>
+        </div>
 
-        <div className="mt-10 rounded-xl border border-slate-800 bg-slate-900/40 p-6">
-          <p className="text-sm text-slate-400">
-            🚧 AI questionnaire and recommendation engine will appear here.
-          </p>
+        <div>
+          <label className="text-sm">Preferred Cloud</label>
+          <select
+            className="mt-2 w-full rounded bg-slate-900 border border-slate-700 p-2"
+            value={cloud}
+            onChange={(e) => setCloud(e.target.value)}
+          >
+            <option value="">Select</option>
+            <option>Azure</option>
+            <option>AWS</option>
+            <option>GCP</option>
+          </select>
         </div>
 
         <button
-          disabled
-          className="mt-8 rounded-md bg-slate-700 px-6 py-3 text-sm text-slate-300"
+          disabled={!industry || !cloud}
+          onClick={goGenerate}
+          className="rounded bg-gradient-to-r from-sky-400 to-violet-500 px-6 py-3 text-sm font-medium text-slate-900 disabled:opacity-40"
         >
-          Generate (coming soon)
+          Generate Architecture
         </button>
       </div>
-    </main>
+    </>
   );
 }

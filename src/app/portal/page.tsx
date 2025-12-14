@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function PortalEntryPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -15,7 +17,7 @@ export default function PortalEntryPage() {
         <div className="mt-12 grid gap-6 md:grid-cols-2">
 
           {/* AI MODE */}
-          <a
+          <Link
             href="/portal/ai"
             className="group rounded-xl border border-slate-800 bg-slate-900/40 p-8 hover:border-sky-400"
           >
@@ -31,10 +33,10 @@ export default function PortalEntryPage() {
             <p className="mt-6 text-xs text-slate-500">
               Best for fast onboarding and non-technical users
             </p>
-          </a>
+          </Link>
 
           {/* MANUAL MODE */}
-          <a
+          <Link
             href="/portal/manual"
             className="group rounded-xl border border-slate-800 bg-slate-900/40 p-8 hover:border-violet-400"
           >
@@ -50,7 +52,7 @@ export default function PortalEntryPage() {
             <p className="mt-6 text-xs text-slate-500">
               Best for data engineers and consultants
             </p>
-          </a>
+          </Link>
 
         </div>
       </div>
