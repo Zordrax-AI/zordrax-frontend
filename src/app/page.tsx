@@ -6,6 +6,7 @@ export default function HomePage() {
 
       {/* ================= HERO ================= */}
       <section className="relative h-[90vh] min-h-[700px] overflow-hidden">
+
         {/* Background video */}
         <video
           className="absolute inset-0 h-full w-full object-cover"
@@ -13,29 +14,34 @@ export default function HomePage() {
           muted
           loop
           playsInline
-          poster="/marketing/videos/hero-poster.jpg"
         >
-          <source src="/marketing/videos/hero.webm" type="video/webm" />
-          <source src="/marketing/videos/hero.mp4" type="video/mp4" />
+          <source src="/marketing/analytics-intro.webm" type="video/webm" />
         </video>
 
-        {/* Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/70 to-slate-950/40" />
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-slate-950/70" />
+
+        {/* Aurora / rainbow glow */}
+        <div className="absolute inset-0">
+          <div className="absolute -top-40 -left-40 h-[600px] w-[600px] rounded-full bg-cyan-500/20 blur-[120px]" />
+          <div className="absolute top-20 right-0 h-[500px] w-[500px] rounded-full bg-fuchsia-500/20 blur-[120px]" />
+          <div className="absolute bottom-0 left-1/3 h-[500px] w-[500px] rounded-full bg-amber-400/20 blur-[120px]" />
+        </div>
 
         {/* Content */}
         <div className="relative z-10 mx-auto max-w-7xl px-6 pt-40">
-          <span className="inline-flex items-center gap-2 rounded-full bg-slate-900/80 px-4 py-2 text-xs text-sky-400">
+          <span className="inline-flex items-center gap-2 rounded-full bg-slate-900/70 px-4 py-2 text-xs text-cyan-300">
             ● Government · Agriculture · Health
           </span>
 
-          <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-tight">
+          <h1 className="mt-6 max-w-3xl text-5xl font-semibold leading-tight text-white">
             From Government Services
             <br />
             to Smart Agriculture
             <br />
             to Health Systems —
             <br />
-            <span className="text-slate-300">
+            <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-300 to-amber-300 bg-clip-text text-transparent">
               we turn data into decisions.
             </span>
           </h1>
@@ -48,14 +54,14 @@ export default function HomePage() {
           <div className="mt-10 flex gap-4">
             <a
               href="/portal"
-              className="rounded-md bg-gradient-to-r from-sky-400 to-violet-500 px-6 py-3 text-sm font-medium text-slate-900"
+              className="rounded-md bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-amber-300 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg hover:opacity-90 transition"
             >
               Start a Project
             </a>
 
             <a
               href="/about"
-              className="rounded-md border border-slate-600 px-6 py-3 text-sm text-slate-200 hover:bg-slate-900"
+              className="rounded-md border border-white/30 px-6 py-3 text-sm text-white hover:bg-white/10"
             >
               Explore Services
             </a>
