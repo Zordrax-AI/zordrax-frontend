@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import MobileMenu from "@/components/MobileMenu";
 
+
+
 export default function Navbar() {
   return (
     <header className="sticky top-0 z-50 border-b border-white/10 bg-slate-950/70 backdrop-blur">
