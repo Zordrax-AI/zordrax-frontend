@@ -1,19 +1,21 @@
 import Link from "next/link";
 
-export default function OnboardingEntry() {
+export default function OnboardingOverview() {
   return (
-    <section className="px-6 py-16">
-      <h1 className="text-2xl font-semibold">Choose Onboarding Mode</h1>
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">AI-Driven Onboarding</h1>
 
-      <div className="mt-6 flex gap-6">
-        <Link href="/portal/onboarding/guided" className="border p-4 rounded">
-          Guided (Wizard)
-        </Link>
+      <p className="text-slate-400 max-w-xl">
+        This guided flow will collect requirements, generate an AI-recommended
+        data stack, and deploy it automatically.
+      </p>
 
-        <Link href="/portal/onboarding/visual" className="border p-4 rounded">
-          Visual (Low-Code)
-        </Link>
-      </div>
-    </section>
+      <Link
+        href="/portal/onboarding/questions"
+        className="inline-block rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+      >
+        Start onboarding
+      </Link>
+    </div>
   );
 }
