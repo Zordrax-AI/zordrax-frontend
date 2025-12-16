@@ -10,9 +10,14 @@ export default function RecommendPage() {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {
-    const answers = JSON.parse(
-      sessionStorage.getItem("onboarding_answers") || "{}"
-    );
+    const raw = sessionStorage.getItem("onboarding_answers");
+
+    if (!raw) {
+      router.push("/portal/onboarding/questions");
+      return;
+    }
+
+    const answers = JSON.parse(raw);
 
     fetch(`${BASE}/ai/recommend-stack`, {
       method: "POST",
@@ -22,11 +27,16 @@ export default function RecommendPage() {
       .then((r) => r.json())
       .then((res) => {
         setData(res);
-        sessionStorage.setItem("onboarding_manifest", JSON.stringify(res));
+        sessionStorage.setItem(
+          "onboarding_manifest",
+          JSON.stringify(res)
+        );
       });
   }, []);
 
-  if (!data) return <div>Generating recommendation…</div>;
+  if (!data) {
+    return <div className="text-slate-400">Generating recommendation…</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -36,12 +46,21 @@ export default function RecommendPage() {
         {JSON.stringify(data, null, 2)}
       </pre>
 
-      <button
-        onClick={() => router.push("/portal/onboarding/deploy")}
-        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
-      >
-        Deploy this stack
-      </button>
+      <div className="flex gap-3">
+        <button
+          onClick={() => router.push("/portal/onboarding/questions")}
+          className="rounded-md border border-slate-700 px-4 py-2 text-sm hover:bg-slate-900"
+        >
+          Back
+        </button>
+
+        <button
+          onClick={() => router.push("/portal/onboarding/deploy")}
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
+        >
+          Deploy this stack
+        </button>
+      </div>
     </div>
   );
 }

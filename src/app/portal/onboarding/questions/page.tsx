@@ -59,3 +59,9 @@ export default function QuestionsPage() {
     </div>
   );
 }
+<button
+  onClick={() => router.push("/portal/onboarding")}
+  className="mt-6 text-sm text-slate-400 hover:text-white"
+>
+  ← Back to overview
+</button>

@@ -1,45 +1,48 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const steps = [
+  { label: "Overview", href: "/portal/onboarding" },
+  { label: "Questions", href: "/portal/onboarding/questions" },
+  { label: "Recommendation", href: "/portal/onboarding/recommend" },
+  { label: "Deploy", href: "/portal/onboarding/deploy" },
+  { label: "Status", href: "/portal/onboarding/status" },
+];
 
 export default function OnboardingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-200">
       <aside className="w-64 border-r border-slate-800 p-4">
-        <h2 className="mb-4 text-sm font-semibold uppercase text-slate-400">
+        <h2 className="mb-4 text-xs font-semibold uppercase text-slate-500">
           Onboarding
         </h2>
 
-        <nav className="space-y-2 text-sm">
-          <Link href="/portal/onboarding" className="block hover:text-white">
-            Overview
-          </Link>
-          <Link
-            href="/portal/onboarding/questions"
-            className="block hover:text-white"
-          >
-            Questions
-          </Link>
-          <Link
-            href="/portal/onboarding/recommend"
-            className="block hover:text-white"
-          >
-            Recommendation
-          </Link>
-          <Link
-            href="/portal/onboarding/deploy"
-            className="block hover:text-white"
-          >
-            Deploy
-          </Link>
-          <Link
-            href="/portal/onboarding/status"
-            className="block hover:text-white"
-          >
-            Status
-          </Link>
+        <nav className="space-y-1 text-sm">
+          {steps.map((s) => {
+            const active = pathname === s.href;
+
+            return (
+              <Link
+                key={s.href}
+                href={s.href}
+                className={`block rounded-md px-3 py-2 ${
+                  active
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-400 hover:bg-slate-900 hover:text-white"
+                }`}
+              >
+                {s.label}
+              </Link>
+            );
+          })}
         </nav>
       </aside>
 
