@@ -2,158 +2,297 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { getEventsUrl, getRunStatus } from "@/lib/agent";
-import { loadSessions, upsertSession } from "@/lib/sessions";
+import { getEventsUrl, getRunStatus, type ZordraxRun } from "@/lib/agent";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui/Spinner";
 
-type RunStatus = "queued" | "running" | "completed" | "failed" | "unknown";
-
-type LogEvent = {
-  ts?: string;
-  level?: "info" | "warn" | "error";
-  message: string;
-  stage?: string;
-  status?: string;
+type SseEvent = {
+  event_id?: number;
+  run_id?: string;
+  ts?: number;
+  level?: string;
+  message?: string;
+  stage?: string | null;
+  status?: string | null;
 };
 
-function normalizeStatus(value?: string): RunStatus {
-  if (
-    value === "queued" ||
-    value === "running" ||
-    value === "completed" ||
-    value === "failed"
-  ) {
-    return value;
+function tone(status: string) {
+  const s = (status || "").toLowerCase();
+  if (s === "completed") return "success";
+  if (s === "failed") return "error";
+  if (s === "running") return "warning";
+  if (s === "queued") return "default";
+  return "default";
+}
+
+function fmtTs(ms?: number) {
+  if (!ms) return "";
+  try {
+    return new Date(ms).toLocaleString();
+  } catch {
+    return String(ms);
   }
-  return "unknown";
 }
 
 export default function StatusClient() {
-  const sp = useSearchParams();
-  const runId = sp.get("run") || "";
+  const params = useSearchParams();
+  const runId = params.get("run");
 
-  const [events, setEvents] = useState<LogEvent[]>([]);
-  const [state, setState] = useState<{ status?: RunStatus; stage?: string }>({});
+  const [run, setRun] = useState<ZordraxRun | null>(null);
+  const [events, setEvents] = useState<SseEvent[]>([]);
+  const [phase, setPhase] = useState<"init" | "connecting" | "streaming" | "done" | "error">("init");
   const [error, setError] = useState<string | null>(null);
 
   const esRef = useRef<EventSource | null>(null);
+  const closedRef = useRef(false);
 
-  const title = useMemo(() => {
-    const s = loadSessions().find((x) => x.id === runId);
-    return s?.title || "Deployment Status";
-  }, [runId]);
+  const derived = useMemo(() => {
+    const status = run?.status || "queued";
+    const stage = run?.stage || "queued";
+    const last = events.length ? events[events.length - 1] : null;
+    return {
+      status,
+      stage,
+      lastMessage: last?.message || "",
+      lastLevel: last?.level || "",
+      lastTs: last?.ts,
+    };
+  }, [run, events]);
 
+  // 1) Load initial run status (optimistic state)
   useEffect(() => {
-    if (!runId) return;
+    if (!runId) {
+      setError("Missing run id. Open this page using /portal/status?run=<id>");
+      setPhase("error");
+      return;
+    }
 
-    // Initial status fetch
+    let cancelled = false;
     (async () => {
       try {
-        const s = await getRunStatus(runId);
-        const status = normalizeStatus(s.status);
-
-        setState({ status, stage: s.stage });
-
-        upsertSession({
-          id: runId,
-          created_at: new Date().toISOString(),
-          mode: (s.mode as any) || "ai",
-          title,
-          status,
-        });
-      } catch {
-        // ok
+        setPhase("connecting");
+        const r = await getRunStatus(runId);
+        if (!cancelled) setRun(r);
+      } catch (e: any) {
+        if (!cancelled) {
+          setError(e?.message || "Failed to fetch run status");
+          setPhase("error");
+        }
       }
     })();
 
-    // SSE stream
-    try {
-      const es = new EventSource(getEventsUrl(runId));
-      esRef.current = es;
+    return () => {
+      cancelled = true;
+    };
+  }, [runId]);
 
-      es.onmessage = (msg) => {
-        try {
-          const data = JSON.parse(msg.data) as LogEvent;
+  // 2) Start SSE streaming + safe reconnect behavior
+  useEffect(() => {
+    if (!runId) return;
 
-          setEvents((prev) => [...prev, data].slice(-300));
+    closedRef.current = false;
+    setError(null);
 
-          const nextStatus = normalizeStatus(data.status);
+    const url = getEventsUrl(runId);
 
-          if (data.status || data.stage) {
-            setState((prev) => ({
-              status: data.status ? nextStatus : prev.status,
-              stage: data.stage ?? prev.stage,
-            }));
-          }
-
-          if (data.status) {
-            upsertSession({
-              id: runId,
-              created_at: new Date().toISOString(),
-              mode: "ai",
-              title,
-              status: nextStatus,
-            });
-          }
-        } catch {
-          // ignore malformed events
-        }
-      };
-
-      es.onerror = () => {
-        setError("Log stream disconnected. Refresh to retry.");
-        es.close();
-      };
-    } catch (e: any) {
-      setError(e?.message || "Unable to open SSE stream");
+    // close existing
+    if (esRef.current) {
+      try {
+        esRef.current.close();
+      } catch {}
+      esRef.current = null;
     }
 
-    return () => {
-      esRef.current?.close();
+    const es = new EventSource(url);
+    esRef.current = es;
+
+    setPhase("streaming");
+
+    es.onmessage = (msg) => {
+      try {
+        const data = JSON.parse(msg.data) as SseEvent;
+
+        setEvents((prev) => {
+          // de-dup if reconnect replays last chunk
+          const lastId = prev.length ? prev[prev.length - 1].event_id : undefined;
+          if (data.event_id && lastId && data.event_id <= lastId) return prev;
+          return [...prev, data].slice(-500); // keep last 500 events
+        });
+
+        // Update optimistic run state based on event payload (if provided)
+        if (data.status || data.stage) {
+          setRun((prev) => {
+            const base = prev || ({
+              id: runId,
+              mode: "unknown",
+              title: "Run",
+              status: "queued",
+              stage: "queued",
+              created_at: Date.now(),
+              updated_at: Date.now(),
+            } as ZordraxRun);
+
+            return {
+              ...base,
+              status: data.status ?? base.status,
+              stage: data.stage ?? base.stage,
+              updated_at: Date.now(),
+            };
+          });
+        }
+      } catch {
+        // ignore malformed events
+      }
     };
-  }, [runId, title]);
+
+    es.onerror = async () => {
+      if (closedRef.current) return;
+
+      // EventSource will auto-retry; we just reflect state + refresh status
+      setPhase("connecting");
+
+      try {
+        const r = await getRunStatus(runId);
+        setRun(r);
+
+        const st = (r.status || "").toLowerCase();
+        if (st === "completed" || st === "failed") {
+          setPhase("done");
+          try {
+            es.close();
+          } catch {}
+          esRef.current = null;
+          closedRef.current = true;
+        } else {
+          setPhase("streaming");
+        }
+      } catch (e: any) {
+        setError(e?.message || "SSE disconnected and status refresh failed");
+        setPhase("error");
+      }
+    };
+
+    return () => {
+      closedRef.current = true;
+      try {
+        es.close();
+      } catch {}
+      esRef.current = null;
+    };
+  }, [runId]);
+
+  if (!runId) {
+    return (
+      <div className="p-6">
+        <Card>
+          <div className="space-y-2">
+            <h1 className="text-lg font-semibold">Run Status</h1>
+            <p className="text-sm text-slate-400">
+              Missing run id. Use <code className="text-slate-200">/portal/status?run=&lt;id&gt;</code>.
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  const s = (derived.status || "").toLowerCase();
+  const finished = s === "completed" || s === "failed";
 
   return (
-    <>
-      <h1 className="text-xl font-semibold">{title}</h1>
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Run Status</h1>
+          <p className="text-xs text-slate-500 break-all">{runId}</p>
+        </div>
 
-      <div className="mt-4 text-sm text-slate-400">
-        <div>
-          Run ID: <span className="text-slate-200">{runId}</span>
-        </div>
-        <div>
-          Status: <span className="text-slate-200">{state.status ?? "unknown"}</span>
-        </div>
-        <div>
-          Stage: <span className="text-slate-200">{state.stage ?? "—"}</span>
+        <div className="flex items-center gap-2">
+          {phase === "connecting" ? (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <Spinner /> Connecting…
+            </div>
+          ) : phase === "streaming" ? (
+            <div className="flex items-center gap-2 text-xs text-slate-400">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+              Live
+            </div>
+          ) : phase === "done" ? (
+            <div className="text-xs text-slate-400">Finished</div>
+          ) : phase === "error" ? (
+            <div className="text-xs text-red-300">Error</div>
+          ) : null}
         </div>
       </div>
 
-      {error && (
-        <div className="mt-6 rounded border border-yellow-800 bg-yellow-900/20 p-4 text-sm text-yellow-200">
-          {error}
-        </div>
-      )}
+      {error ? (
+        <Card>
+          <div className="rounded-md border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+            {error}
+            <div className="mt-2 text-xs text-red-200/80">
+              Check: CORS_ALLOW_ORIGINS on backend + NEXT_PUBLIC_API_BASE_URL on Vercel.
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
-      <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900/40 p-4">
-        <div className="mb-3 text-sm font-medium text-slate-200">
-          Live logs
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <p className="text-xs text-slate-400">Status</p>
+          <div className="mt-2">
+            <Badge tone={tone(derived.status)}>{derived.status}</Badge>
+          </div>
+        </Card>
+        <Card>
+          <p className="text-xs text-slate-400">Stage</p>
+          <p className="mt-2 text-sm">{derived.stage}</p>
+        </Card>
+        <Card>
+          <p className="text-xs text-slate-400">Last update</p>
+          <p className="mt-2 text-sm text-slate-300">{fmtTs(derived.lastTs)}</p>
+        </Card>
+      </div>
+
+      <Card>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Live Events</h2>
+          <div className="text-xs text-slate-500">{events.length} events</div>
         </div>
 
-        <div className="h-[420px] overflow-auto whitespace-pre-wrap font-mono text-xs text-slate-300">
+        {finished ? (
+          <div className="mt-3 text-xs text-slate-400">
+            Run finished ({derived.status}). Stream will stop automatically.
+          </div>
+        ) : null}
+
+        <div className="mt-4 space-y-2 max-h-[420px] overflow-auto pr-2">
           {events.length === 0 ? (
-            <div className="text-slate-500">Waiting for events…</div>
+            <div className="text-sm text-slate-400">
+              Waiting for events…
+            </div>
           ) : (
-            events.map((e, i) => (
-              <div key={i}>
-                {e.ts ? `[${e.ts}] ` : ""}
-                {e.level ? `${e.level.toUpperCase()} ` : ""}
-                {e.stage ? `(${e.stage}) ` : ""}
-                {e.message}
+            events.map((e) => (
+              <div
+                key={e.event_id ?? `${e.ts}-${e.message}`}
+                className="rounded-md border border-slate-900 bg-slate-950/40 p-3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs text-slate-400">
+                    {fmtTs(e.ts)} {e.stage ? `· ${e.stage}` : ""}
+                  </div>
+                  <div className="text-xs text-slate-500">
+                    {e.level ?? "info"}
+                  </div>
+                </div>
+                <div className="mt-2 text-sm text-slate-200 whitespace-pre-wrap">
+                  {e.message}
+                </div>
               </div>
             ))
           )}
         </div>
-      </div>
-    </>
+      </Card>
+    </div>
   );
 }
