@@ -56,12 +56,14 @@ export default function QuestionsPage() {
           </button>
         ))}
       </div>
+
+      {/* Back button */}
+      <button
+        onClick={() => router.push("/portal/onboarding")}
+        className="mt-6 text-sm text-slate-400 hover:text-white"
+      >
+        &larr; Back to overview
+      </button>
     </div>
   );
 }
-<button
-  onClick={() => router.push("/portal/onboarding")}
-  className="mt-6 text-sm text-slate-400 hover:text-white"
->
-  ← Back to overview
-</button>
