@@ -1,76 +1,57 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { startOnboarding } from "@/lib/agent";
-import { upsertSession } from "@/lib/sessions";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { onboard } from "@/lib/agent";
 
 export default function GenerateClient() {
   const router = useRouter();
-  const sp = useSearchParams();
-
-  const mode = (sp.get("mode") as "ai" | "manual" | null) ?? "ai";
-
-  const payload = useMemo(() => {
-    const all: Record<string, any> = {};
-    sp.forEach((v, k) => (all[k] = v));
-
-    if (mode === "ai") {
-      return { mode, answers: { industry: all.industry, cloud: all.cloud } };
-    }
-    return {
-      mode,
-      config: {
-        cloud: all.cloud,
-        etl: all.etl,
-        governance: all.governance,
-        bi: all.bi,
-      },
-    };
-  }, [sp, mode]);
-
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  async function handleStart() {
+    setLoading(true);
+    setError(null);
 
-    (async () => {
-      try {
-        const res = await startOnboarding(payload);
+    try {
+      const res = await onboard({
+        mode: "ai",
+      });
 
-        if (cancelled) return;
-
-        upsertSession({
-          id: res.run_id,
-          created_at: new Date().toISOString(),
-          mode,
-          title: mode === "ai" ? "AI onboarding" : "Manual onboarding",
-          status: res.status ?? "queued",
-        });
-
-        router.push(`/portal/status?run=${encodeURIComponent(res.run_id)}`);
-      } catch (e: any) {
-        setError(e?.message || "Failed to start onboarding");
+      if (!res?.run_id) {
+        throw new Error("Backend did not return run_id");
       }
-    })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [payload, router, mode]);
+      router.push(`/portal/status?run=${encodeURIComponent(res.run_id)}`);
+    } catch (e: any) {
+      setError(e?.message || "Failed to start onboarding");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <>
-      <h1 className="text-xl font-semibold">Generating Platform</h1>
-      <p className="mt-3 text-slate-400">
-        Starting orchestration via FastAPI…
-      </p>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold">AI Onboarding</h1>
+        <p className="text-sm text-slate-400">
+          Start an AI-guided Zordrax onboarding run.
+        </p>
+      </div>
 
       {error && (
-        <div className="mt-6 rounded border border-red-800 bg-red-900/20 p-4 text-sm text-red-200">
+        <div className="rounded-md border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
           {error}
         </div>
       )}
-    </>
+
+      <button
+        onClick={handleStart}
+        disabled={loading}
+        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
+      >
+        {loading ? "Starting…" : "Start AI Onboarding"}
+      </button>
+    </div>
   );
 }
