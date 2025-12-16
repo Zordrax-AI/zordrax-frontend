@@ -18,7 +18,7 @@ export default function PortalEntryPage() {
 
           {/* AI MODE */}
           <Link
-            href="/portal/ai"
+            href="/portal/onboarding"
             className="group rounded-xl border border-slate-800 bg-slate-900/40 p-8 hover:border-sky-400"
           >
             <h2 className="text-xl font-semibold group-hover:text-sky-400">
@@ -37,7 +37,7 @@ export default function PortalEntryPage() {
 
           {/* MANUAL MODE */}
           <Link
-            href="/portal/manual"
+            href="/portal/onboarding/manual"
             className="group rounded-xl border border-slate-800 bg-slate-900/40 p-8 hover:border-violet-400"
           >
             <h2 className="text-xl font-semibold group-hover:text-violet-400">

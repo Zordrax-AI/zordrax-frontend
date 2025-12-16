@@ -35,8 +35,22 @@ export default function RecommendPage() {
   }, []);
 
   if (!data) {
-    return <div className="text-slate-400">Generating recommendation…</div>;
-  }
+  return (
+    <div className="space-y-4">
+      <p className="text-slate-400">
+        No onboarding answers found.
+      </p>
+
+      <button
+        onClick={() => router.push("/portal/onboarding/questions")}
+        className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white"
+      >
+        Go to questions
+      </button>
+    </div>
+  );
+}
+
 
   return (
     <div className="space-y-6">
