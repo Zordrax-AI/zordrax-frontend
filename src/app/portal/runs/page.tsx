@@ -1,201 +1,192 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { Badge } from "@/components/ui/Badge";
-import {
-  fetchRuns,
-  fetchObservabilityOverview,
-} from "@/lib/api";
-import type {
-  PipelineRun,
-  ObservabilityOverview,
-  RunHistoryResponse,
-} from "@/lib/types";
+import { listRuns, type ZordraxRun } from "@/lib/agent";
 
-function statusColour(result?: string | null) {
-  const val = (result || "").toLowerCase();
-  if (val === "succeeded") return "bg-emerald-500/10 text-emerald-300 border-emerald-500";
-  if (val === "failed") return "bg-rose-500/10 text-rose-300 border-rose-500";
-  return "bg-slate-700/40 text-slate-200 border-slate-600";
+function fmtTs(ms: number) {
+  try {
+    return new Date(ms).toLocaleString();
+  } catch {
+    return String(ms);
+  }
+}
+
+function statusTone(status: string) {
+  const s = (status || "").toLowerCase();
+  if (s === "completed") return "success";
+  if (s === "failed") return "error";
+  if (s === "running" || s === "in_progress") return "warning";
+  if (s === "queued") return "default";
+  return "default";
 }
 
 export default function RunsPage() {
-  const [runs, setRuns] = useState<PipelineRun[]>([]);
-  const [overview, setOverview] = useState<ObservabilityOverview | null>(null);
+  const [runs, setRuns] = useState<ZordraxRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const [historyRes, overviewRes] = await Promise.all([
-          fetchRuns(),
-          fetchObservabilityOverview(),
-        ]);
-
-        const history = historyRes as RunHistoryResponse;
-        setRuns(history.items ?? []);
-        setOverview(overviewRes as ObservabilityOverview);
-      } catch (e: any) {
-        setError(e.message ?? "Failed to load deployment runs.");
-      } finally {
-        setLoading(false);
-      }
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await listRuns(50, 0);
+      setRuns(data);
+    } catch (e: any) {
+      setError(e?.message || "Failed to load runs");
+    } finally {
+      setLoading(false);
     }
+  }
 
+  useEffect(() => {
     load();
   }, []);
 
+  const stats = useMemo(() => {
+    const out = {
+      total: runs.length,
+      queued: 0,
+      running: 0,
+      completed: 0,
+      failed: 0,
+    };
+    for (const r of runs) {
+      const s = (r.status || "").toLowerCase();
+      if (s in out) (out as any)[s] += 1;
+    }
+    return out;
+  }, [runs]);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Deployment Runs</h1>
-        <p className="text-xs text-slate-400">
-          Azure DevOps build history for the Zordrax pipelines.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold">Deployment Runs</h1>
+          <p className="text-xs text-slate-400">
+            Zordrax Onboarding Agent run history (from the backend /runs API).
+          </p>
+        </div>
+
+        <button
+          onClick={load}
+          className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-xs hover:bg-slate-900"
+        >
+          Refresh
+        </button>
       </div>
 
       {/* Overview cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <div className="space-y-1">
-            <p className="text-xs text-slate-400">Total runs</p>
-            <p className="text-2xl font-semibold">
-              {overview?.total_runs ?? "–"}
-            </p>
+            <p className="text-xs text-slate-400">Total</p>
+            <p className="text-2xl font-semibold">{stats.total}</p>
           </div>
         </Card>
         <Card>
           <div className="space-y-1">
-            <p className="text-xs text-slate-400">Succeeded</p>
-            <p className="text-2xl font-semibold text-emerald-300">
-              {overview?.succeeded_runs ?? "–"}
-            </p>
+            <p className="text-xs text-slate-400">Queued</p>
+            <p className="text-2xl font-semibold">{stats.queued}</p>
+          </div>
+        </Card>
+        <Card>
+          <div className="space-y-1">
+            <p className="text-xs text-slate-400">Running</p>
+            <p className="text-2xl font-semibold">{stats.running}</p>
+          </div>
+        </Card>
+        <Card>
+          <div className="space-y-1">
+            <p className="text-xs text-slate-400">Completed</p>
+            <p className="text-2xl font-semibold">{stats.completed}</p>
           </div>
         </Card>
         <Card>
           <div className="space-y-1">
             <p className="text-xs text-slate-400">Failed</p>
-            <p className="text-2xl font-semibold text-rose-300">
-              {overview?.failed_runs ?? "–"}
-            </p>
-          </div>
-        </Card>
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">Running / active</p>
-            <p className="text-2xl font-semibold text-sky-300">
-              {overview?.running_runs ?? "0"}
-            </p>
+            <p className="text-2xl font-semibold">{stats.failed}</p>
           </div>
         </Card>
       </div>
 
-      {/* Last run highlight */}
-      {overview?.last_run && (
-        <Card className="flex items-center justify-between">
-          <div>
-            <p className="text-xs text-slate-400 mb-1">Last run</p>
-            <p className="text-sm">
-              #{overview.last_run.id} —{" "}
-              <span className="text-slate-300">
-                {new Date(overview.last_run.created).toLocaleString()}
-              </span>
-            </p>
-          </div>
-          <a
-            href={overview.last_run.url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-xs text-sky-300 underline"
-          >
-            View in Azure DevOps
-          </a>
-        </Card>
-      )}
-
-      {/* Runs table */}
       <Card>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-100">
-            Recent runs
-          </h2>
-          {loading && (
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">Latest Runs</h2>
+          {loading ? (
             <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Spinner /> Loading...
+              <Spinner /> Loading…
             </div>
-          )}
+          ) : null}
         </div>
 
-        {error && (
-          <p className="text-sm text-rose-400">
+        {error ? (
+          <div className="mt-3 rounded-md border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
             {error}
-          </p>
-        )}
-
-        {!loading && !error && runs.length === 0 && (
-          <p className="text-sm text-slate-400">
-            No deployment runs found.
-          </p>
-        )}
-
-        {!loading && !error && runs.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="text-xs text-slate-400 border-b border-slate-800">
-                  <th className="text-left py-2 pr-4">Run</th>
-                  <th className="text-left py-2 pr-4">State</th>
-                  <th className="text-left py-2 pr-4">Result</th>
-                  <th className="text-left py-2 pr-4">Created</th>
-                  <th className="text-left py-2">Link</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((run) => (
-                  <tr
-                    key={run.id}
-                    className="border-b border-slate-900/60 last:border-0"
-                  >
-                    <td className="py-2 pr-4 text-slate-200">
-                      #{run.id}
-                    </td>
-                    <td className="py-2 pr-4 text-slate-200">
-                      {run.state}
-                    </td>
-                    <td className="py-2 pr-4">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full border text-xs ${statusColour(
-                          run.result
-                        )}`}
-                      >
-                        {run.result || "—"}
-                      </span>
-                    </td>
-                    <td className="py-2 pr-4 text-slate-300">
-                      {new Date(run.created).toLocaleString()}
-                    </td>
-                    <td className="py-2">
-                      <a
-                        href={run.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-sky-300 underline"
-                      >
-                        View logs
-                      </a>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="mt-2 text-xs text-red-200/80">
+              Tip: ensure NEXT_PUBLIC_API_BASE_URL is set in Vercel and your backend
+              has CORS_ALLOW_ORIGINS including this Vercel domain.
+            </div>
           </div>
-        )}
+        ) : null}
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-900 text-left text-xs text-slate-400">
+                <th className="py-2 pr-4">Run</th>
+                <th className="py-2 pr-4">Mode</th>
+                <th className="py-2 pr-4">Status</th>
+                <th className="py-2 pr-4">Stage</th>
+                <th className="py-2 pr-4">Created</th>
+                <th className="py-2 pr-4">Open</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!loading && runs.length === 0 ? (
+                <tr>
+                  <td className="py-3 text-slate-400" colSpan={6}>
+                    No runs yet. Start one from Portal → AI or Manual.
+                  </td>
+                </tr>
+              ) : null}
+
+              {runs.map((r) => (
+                <tr key={r.id} className="border-b border-slate-950">
+                  <td className="py-3 pr-4">
+                    <div className="font-medium">{r.title}</div>
+                    <div className="text-xs text-slate-500">{r.id}</div>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span className="text-xs text-slate-300">{r.mode}</span>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span className="text-xs text-slate-300">{r.stage}</span>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span className="text-xs text-slate-400">
+                      {fmtTs(r.created_at)}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <Link
+                      className="text-xs underline text-slate-200 hover:text-white"
+                      href={`/portal/status?run=${encodeURIComponent(r.id)}`}
+                    >
+                      View status
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
     </div>
   );
