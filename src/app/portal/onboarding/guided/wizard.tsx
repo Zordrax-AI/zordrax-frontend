@@ -1,14 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import {
-  createSession,
-  getNextQuestion,
-  answerQuestion,
-} from "@/lib/agent";
+
+const API = process.env.NEXT_PUBLIC_AGENT_BASE_URL!;
 
 type Question = {
   key: string;
@@ -16,6 +13,43 @@ type Question = {
   options: string[];
   done?: boolean;
 };
+
+/* ---------------- API ---------------- */
+
+async function createSession(): Promise<{ session_id: string }> {
+  const res = await fetch(`${API}/api/onboarding/sessions`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to create session");
+  return res.json();
+}
+
+async function getNextQuestion(sessionId: string): Promise<Question> {
+  const res = await fetch(
+    `${API}/api/onboarding/sessions/${sessionId}/next-question`
+  );
+  if (!res.ok) throw new Error("Failed to fetch next question");
+  return res.json();
+}
+
+async function answerQuestion(
+  sessionId: string,
+  key: string,
+  value: string
+) {
+  const res = await fetch(
+    `${API}/api/onboarding/sessions/${sessionId}/answer`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    }
+  );
+
+  if (!res.ok) throw new Error("Failed to submit answer");
+}
+
+/* ---------------- COMPONENT ---------------- */
 
 export default function GuidedWizard() {
   const router = useRouter();
@@ -26,16 +60,21 @@ export default function GuidedWizard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function loadNext(sid: string) {
-    const q = await getNextQuestion(sid);
+  const loadNext = useCallback(
+    async (sid: string) => {
+      const q = await getNextQuestion(sid);
 
-    if (q?.done) {
-      router.push(`/portal/onboarding/recommendation?session=${sid}`);
-      return;
-    }
+      if (q.done) {
+        router.push(
+          `/portal/onboarding/recommendation?session=${sid}`
+        );
+        return;
+      }
 
-    setQuestion(q);
-  }
+      setQuestion(q);
+    },
+    [router]
+  );
 
   useEffect(() => {
     (async () => {
@@ -49,15 +88,13 @@ export default function GuidedWizard() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [loadNext]);
 
   async function pick(value: string) {
-    if (!sessionId || !question || busy) return;
-
-    setBusy(true);
-    setError(null);
+    if (!sessionId || !question) return;
 
     try {
+      setBusy(true);
       await answerQuestion(sessionId, question.key, value);
       await loadNext(sessionId);
     } catch (e: any) {
@@ -70,61 +107,39 @@ export default function GuidedWizard() {
   /* ---------------- UI STATES ---------------- */
 
   if (loading) {
-    return (
-      <Card className="p-6">
-        <div className="text-sm text-slate-300">Loading onboarding…</div>
-      </Card>
-    );
+    return <div className="p-6">Starting onboarding…</div>;
   }
 
   if (error) {
     return (
-      <Card className="p-6 space-y-3">
-        <div className="text-sm text-red-200">{error}</div>
-        <Button variant="outline" onClick={() => window.location.reload()}>
-          Retry
-        </Button>
-      </Card>
+      <div className="p-6 text-red-400">
+        {error}
+      </div>
     );
   }
 
   if (!question) {
     return (
-      <Card className="p-6">
-        <div className="text-sm text-slate-400">
-          No questions available.
-        </div>
-      </Card>
+      <div className="p-6 text-slate-400">
+        No questions available.
+      </div>
     );
   }
 
   return (
     <Card className="p-6 space-y-4">
-      <div className="text-xs text-slate-400">
-        Session: <span className="font-mono">{sessionId}</span>
-      </div>
-
       <h2 className="text-lg font-semibold">{question.question}</h2>
 
-      <div className="flex flex-col gap-3">
+      <div className="space-y-2">
         {question.options.map((opt) => (
           <Button
             key={opt}
             variant="outline"
             onClick={() => pick(opt)}
-            className={
-              busy
-                ? "opacity-50 pointer-events-none"
-                : ""
-            }
           >
-            {busy ? "Submitting…" : opt}
+            {busy ? "…" : opt}
           </Button>
         ))}
-      </div>
-
-      <div className="text-xs text-slate-500">
-        Answers are persisted to a backend session.
       </div>
     </Card>
   );
