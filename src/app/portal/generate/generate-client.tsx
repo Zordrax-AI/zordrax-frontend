@@ -39,11 +39,7 @@ export default function GenerateClient() {
     <div className="p-6 space-y-4">
       <h1 className="text-xl font-semibold">Generate Architecture</h1>
 
-      {error && (
-        <div className="text-sm text-red-400">
-          {error}
-        </div>
-      )}
+      {error && <div className="text-sm text-red-400">{error}</div>}
 
       <button
         onClick={generate}
