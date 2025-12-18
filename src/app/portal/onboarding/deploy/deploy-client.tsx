@@ -1,59 +1,46 @@
-"use client";
+   Creating an optimized production build ...
+ ⚠ Compiled with warnings
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { onboard } from "@/lib/agent";
+./src/app/portal/generate/generate-client.tsx
+Attempted import error: 'onboard' is not exported from '@/lib/agent' (imported as 'onboard').
 
-export default function DeployClient() {
-  const params = useSearchParams();
-  const router = useRouter();
-  const sessionId = params.get("session");
+Import trace for requested module:
+./src/app/portal/generate/generate-client.tsx
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+./src/app/portal/onboarding/deploy/deploy-client.tsx
+Attempted import error: 'onboard' is not exported from '@/lib/agent' (imported as 'onboard').
 
-  async function deploy() {
-    if (!sessionId) {
-      setError("Missing session id. Start onboarding again.");
-      return;
-    }
+Import trace for requested module:
+./src/app/portal/onboarding/deploy/deploy-client.tsx
 
-    setLoading(true);
-    setError(null);
+ ⚠ Compiled with warnings
 
-    try {
-      const data = await onboard({
-        mode: "ai",
-        session_id: sessionId,
-      });
+./src/app/portal/generate/generate-client.tsx
+Attempted import error: 'onboard' is not exported from '@/lib/agent' (imported as 'onboard').
 
-      if (!data?.run_id) throw new Error("Backend did not return run_id");
+Import trace for requested module:
+./src/app/portal/generate/generate-client.tsx
 
-      router.push(`/portal/status?run=${data.run_id}`);
-    } catch (e: any) {
-      setError(e?.message || "Deploy failed");
-    } finally {
-      setLoading(false);
-    }
-  }
+./src/app/portal/onboarding/deploy/deploy-client.tsx
+Attempted import error: 'onboard' is not exported from '@/lib/agent' (imported as 'onboard').
 
-  return (
-    <div className="p-6 space-y-4">
-      <h2 className="text-lg font-semibold">Ready to deploy</h2>
+Import trace for requested module:
+./src/app/portal/onboarding/deploy/deploy-client.tsx
 
-      {error && (
-        <div className="rounded border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
-          {error}
-        </div>
-      )}
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+Failed to compile.
 
-      <button
-        onClick={deploy}
-        disabled={loading}
-        className="rounded bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-50"
-      >
-        {loading ? "Deploying..." : "Deploy"}
-      </button>
-    </div>
-  );
-}
+./src/app/portal/generate/generate-client.tsx:5:10
+Type error: Module '"@/lib/agent"' has no exported member 'onboard'.
+
+  3 | import { useState } from "react";
+  4 | import { useRouter } from "next/navigation";
+> 5 | import { onboard } from "@/lib/agent";
+    |          ^
+  6 |
+  7 | export default function GenerateClient() {
+  8 |   const router = useRouter();
+
+##[error]Bash exited with code '1'.
+Finishing: Build Next.js

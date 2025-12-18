@@ -2,55 +2,55 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { onboard } from "@/lib/agent";
+
+const API = process.env.NEXT_PUBLIC_AGENT_BASE_URL!;
 
 export default function GenerateClient() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleStart() {
-    setLoading(true);
-    setError(null);
-
+  async function generate() {
     try {
-      const res = await onboard({
-        mode: "ai",
+      setLoading(true);
+      setError(null);
+
+      const res = await fetch(`${API}/api/onboard`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "ai" }),
       });
 
-      if (!res?.run_id) {
-        throw new Error("Backend did not return run_id");
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text);
       }
 
-      router.push(`/portal/status?run=${encodeURIComponent(res.run_id)}`);
+      const { run_id } = await res.json();
+      router.push(`/portal/status?run=${run_id}`);
     } catch (e: any) {
-      setError(e?.message || "Failed to start onboarding");
+      setError(e?.message || "Failed to generate");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">AI Onboarding</h1>
-        <p className="text-sm text-slate-400">
-          Start an AI-guided Zordrax onboarding run.
-        </p>
-      </div>
+    <div className="p-6 space-y-4">
+      <h1 className="text-xl font-semibold">Generate Architecture</h1>
 
       {error && (
-        <div className="rounded-md border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+        <div className="text-sm text-red-400">
           {error}
         </div>
       )}
 
       <button
-        onClick={handleStart}
+        onClick={generate}
         disabled={loading}
-        className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
+        className="rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500 disabled:opacity-50"
       >
-        {loading ? "Starting…" : "Start AI Onboarding"}
+        {loading ? "Generating…" : "Generate"}
       </button>
     </div>
   );
