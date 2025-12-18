@@ -1,12 +1,10 @@
 // src/lib/agent.ts
 
-/* =========================================================
-   Types
-   ========================================================= */
+/* ================= TYPES ================= */
 
 export type ZordraxRun = {
   id: string;
-  mode: string;
+  mode: "ai" | "manual" | string;
   title: string;
   status: string;
   stage: string;
@@ -24,32 +22,26 @@ export type OnboardResponse = {
   run_id: string;
   status: string;
   stage: string;
-  mode: string;
 };
 
-/* =========================================================
-   Base URL resolution
-   ========================================================= */
+/* ================= BASE URL ================= */
 
-const BASE =
+const base =
   (process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     "").replace(/\/$/, "");
 
 function assertBase() {
-  if (!BASE) {
-    console.error(
-      "❌ Missing NEXT_PUBLIC_AGENT_BASE_URL (or NEXT_PUBLIC_API_BASE_URL)"
+  if (!base) {
+    throw new Error(
+      "Missing NEXT_PUBLIC_AGENT_BASE_URL or NEXT_PUBLIC_API_BASE_URL"
     );
-    throw new Error("API base URL not configured");
   }
 }
 
-/* =========================================================
-   Helpers
-   ========================================================= */
+/* ================= HELPERS ================= */
 
-async function parseJson<T>(res: Response): Promise<T> {
+async function okJson<T>(res: Response): Promise<T> {
   const text = await res.text();
   if (!res.ok) {
     throw new Error(`HTTP ${res.status}: ${text}`);
@@ -57,72 +49,50 @@ async function parseJson<T>(res: Response): Promise<T> {
   return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
-/* =========================================================
-   API Calls
-   ========================================================= */
+/* ================= RUNS ================= */
 
-/** Start a deployment run */
-export async function onboard(
-  payload: OnboardRequest
-): Promise<OnboardResponse> {
-  assertBase();
-
-  const res = await fetch(`${BASE}/api/onboard`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-
-  return parseJson<OnboardResponse>(res);
-}
-
-/** List deployment runs */
 export async function listRuns(
   limit = 50,
   offset = 0
 ): Promise<ZordraxRun[]> {
   assertBase();
-
-  const url = new URL(`${BASE}/api/runs`);
+  const url = new URL(`${base}/api/runs`);
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("offset", String(offset));
 
-  const res = await fetch(url.toString(), {
-    method: "GET",
-  });
-
-  const data = await parseJson<{ items: ZordraxRun[] }>(res);
+  const res = await fetch(url.toString());
+  const data = await okJson<{ items: ZordraxRun[] }>(res);
   return data.items;
 }
 
-/** Fetch a single run */
 export async function getRun(runId: string): Promise<ZordraxRun> {
   assertBase();
-
-  const res = await fetch(`${BASE}/api/runs/${encodeURIComponent(runId)}`);
-  return parseJson<ZordraxRun>(res);
+  const res = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}`);
+  return okJson<ZordraxRun>(res);
 }
 
-/** SSE events URL */
-export function getRunEventsUrl(runId: string): string {
-  assertBase();
-  return `${BASE}/api/runs/${encodeURIComponent(runId)}/events`;
-}
+/* ================= BACKWARD COMPAT ================= */
 
-/** Cancel a run */
-export async function cancelRun(runId: string) {
+// 🔒 DO NOT REMOVE — older UI code depends on this name
+export const getRunStatus = getRun;
+
+/* ================= ONBOARD ================= */
+
+export async function onboard(
+  payload: OnboardRequest
+): Promise<OnboardResponse> {
   assertBase();
-  const res = await fetch(`${BASE}/api/runs/${runId}/cancel`, {
+  const res = await fetch(`${base}/api/onboard`, {
     method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
-  return parseJson(res);
+  return okJson<OnboardResponse>(res);
 }
 
-/** Retry a failed run */
-export async function retryRun(runId: string) {
+/* ================= EVENTS ================= */
+
+export function getEventsUrl(runId: string): string {
   assertBase();
-  const res = await fetch(`${BASE}/api/runs/${runId}/retry`, {
-    method: "POST",
-  });
-  return parseJson(res);
+  return `${base}/api/runs/${encodeURIComponent(runId)}/events`;
 }

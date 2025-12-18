@@ -4,7 +4,8 @@
 // Prefer importing directly from "@/lib/agent".
 
 import type { ZordraxRun } from "@/lib/agent";
-import { listRuns, getRunStatus } from "@/lib/agent";
+import { listRuns, getRun, getRunStatus } from "@/lib/agent";
+
 
 // Old type names that existed in your UI
 export type PipelineStatus = {
