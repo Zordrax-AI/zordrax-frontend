@@ -1,21 +1,12 @@
-export const RUN_STAGES = [
-  { key: "queued", label: "Queued" },
-  { key: "infra_provisioning", label: "Provisioning Infrastructure" },
-  { key: "etl_setup", label: "Setting up Data Pipelines" },
-  { key: "governance_setup", label: "Applying Governance & Security" },
-  { key: "bi_deployment", label: "Deploying BI & Reporting" },
-  { key: "completed", label: "Completed" },
-  { key: "failed", label: "Failed" },
-] as const;
+"use client";
 
-export function stageLabel(stage?: string) {
-  return RUN_STAGES.find((s) => s.key === stage)?.label ?? "Unknown";
-}
-
-export function stageProgress(stage?: string) {
-  const idx = RUN_STAGES.findIndex((s) => s.key === stage);
-  if (idx < 0) return 0;
-  // exclude failed from progress math
-  const total = RUN_STAGES.length - 1;
-  return Math.round(((idx + 1) / total) * 100);
+export default function ProgressBar({ value }: { value: number }) {
+  return (
+    <div className="h-2 w-full rounded bg-slate-800 overflow-hidden">
+      <div
+        className="h-full bg-emerald-500 transition-all duration-500"
+        style={{ width: `${value}%` }}
+      />
+    </div>
+  );
 }

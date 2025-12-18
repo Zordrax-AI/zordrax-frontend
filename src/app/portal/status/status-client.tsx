@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { ProgressBar } from "@/components/ui/ProgressBar";
+import ProgressBar from "@/components/ui/ProgressBar";
+
 import { stageLabel, stageProgress } from "@/lib/runStages";
 
 type Run = {
