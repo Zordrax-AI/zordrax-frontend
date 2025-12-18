@@ -1,67 +1,128 @@
 // src/lib/agent.ts
+
+/* =========================================================
+   Types
+   ========================================================= */
+
+export type ZordraxRun = {
+  id: string;
+  mode: string;
+  title: string;
+  status: string;
+  stage: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export type OnboardRequest = {
+  mode: "ai" | "manual";
+  session_id?: string;
+  answers?: Record<string, any>;
+};
+
+export type OnboardResponse = {
+  run_id: string;
+  status: string;
+  stage: string;
+  mode: string;
+};
+
+/* =========================================================
+   Base URL resolution
+   ========================================================= */
+
 const BASE =
-  (process.env.NEXT_PUBLIC_AGENT_BASE_URL ?? "").replace(/\/$/, "");
+  (process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "").replace(/\/$/, "");
 
-if (!BASE) {
-  throw new Error("NEXT_PUBLIC_AGENT_BASE_URL is missing");
-}
-
-async function json<T>(res: Response): Promise<T> {
-  if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`${res.status}: ${t}`);
+function assertBase() {
+  if (!BASE) {
+    console.error(
+      "❌ Missing NEXT_PUBLIC_AGENT_BASE_URL (or NEXT_PUBLIC_API_BASE_URL)"
+    );
+    throw new Error("API base URL not configured");
   }
-  return res.json();
 }
 
-/* ---------------- RUNS ---------------- */
+/* =========================================================
+   Helpers
+   ========================================================= */
 
-export async function onboard(payload: any) {
+async function parseJson<T>(res: Response): Promise<T> {
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
+  return text ? (JSON.parse(text) as T) : ({} as T);
+}
+
+/* =========================================================
+   API Calls
+   ========================================================= */
+
+/** Start a deployment run */
+export async function onboard(
+  payload: OnboardRequest
+): Promise<OnboardResponse> {
+  assertBase();
+
   const res = await fetch(`${BASE}/api/onboard`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return json<{ run_id: string }>(res);
+
+  return parseJson<OnboardResponse>(res);
 }
 
-export async function listRuns() {
-  const res = await fetch(`${BASE}/api/runs`);
-  return json<{ items: any[] }>(res);
+/** List deployment runs */
+export async function listRuns(
+  limit = 50,
+  offset = 0
+): Promise<ZordraxRun[]> {
+  assertBase();
+
+  const url = new URL(`${BASE}/api/runs`);
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("offset", String(offset));
+
+  const res = await fetch(url.toString(), {
+    method: "GET",
+  });
+
+  const data = await parseJson<{ items: ZordraxRun[] }>(res);
+  return data.items;
 }
 
-export function eventsUrl(runId: string) {
-  return `${BASE}/api/runs/${runId}/events`;
+/** Fetch a single run */
+export async function getRun(runId: string): Promise<ZordraxRun> {
+  assertBase();
+
+  const res = await fetch(`${BASE}/api/runs/${encodeURIComponent(runId)}`);
+  return parseJson<ZordraxRun>(res);
 }
 
-/* ---------------- ONBOARDING ---------------- */
+/** SSE events URL */
+export function getRunEventsUrl(runId: string): string {
+  assertBase();
+  return `${BASE}/api/runs/${encodeURIComponent(runId)}/events`;
+}
 
-export async function createSession() {
-  const res = await fetch(`${BASE}/api/onboarding/sessions`, {
+/** Cancel a run */
+export async function cancelRun(runId: string) {
+  assertBase();
+  const res = await fetch(`${BASE}/api/runs/${runId}/cancel`, {
     method: "POST",
   });
-  return json<{ session_id: string }>(res);
+  return parseJson(res);
 }
 
-export async function nextQuestion(sessionId: string) {
-  const res = await fetch(
-    `${BASE}/api/onboarding/sessions/${sessionId}/next-question`
-  );
-  return json<any>(res);
-}
-
-export async function answerQuestion(
-  sessionId: string,
-  key: string,
-  value: string
-) {
-  const res = await fetch(
-    `${BASE}/api/onboarding/sessions/${sessionId}/answer`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key, value }),
-    }
-  );
-  return json(res);
+/** Retry a failed run */
+export async function retryRun(runId: string) {
+  assertBase();
+  const res = await fetch(`${BASE}/api/runs/${runId}/retry`, {
+    method: "POST",
+  });
+  return parseJson(res);
 }
