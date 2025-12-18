@@ -1,69 +1,56 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
-type Question = {
-  id: string;
-  label: string;
-  options: string[];
-};
-
-const QUESTIONS: Question[] = [
-  {
-    id: "company_size",
-    label: "What is your company size?",
-    options: ["1-10", "11-50", "51-200", "200+"],
-  },
-  {
-    id: "cloud_provider",
-    label: "Primary cloud provider?",
-    options: ["Azure", "AWS", "GCP", "Hybrid"],
-  },
-];
+const API = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
 
 export default function QuestionsPage() {
+  const params = useSearchParams();
   const router = useRouter();
-  const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const sessionId = params.get("session");
 
-  const q = QUESTIONS[index];
+  const [question, setQuestion] = useState<any>(null);
 
-  function answer(opt: string) {
-    const next = { ...answers, [q.id]: opt };
-    setAnswers(next);
+  useEffect(() => {
+    if (!sessionId) return;
+    fetch(`${API}/api/onboarding/sessions/${sessionId}/next-question`)
+      .then((r) => r.json())
+      .then(setQuestion);
+  }, [sessionId]);
 
-    if (index === QUESTIONS.length - 1) {
-      sessionStorage.setItem("onboarding_answers", JSON.stringify(next));
-      router.push("/portal/onboarding/recommend");
+  async function answer(value: any) {
+    await fetch(`${API}/api/onboarding/sessions/${sessionId}/answer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: question.key, value }),
+    });
+
+    const next = await fetch(
+      `${API}/api/onboarding/sessions/${sessionId}/next-question`
+    ).then((r) => r.json());
+
+    if (next.done) {
+      router.push(`/portal/onboarding/recommendation?session=${sessionId}`);
     } else {
-      setIndex(index + 1);
+      setQuestion(next);
     }
   }
 
+  if (!question) return null;
+
   return (
-    <div className="space-y-6 max-w-xl">
-      <h2 className="text-xl font-semibold">{q.label}</h2>
-
-      <div className="space-y-2">
-        {q.options.map((opt) => (
-          <button
-            key={opt}
-            onClick={() => answer(opt)}
-            className="block w-full rounded-md border border-slate-800 bg-slate-900 px-4 py-2 text-left hover:bg-slate-800"
-          >
-            {opt}
-          </button>
-        ))}
-      </div>
-
-      {/* Back button */}
-      <button
-        onClick={() => router.push("/portal/onboarding")}
-        className="mt-6 text-sm text-slate-400 hover:text-white"
-      >
-        &larr; Back to overview
-      </button>
+    <div className="p-6 space-y-4">
+      <h2 className="text-lg font-semibold">{question.question}</h2>
+      {question.options.map((o: string) => (
+        <button
+          key={o}
+          onClick={() => answer(o)}
+          className="block w-full rounded bg-slate-800 p-3"
+        >
+          {o}
+        </button>
+      ))}
     </div>
   );
 }

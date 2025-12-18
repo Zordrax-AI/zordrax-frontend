@@ -2,21 +2,23 @@
 
 import { useRouter } from "next/navigation";
 
-export default function OnboardingOverviewPage() {
+const API = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+
+export default function OnboardingOverview() {
   const router = useRouter();
 
+  async function start() {
+    const res = await fetch(`${API}/api/onboarding/sessions`, { method: "POST" });
+    const { session_id } = await res.json();
+    router.push(`/portal/onboarding/questions?session=${session_id}`);
+  }
+
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">AI-Driven Onboarding</h1>
-
-      <p className="text-slate-400 max-w-xl">
-        This guided flow will collect requirements, generate an AI-recommended
-        data stack, and deploy it automatically.
-      </p>
-
+    <div className="p-6 space-y-4">
+      <h1 className="text-xl font-semibold">AI-Driven Onboarding</h1>
       <button
-        onClick={() => router.push("/portal/onboarding/questions")}
-        className="rounded-md bg-indigo-600 px-6 py-2 text-sm font-medium text-white hover:bg-indigo-500"
+        onClick={start}
+        className="rounded bg-indigo-600 px-4 py-2 text-white"
       >
         Start onboarding
       </button>
