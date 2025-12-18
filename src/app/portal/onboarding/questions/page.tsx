@@ -5,7 +5,7 @@ import QuestionsClient from "./questions-client";
 
 export default function QuestionsPage() {
   return (
-    <Suspense fallback={<div className="p-6">Loading questions…</div>}>
+    <Suspense fallback={<div className="p-6">Loading onboarding…</div>}>
       <QuestionsClient />
     </Suspense>
   );

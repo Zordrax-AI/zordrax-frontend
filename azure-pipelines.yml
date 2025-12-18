@@ -1,34 +1,43 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: "ubuntu-latest"
+
 stages:
-- stage: Build
-  displayName: Build frontend
-  jobs:
-  - job: BuildJob
-    displayName: Build
-    steps:
-    - task: NodeTool@0
-      inputs:
-        versionSpec: "20.x"
+  - stage: Build
+    displayName: Build frontend
+    jobs:
+      - job: BuildJob
+        displayName: Build
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: "20.x"
+            displayName: "Use Node 20"
 
-    - script: |
-        echo "NEXT_PUBLIC_BACKEND_URL=$(NEXT_PUBLIC_BACKEND_URL)" >> .env.local
-        echo "NEXT_PUBLIC_ONBOARDING_API_URL=$(NEXT_PUBLIC_ONBOARDING_API_URL)" >> .env.local
-        echo "NEXT_PUBLIC_CLIENT_ID=$(NEXT_PUBLIC_CLIENT_ID)" >> .env.local
-        echo "NEXT_PUBLIC_AUTH_URL=$(NEXT_PUBLIC_AUTH_URL)" >> .env.local
-        echo "---- ENV FILE ----"
-        cat .env.local
-      displayName: "Inject env vars"
+          # Inject ONLY what the frontend actually uses
+          - script: |
+              echo "NEXT_PUBLIC_AGENT_BASE_URL=$(NEXT_PUBLIC_AGENT_BASE_URL)" >> .env.local
+              echo "---- .env.local ----"
+              cat .env.local
+            displayName: "Inject env vars"
 
-    - script: |
-        npm ci
-        npm run build
-      displayName: "Build Next.js"
+          - script: |
+              npm ci
+              npm run build
+            displayName: "Build Next.js"
 
-    - task: ArchiveFiles@2
-      inputs:
-        rootFolderOrFile: "$(System.DefaultWorkingDirectory)"
-        includeRootFolder: false
-        archiveType: zip
-        archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+          - task: ArchiveFiles@2
+            inputs:
+              rootFolderOrFile: "$(System.DefaultWorkingDirectory)"
+              includeRootFolder: false
+              archiveType: zip
+              archiveFile: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+            displayName: "Archive build output"
 
-    - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
-      artifact: drop
+          - publish: "$(Build.ArtifactStagingDirectory)/frontend.zip"
+            artifact: drop
+            displayName: "Publish artifact"

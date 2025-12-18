@@ -24,7 +24,7 @@ type Event = {
   heartbeat?: boolean;
 };
 
-const API = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+const API = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
 
 function tone(status?: string) {
   if (status === "completed") return "success";

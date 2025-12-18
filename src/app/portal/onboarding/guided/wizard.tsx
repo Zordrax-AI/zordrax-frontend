@@ -1,221 +1,124 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { createSession, getNextQuestion, answerQuestion } from "@/lib/agent";
 
-interface Question {
-  id: string;
-  text: string;
-  type: "select" | "text";
-  options?: string[];
-}
+type Question = {
+  key: string;
+  question: string;
+  options: string[];
+  done?: boolean;
+};
 
-interface RecommendationResponse {
-  manifest: any;
-  file_path: string;
-}
-
-const BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
-
-// -------------------------
-// Helper API callers
-// -------------------------
-async function fetchQuestions(): Promise<Question[]> {
-  const res = await fetch(`${BASE}/ai/questions`);
-  return res.json();
-}
-
-async function fetchNextQuestion(prev: any): Promise<Question | null> {
-  const res = await fetch(`${BASE}/ai/next-question`, {
-    method: "POST",
-    body: JSON.stringify(prev),
-    headers: { "Content-Type": "application/json" }
-  });
-
-  return res.json();
-}
-
-async function generateManifest(answers: any): Promise<RecommendationResponse> {
-  const res = await fetch(`${BASE}/ai/manifest`, {
-    method: "POST",
-    body: JSON.stringify({
-      project_name: "zordrax-project",
-      infrastructure: answers.infrastructure,
-      etl: answers.etl_tool,
-      governance: answers.governance,
-      bi: answers.bi_tool
-    }),
-    headers: { "Content-Type": "application/json" }
-  });
-
-  return res.json();
-}
-
-// -------------------------
-// Main Wizard Component
-// -------------------------
 export default function GuidedWizard() {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [current, setCurrent] = useState<Question | null>(null);
-  const [index, setIndex] = useState(0);
-  const [answers, setAnswers] = useState<any>({});
-  const [summaryMode, setSummaryMode] = useState(false);
-  const [manifest, setManifest] = useState<RecommendationResponse | null>(null);
-  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
-  // Load first questions
-  useEffect(() => {
-    async function init() {
-      const q = await fetchQuestions();
-      setQuestions(q);
-      setCurrent(q[0]);
-      setIndex(0);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [question, setQuestion] = useState<Question | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadNext(sid: string) {
+    const q = await getNextQuestion(sid);
+
+    // Backend may return {done:true} at the end
+    if (q?.done) {
+      router.push(`/portal/onboarding/recommendation?session=${sid}`);
+      return;
     }
-    init();
+
+    setQuestion(q);
+  }
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const { session_id } = await createSession();
+        setSessionId(session_id);
+        await loadNext(session_id);
+      } catch (e: any) {
+        setError(e?.message || "Failed to start onboarding");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // -------------------------
-  // Handler for answering a question
-  // -------------------------
-  const selectAnswer = async (value: string) => {
-    const updated = { ...answers, [current!.id]: value };
-    setAnswers(updated);
+  async function pick(value: string) {
+    if (!sessionId || !question) return;
 
-    // If last predefined question → fetch dynamic next Q
-    if (index === questions.length - 1) {
-      const next = await fetchNextQuestion({
-        previous_answers: updated,
-        industry: updated.industry
-      });
+    setBusy(true);
+    setError(null);
 
-      if (!next || !next.id) {
-        // No more questions → show summary
-        setSummaryMode(true);
-        return;
-      }
-
-      setCurrent(next);
-      setIndex(prev => prev + 1);
-      setQuestions(prev => [...prev, next]); // append dynamic q
-    } else {
-      // Move to next predefined question
-      const next = questions[index + 1];
-      setCurrent(next);
-      setIndex(prev => prev + 1);
+    try {
+      await answerQuestion(sessionId, question.key, value);
+      await loadNext(sessionId);
+    } catch (e: any) {
+      setError(e?.message || "Failed to submit answer");
+    } finally {
+      setBusy(false);
     }
-  };
+  }
 
-  // -------------------------
-  // Back button logic
-  // -------------------------
-  const goBack = () => {
-    if (index === 0) return;
-
-    const prev = questions[index - 1];
-    setCurrent(prev);
-    setIndex(prevIndex => prevIndex - 1);
-
-    // Also remove last answer
-    const newAnswers = { ...answers };
-    delete newAnswers[current!.id];
-    setAnswers(newAnswers);
-
-    setSummaryMode(false);
-    setManifest(null);
-  };
-
-  // -------------------------
-  // Generate manifest (final step)
-  // -------------------------
-  const generate = async () => {
-    setLoading(true);
-    const m = await generateManifest(answers);
-    setManifest(m);
-    setLoading(false);
-  };
-
-  // -------------------------
-  // Render summary page
-  // -------------------------
-  if (summaryMode) {
+  if (loading) {
     return (
-      <Card className="p-6 space-y-4">
-        <h2 className="text-xl font-semibold">Review Your Answers</h2>
+      <Card className="p-6">
+        <div className="text-sm text-slate-300">Loading onboarding…</div>
+      </Card>
+    );
+  }
 
-        <div className="space-y-2">
-          {Object.entries(answers).map(([key, val]) => (
-            <p key={key} className="text-sm">
-              <span className="font-semibold">{key}</span>: {val as string}
-            </p>
-          ))}
-        </div>
-
-        {!manifest && (
-          <Button variant="primary" onClick={generate}>
-            {loading ? "Generating..." : "Generate Manifest"}
-          </Button>
-        )}
-
-        {manifest && (
-          <div className="mt-4 space-y-3">
-            <p className="text-green-400 text-sm">
-              Manifest generated successfully.
-            </p>
-            <pre className="bg-slate-900 p-4 rounded text-xs overflow-auto">
-              {JSON.stringify(manifest.manifest, null, 2)}
-            </pre>
-
-            <a
-              href={manifest.file_path}
-              target="_blank"
-              className="text-sky-300 underline text-sm"
-            >
-              Download Manifest File
-            </a>
-          </div>
-        )}
-
-        <Button variant="outline" onClick={goBack}>
-          Back
+  if (error) {
+    return (
+      <Card className="p-6 space-y-3">
+        <div className="text-sm text-red-200">{error}</div>
+        <Button variant="outline" onClick={() => window.location.reload()}>
+          Retry
         </Button>
       </Card>
     );
   }
 
-  // -------------------------
-  // Render question UI
-  // -------------------------
-  if (!current) return <p>Loading wizard...</p>;
+  if (!question) {
+    return (
+      <Card className="p-6">
+        <div className="text-sm text-slate-300">No questions available.</div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="p-6 space-y-4">
-      {/* Progress bar */}
       <div className="text-xs text-slate-400">
-        Step {index + 1} of {questions.length}
+        Session: <span className="font-mono">{sessionId}</span>
       </div>
 
-      <h2 className="text-lg font-semibold">{current.text}</h2>
+      <h2 className="text-lg font-semibold">{question.question}</h2>
 
       <div className="flex flex-col gap-3">
-        {current.type === "select" &&
-          current.options?.map(opt => (
-            <Button
-              key={opt}
-              variant="outline"
-              onClick={() => selectAnswer(opt)}
-            >
-              {opt}
-            </Button>
-          ))}
+        {question.options.map((opt) => (
+          <Button
+            key={opt}
+            variant="outline"
+            onClick={() => pick(opt)}
+            disabled={busy}
+          >
+            {busy ? "..." : opt}
+          </Button>
+        ))}
       </div>
 
-      {/* Back Button */}
-      {index > 0 && (
-        <Button variant="ghost" onClick={goBack}>
-          Back
-        </Button>
-      )}
+      <div className="text-xs text-slate-500">
+        This wizard is session-based and persisted to backend.
+      </div>
     </Card>
   );
 }
