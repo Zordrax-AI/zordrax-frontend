@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { createSession, getNextQuestion, answerQuestion } from "@/lib/agent";
+import {
+  createSession,
+  getNextQuestion,
+  answerQuestion,
+} from "@/lib/agent";
 
 type Question = {
   key: string;
@@ -25,7 +29,6 @@ export default function GuidedWizard() {
   async function loadNext(sid: string) {
     const q = await getNextQuestion(sid);
 
-    // Backend may return {done:true} at the end
     if (q?.done) {
       router.push(`/portal/onboarding/recommendation?session=${sid}`);
       return;
@@ -36,9 +39,6 @@ export default function GuidedWizard() {
 
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      setError(null);
-
       try {
         const { session_id } = await createSession();
         setSessionId(session_id);
@@ -49,11 +49,10 @@ export default function GuidedWizard() {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function pick(value: string) {
-    if (!sessionId || !question) return;
+    if (!sessionId || !question || busy) return;
 
     setBusy(true);
     setError(null);
@@ -67,6 +66,8 @@ export default function GuidedWizard() {
       setBusy(false);
     }
   }
+
+  /* ---------------- UI STATES ---------------- */
 
   if (loading) {
     return (
@@ -90,7 +91,9 @@ export default function GuidedWizard() {
   if (!question) {
     return (
       <Card className="p-6">
-        <div className="text-sm text-slate-300">No questions available.</div>
+        <div className="text-sm text-slate-400">
+          No questions available.
+        </div>
       </Card>
     );
   }
@@ -109,15 +112,19 @@ export default function GuidedWizard() {
             key={opt}
             variant="outline"
             onClick={() => pick(opt)}
-            disabled={busy}
+            className={
+              busy
+                ? "opacity-50 pointer-events-none"
+                : ""
+            }
           >
-            {busy ? "..." : opt}
+            {busy ? "Submitting…" : opt}
           </Button>
         ))}
       </div>
 
       <div className="text-xs text-slate-500">
-        This wizard is session-based and persisted to backend.
+        Answers are persisted to a backend session.
       </div>
     </Card>
   );
