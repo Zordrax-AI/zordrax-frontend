@@ -13,35 +13,28 @@ type Question = {
 };
 
 export default function QuestionsClient() {
-  const params = useSearchParams();
   const router = useRouter();
+  const params = useSearchParams();
   const sessionId = params.get("session");
 
   const [question, setQuestion] = useState<Question | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!sessionId) {
-      setError("Missing onboarding session.");
-      setLoading(false);
+      // HARD redirect — user entered illegally
+      router.replace("/portal/onboarding");
       return;
     }
 
     fetch(`${API}/api/onboarding/sessions/${sessionId}/next-question`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load question");
-        return res.json();
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed to load question");
+        return r.json();
       })
-      .then((data) => {
-        setQuestion(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, [sessionId]);
+      .then(setQuestion)
+      .catch((e) => setError(e.message));
+  }, [sessionId, router]);
 
   async function answer(value: string) {
     if (!question || !sessionId) return;
@@ -63,39 +56,24 @@ export default function QuestionsClient() {
     }
   }
 
-  // ---------------- UI STATES ----------------
-
-  if (loading) {
+  if (!question && !error) {
     return <div className="p-6">Loading question…</div>;
   }
 
   if (error) {
-    return (
-      <div className="p-6 text-red-400">
-        {error}
-      </div>
-    );
-  }
-
-  if (!question) {
-    return (
-      <div className="p-6 text-slate-400">
-        No questions available.
-      </div>
-    );
+    return <div className="p-6 text-red-400">{error}</div>;
   }
 
   return (
     <div className="p-6 space-y-4">
-      <h2 className="text-lg font-semibold">{question.question}</h2>
-
-      {question.options.map((opt) => (
+      <h2 className="text-lg font-semibold">{question!.question}</h2>
+      {question!.options.map((o) => (
         <button
-          key={opt}
-          onClick={() => answer(opt)}
-          className="block w-full rounded bg-slate-800 p-3 text-left hover:bg-slate-700"
+          key={o}
+          onClick={() => answer(o)}
+          className="block w-full rounded bg-slate-800 p-3 hover:bg-slate-700"
         >
-          {opt}
+          {o}
         </button>
       ))}
     </div>
