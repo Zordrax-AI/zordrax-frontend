@@ -1,124 +1,67 @@
 // src/lib/agent.ts
+const BASE =
+  (process.env.NEXT_PUBLIC_AGENT_BASE_URL ?? "").replace(/\/$/, "");
 
-export type OnboardRequest = {
-  mode: "ai" | "manual";
-  session_id?: string;
-  answers?: Record<string, any>;
-  config?: Record<string, any>;
-};
-
-export type OnboardResponse = {
-  run_id: string;
-  status: string;
-  stage: string;
-  mode?: string;
-};
-
-export type ZordraxRun = {
-  id: string;
-  mode: "ai" | "manual" | string;
-  title: string;
-  status: string;
-  stage: string;
-  created_at: number;
-  updated_at: number;
-};
-
-const base =
-  (process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "").replace(/\/$/, "");
-
-function assertBase() {
-  if (!base) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      "Missing API base URL. Set NEXT_PUBLIC_AGENT_BASE_URL (preferred) or NEXT_PUBLIC_API_BASE_URL."
-    );
-    throw new Error("API base URL missing");
-  }
+if (!BASE) {
+  throw new Error("NEXT_PUBLIC_AGENT_BASE_URL is missing");
 }
 
-async function okJson<T>(res: Response): Promise<T> {
-  const text = await res.text();
+async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    throw new Error(
-      `Request failed (${res.status}) ${text ? `→ ${text}` : ""}`.trim()
-    );
+    const t = await res.text();
+    throw new Error(`${res.status}: ${t}`);
   }
-  return text ? (JSON.parse(text) as T) : ({} as T);
+  return res.json();
 }
 
-/**
- * Start a run (deploy). Backend route: POST /api/onboard
- */
-export async function onboard(payload: OnboardRequest): Promise<OnboardResponse> {
-  assertBase();
-  const res = await fetch(`${base}/api/onboard`, {
+/* ---------------- RUNS ---------------- */
+
+export async function onboard(payload: any) {
+  const res = await fetch(`${BASE}/api/onboard`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  return okJson<OnboardResponse>(res);
+  return json<{ run_id: string }>(res);
 }
 
-/**
- * List runs. Backend route: GET /api/runs → { items: ZordraxRun[] } OR ZordraxRun[]
- * We normalize to ZordraxRun[].
- */
-export async function listRuns(limit = 50, offset = 0): Promise<ZordraxRun[]> {
-  assertBase();
-  const url = new URL(`${base}/api/runs`);
-  url.searchParams.set("limit", String(limit));
-  url.searchParams.set("offset", String(offset));
-
-  const res = await fetch(url.toString(), { method: "GET" });
-  const data = await okJson<any>(res);
-
-  // Normalize both shapes:
-  // - { items: [...] }
-  // - [...]
-  if (Array.isArray(data)) return data as ZordraxRun[];
-  if (data && Array.isArray(data.items)) return data.items as ZordraxRun[];
-
-  return [];
+export async function listRuns() {
+  const res = await fetch(`${BASE}/api/runs`);
+  return json<{ items: any[] }>(res);
 }
 
-/**
- * Get run status. Backend route: GET /api/runs/{runId}
- */
-export async function getRunStatus(runId: string): Promise<ZordraxRun> {
-  assertBase();
-  const res = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}`);
-  return okJson<ZordraxRun>(res);
+export function eventsUrl(runId: string) {
+  return `${BASE}/api/runs/${runId}/events`;
 }
 
-/**
- * SSE URL. Backend route: GET /api/runs/{runId}/events
- */
-export function getEventsUrl(runId: string) {
-  assertBase();
-  return `${base}/api/runs/${encodeURIComponent(runId)}/events`;
-}
+/* ---------------- ONBOARDING ---------------- */
 
-/**
- * Cancel run. Backend route: POST /api/runs/{runId}/cancel
- */
-export async function cancelRun(runId: string) {
-  assertBase();
-  const res = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/cancel`, {
+export async function createSession() {
+  const res = await fetch(`${BASE}/api/onboarding/sessions`, {
     method: "POST",
   });
-  return okJson<any>(res);
+  return json<{ session_id: string }>(res);
 }
 
-/**
- * Retry run. Backend route: POST /api/runs/{runId}/retry
- */
-export async function retryRun(runId: string) {
-  assertBase();
-  const res = await fetch(`${base}/api/runs/${encodeURIComponent(runId)}/retry`, {
-    method: "POST",
-  });
-  return okJson<any>(res);
+export async function nextQuestion(sessionId: string) {
+  const res = await fetch(
+    `${BASE}/api/onboarding/sessions/${sessionId}/next-question`
+  );
+  return json<any>(res);
+}
+
+export async function answerQuestion(
+  sessionId: string,
+  key: string,
+  value: string
+) {
+  const res = await fetch(
+    `${BASE}/api/onboarding/sessions/${sessionId}/answer`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key, value }),
+    }
+  );
+  return json(res);
 }
