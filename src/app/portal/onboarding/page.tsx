@@ -8,10 +8,13 @@ export default function OnboardingOverview() {
   const router = useRouter();
 
   async function start() {
-    const res = await fetch(`${API}/api/onboarding/sessions`, { method: "POST" });
-    const { session_id } = await res.json();
-    router.push(`/portal/onboarding/questions?session=${session_id}`);
-  }
+  const res = await fetch(`${API}/api/onboarding/sessions`, {
+    method: "POST",
+  });
+  const { session_id } = await res.json();
+  router.push(`/portal/onboarding/questions?session=${session_id}`);
+}
+
 
   return (
     <div className="p-6 space-y-4">
