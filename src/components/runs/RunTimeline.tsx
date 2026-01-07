@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type RunEvent = {
   id: number;
@@ -36,7 +36,10 @@ function Badge({ level }: { level: RunEvent["level"] }) {
 }
 
 export function RunTimeline({ runId }: { runId: string }) {
-  const base = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+  const base = useMemo(
+    () => process.env.NEXT_PUBLIC_ONBOARDING_API_URL,
+    []
+  );
 
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,21 +53,22 @@ export function RunTimeline({ runId }: { runId: string }) {
     return STAGE_PROGRESS[latest.stage] ?? 0;
   }, [latest]);
 
-  async function initialLoad() {
+  const initialLoad = useCallback(async () => {
     if (!base) return;
 
     setLoading(true);
     const res = await fetch(`${base}/api/runs/${runId}/events`, {
       cache: "no-store",
     });
+
     const data: RunEvent[] = await res.json();
 
     setEvents(data);
     if (data.length) lastId.current = data[data.length - 1].id;
     setLoading(false);
-  }
+  }, [base, runId]);
 
-  async function cancelRun() {
+  const cancelRun = useCallback(async () => {
     if (!base) return;
     setCanceling(true);
     try {
@@ -74,7 +78,7 @@ export function RunTimeline({ runId }: { runId: string }) {
     } finally {
       setCanceling(false);
     }
-  }
+  }, [base, runId]);
 
   useEffect(() => {
     if (!base) {
@@ -82,10 +86,10 @@ export function RunTimeline({ runId }: { runId: string }) {
       return;
     }
 
-    // 1) initial fetch
+    // 1) Initial fetch
     initialLoad();
 
-    // 2) SSE
+    // 2) SSE stream
     const es = new EventSource(
       `${base}/api/runs/${runId}/events/stream?after_id=${lastId.current}`
     );
@@ -102,7 +106,7 @@ export function RunTimeline({ runId }: { runId: string }) {
     };
 
     return () => es.close();
-  }, [runId]);
+  }, [base, runId, initialLoad]);
 
   return (
     <div className="space-y-4">
@@ -121,7 +125,12 @@ export function RunTimeline({ runId }: { runId: string }) {
 
         <button
           onClick={cancelRun}
-          disabled={canceling || latest?.status === "completed" || latest?.status === "failed" || latest?.status === "canceled"}
+          disabled={
+            canceling ||
+            latest?.status === "completed" ||
+            latest?.status === "failed" ||
+            latest?.status === "canceled"
+          }
           className="rounded border border-amber-500/40 px-3 py-1.5 text-sm text-amber-300 hover:bg-amber-500/10 disabled:opacity-40"
         >
           {canceling ? "Canceling..." : "Cancel"}
@@ -157,7 +166,6 @@ export function RunTimeline({ runId }: { runId: string }) {
               <Badge level={e.level} />
             </div>
 
-            {/* Terraform stdout goes here because backend emits line-by-line */}
             <div className="mt-2 text-sm whitespace-pre-wrap break-words">
               {e.message}
             </div>

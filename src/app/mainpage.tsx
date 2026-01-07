@@ -1,52 +1,64 @@
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
-import { Button, LinkButton } from "@/components/ui/Button";
+import { Button } from "@/components/ui/Button";
 
 export default function MainPage() {
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Zordrax-Analytica Console</h1>
-        <p className="text-sm text-slate-400 mt-1">
-          Orchestrate Infra → ETL → Governance → BI with AI-augmented onboarding.
+    <main className="space-y-10">
+      <section className="space-y-4">
+        <h1 className="text-3xl font-semibold">Zordrax-Analytica</h1>
+        <p className="max-w-2xl text-slate-400">
+          AI-augmented analytics platform for infrastructure, data pipelines,
+          governance, and business intelligence.
         </p>
-      </div>
+      </section>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {/* Onboarding */}
+      <section className="grid gap-4 md:grid-cols-3">
         <Card>
           <div className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-slate-100">Start Onboarding</h2>
+            <h2 className="text-sm font-semibold">Portal</h2>
             <p className="text-xs text-slate-400">
-              Use AI, guided wizard, or visual designer.
+              Access the orchestration console.
             </p>
-            <LinkButton href="/onboarding" variant="primary">
-              Open Onboarding
-            </LinkButton>
+
+            <Link href="/portal">
+              <Button variant="primary" className="w-full">
+                Open Portal
+              </Button>
+            </Link>
           </div>
         </Card>
 
-        {/* Sessions */}
         <Card>
           <div className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-slate-100">Sessions</h2>
-            <p className="text-xs text-slate-400">View saved onboarding sessions.</p>
-            <LinkButton href="/sessions" variant="outline">
-              View Sessions
-            </LinkButton>
+            <h2 className="text-sm font-semibold">Onboarding</h2>
+            <p className="text-xs text-slate-400">
+              Guided AI-assisted setup.
+            </p>
+
+            <Link href="/portal/onboarding">
+              <Button variant="outline" className="w-full">
+                Start Onboarding
+              </Button>
+            </Link>
           </div>
         </Card>
 
-        {/* Runs */}
         <Card>
           <div className="flex flex-col gap-3">
-            <h2 className="text-sm font-semibold text-slate-100">Deployments</h2>
-            <p className="text-xs text-slate-400">Terraform & pipeline history.</p>
-            <LinkButton href="/runs" variant="outline">
-              View Runs
-            </LinkButton>
+            <h2 className="text-sm font-semibold">Runs</h2>
+            <p className="text-xs text-slate-400">
+              View Terraform & pipeline executions.
+            </p>
+
+            <Link href="/portal/runs">
+              <Button variant="outline" className="w-full">
+                View Runs
+              </Button>
+            </Link>
           </div>
         </Card>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
