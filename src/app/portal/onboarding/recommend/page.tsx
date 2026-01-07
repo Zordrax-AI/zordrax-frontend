@@ -1,106 +1,94 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 
-const BASE = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
+type Recommendation = {
+  cloud: string;
+  warehouse: string;
+  etl: string;
+  bi: string;
+  governance: string;
+};
 
-export default function RecommendPage() {
+export default function RecommendationPage() {
   const router = useRouter();
-  const [data, setData] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const params = useSearchParams();
 
+  const [rec, setRec] = useState<Recommendation | null>(null);
+
+  // Mock AI (replace later with /ai/recommend endpoint)
   useEffect(() => {
-    if (!BASE) {
-      setError("Agent base URL is not configured.");
-      return;
-    }
+    setRec({
+      cloud: params.get("cloud") || "azure",
+      warehouse: "Databricks",
+      etl: "dbt",
+      bi: "Power BI",
+      governance: "Purview",
+    });
+  }, []);
 
-    const raw = sessionStorage.getItem("onboarding_answers");
-
-    if (!raw) {
-      router.push("/portal/onboarding/questions");
-      return;
-    }
-
-    let answers;
-    try {
-      answers = JSON.parse(raw);
-    } catch {
-      setError("Invalid onboarding answers.");
-      return;
-    }
-
-    fetch(`${BASE}/ai/recommend-stack`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answers }),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(`API error ${res.status}: ${text}`);
-        }
-        return res.json();
-      })
-      .then((res) => {
-        setData(res);
-        sessionStorage.setItem(
-          "onboarding_manifest",
-          JSON.stringify(res)
-        );
-      })
-      .catch((err) => {
-        console.error("Recommendation fetch failed:", err);
-        setError("Failed to generate recommendation.");
-      });
-  }, [router]);
-
-  if (error) {
-    return (
-      <div className="space-y-4">
-        <p className="text-red-500">{error}</p>
-        <button
-          onClick={() => router.push("/portal/onboarding/questions")}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white"
-        >
-          Back to questions
-        </button>
-      </div>
-    );
+  function handleDeploy() {
+    router.push("/portal/onboarding/deploy");
   }
 
-  if (!data) {
-    return (
-      <p className="text-slate-400">
-        Generating recommendation…
-      </p>
-    );
-  }
+  if (!rec) return null;
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-semibold">Recommended Stack</h2>
-
-      <pre className="rounded-md bg-slate-900 p-4 text-xs overflow-auto">
-        {JSON.stringify(data, null, 2)}
-      </pre>
-
-      <div className="flex gap-3">
-        <button
-          onClick={() => router.push("/portal/onboarding/questions")}
-          className="rounded-md border border-slate-700 px-4 py-2 text-sm hover:bg-slate-900"
-        >
-          Back
-        </button>
-
-        <button
-          onClick={() => router.push("/portal/onboarding/deploy")}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white"
-        >
-          Deploy this stack
-        </button>
+    <div className="max-w-4xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">
+          AI Recommendation (Review & Edit)
+        </h1>
+        <p className="text-sm text-slate-400">
+          Review the proposed architecture. You can adjust anything before
+          deployment.
+        </p>
       </div>
+
+      <Card className="space-y-4">
+        <Editable label="Cloud" value={rec.cloud} onChange={(v) => setRec({ ...rec, cloud: v })} />
+        <Editable label="Warehouse" value={rec.warehouse} onChange={(v) => setRec({ ...rec, warehouse: v })} />
+        <Editable label="ETL" value={rec.etl} onChange={(v) => setRec({ ...rec, etl: v })} />
+        <Editable label="BI" value={rec.bi} onChange={(v) => setRec({ ...rec, bi: v })} />
+        <Editable label="Governance" value={rec.governance} onChange={(v) => setRec({ ...rec, governance: v })} />
+
+        <div className="flex justify-end gap-3 pt-4">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/portal/onboarding")}
+          >
+            Back
+          </Button>
+
+          <Button variant="primary" onClick={handleDeploy}>
+            Approve & Deploy
+          </Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function Editable({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="grid grid-cols-3 items-center gap-4">
+      <div className="text-sm text-slate-400">{label}</div>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="col-span-2 rounded-md bg-slate-900 px-3 py-2 text-sm"
+      />
     </div>
   );
 }
