@@ -1,39 +1,24 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 
-const API = process.env.NEXT_PUBLIC_AGENT_BASE_URL!;
-
-export default function OnboardingOverviewPage() {
+export default function OnboardingEntryPage() {
   const router = useRouter();
 
-  async function startOnboarding() {
-    const res = await fetch(`${API}/api/onboarding/sessions`, {
-      method: "POST",
-    });
-
-    if (!res.ok) {
-      throw new Error("Failed to create onboarding session");
-    }
-
-    const { session_id } = await res.json();
-
-    router.push(`/portal/onboarding/questions?session=${session_id}`);
-  }
-
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-semibold">AI-Driven Onboarding</h1>
-      <p className="text-slate-400">
-        This guided flow will collect requirements and generate an AI-recommended data stack.
-      </p>
+    <div className="space-y-6 max-w-3xl">
+      <h1 className="text-2xl font-semibold">Onboarding</h1>
 
-      <button
-        onClick={startOnboarding}
-        className="rounded bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500"
-      >
-        Start onboarding
-      </button>
+      <Card>
+        <Button
+          variant="primary"
+          onClick={() => router.push("/portal/onboarding/deploy")}
+        >
+          Start Deployment
+        </Button>
+      </Card>
     </div>
   );
 }

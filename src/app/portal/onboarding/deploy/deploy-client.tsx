@@ -1,49 +1,33 @@
-// src/app/portal/onboarding/deploy/deploy-client.tsx
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { createRun, executeRun } from "@/lib/api";
 
-const API = process.env.NEXT_PUBLIC_AGENT_BASE_URL!;
-
-export default function DeployClient() {
+export default function DeployPage() {
   const router = useRouter();
-  const params = useSearchParams();
-  const sessionId = params.get("session");
 
-  async function deploy() {
-    if (!sessionId) {
-      alert("Missing onboarding session");
-      return;
-    }
+  async function handleDeploy() {
+    const { run_id } = await createRun(
+      "manual",
+      "Frontend Triggered Run"
+    );
 
-    const res = await fetch(`${API}/api/onboard`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mode: "ai",
-        session_id: sessionId,
-      }),
-    });
+    await executeRun(run_id);
 
-    if (!res.ok) {
-      alert("Failed to start deployment");
-      return;
-    }
-
-    const { run_id } = await res.json();
     router.push(`/portal/status?run=${run_id}`);
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <h2 className="text-lg font-semibold">Ready to deploy</h2>
+    <div className="max-w-3xl space-y-6">
+      <h1 className="text-2xl font-semibold">Deploy Infrastructure</h1>
 
-      <button
-        onClick={deploy}
-        className="rounded bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
-      >
-        Deploy
-      </button>
+      <Card>
+        <Button variant="primary" onClick={handleDeploy}>
+          Deploy Now
+        </Button>
+      </Card>
     </div>
   );
 }

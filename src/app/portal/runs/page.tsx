@@ -5,22 +5,30 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { Badge } from "@/components/ui/Badge";
-import { listRuns, type ZordraxRun } from "@/lib/agent";
+import { listRuns } from "@/lib/api";
 
-function fmtTs(ms: number) {
+export type ZordraxRun = {
+  run_id: string;
+  title: string;
+  mode: string;
+  status: string;
+  stage: string;
+  created_at: string;
+};
+
+function fmtTs(ts: string) {
   try {
-    return new Date(ms).toLocaleString();
+    return new Date(ts).toLocaleString();
   } catch {
-    return String(ms);
+    return ts;
   }
 }
 
 function statusTone(status: string) {
-  const s = (status || "").toLowerCase();
+  const s = status.toLowerCase();
   if (s === "completed") return "success";
   if (s === "failed") return "error";
-  if (s === "running" || s === "in_progress") return "warning";
-  if (s === "queued") return "default";
+  if (s === "running") return "warning";
   return "default";
 }
 
@@ -33,7 +41,7 @@ export default function RunsPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await listRuns(50, 0);
+      const data = await listRuns();
       setRuns(data);
     } catch (e: any) {
       setError(e?.message || "Failed to load runs");
@@ -47,80 +55,47 @@ export default function RunsPage() {
   }, []);
 
   const stats = useMemo(() => {
-    const out = {
-      total: runs.length,
-      queued: 0,
-      running: 0,
-      completed: 0,
-      failed: 0,
-    };
+    const out = { total: 0, running: 0, completed: 0, failed: 0 };
+    out.total = runs.length;
     for (const r of runs) {
-      const s = (r.status || "").toLowerCase();
-      if (s in out) (out as any)[s] += 1;
+      if (r.status in out) (out as any)[r.status]++;
     }
     return out;
   }, [runs]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-semibold">Deployment Runs</h1>
           <p className="text-xs text-slate-400">
-            Run history (from backend /api/runs).
+            Terraform execution history.
           </p>
         </div>
 
         <button
           onClick={load}
-          className="rounded-md border border-slate-800 bg-slate-950 px-3 py-2 text-xs hover:bg-slate-900"
+          className="rounded-md border border-slate-800 px-3 py-2 text-xs"
         >
           Refresh
         </button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">Total</p>
-            <p className="text-2xl font-semibold">{stats.total}</p>
-          </div>
-        </Card>
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">Queued</p>
-            <p className="text-2xl font-semibold">{stats.queued}</p>
-          </div>
-        </Card>
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">Running</p>
-            <p className="text-2xl font-semibold">{stats.running}</p>
-          </div>
-        </Card>
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">Completed</p>
-            <p className="text-2xl font-semibold">{stats.completed}</p>
-          </div>
-        </Card>
-        <Card>
-          <div className="space-y-1">
-            <p className="text-xs text-slate-400">Failed</p>
-            <p className="text-2xl font-semibold">{stats.failed}</p>
-          </div>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-4">
+        {Object.entries(stats).map(([k, v]) => (
+          <Card key={k}>
+            <p className="text-xs text-slate-400 capitalize">{k}</p>
+            <p className="text-2xl font-semibold">{v}</p>
+          </Card>
+        ))}
       </div>
 
       <Card>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold">Latest Runs</h2>
-          {loading ? (
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <Spinner /> Loading…
-            </div>
-          ) : null}
-        </div>
+        {loading ? (
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <Spinner /> Loading…
+          </div>
+        ) : null}
 
         {error ? (
           <div className="mt-3 rounded-md border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
@@ -132,53 +107,47 @@ export default function RunsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-900 text-left text-xs text-slate-400">
-                <th className="py-2 pr-4">Run</th>
-                <th className="py-2 pr-4">Mode</th>
-                <th className="py-2 pr-4">Status</th>
-                <th className="py-2 pr-4">Stage</th>
-                <th className="py-2 pr-4">Created</th>
-                <th className="py-2 pr-4">Open</th>
+                <th>Run</th>
+                <th>Mode</th>
+                <th>Status</th>
+                <th>Stage</th>
+                <th>Created</th>
+                <th />
               </tr>
             </thead>
             <tbody>
-              {!loading && runs.length === 0 ? (
-                <tr>
-                  <td className="py-3 text-slate-400" colSpan={6}>
-                    No runs yet.
-                  </td>
-                </tr>
-              ) : null}
-
               {runs.map((r) => (
-                <tr key={r.id} className="border-b border-slate-950">
-                  <td className="py-3 pr-4">
+                <tr key={r.run_id} className="border-b border-slate-950">
+                  <td>
                     <div className="font-medium">{r.title}</div>
-                    <div className="text-xs text-slate-500">{r.id}</div>
+                    <div className="text-xs text-slate-500">{r.run_id}</div>
                   </td>
-                  <td className="py-3 pr-4">
-                    <span className="text-xs text-slate-300">{r.mode}</span>
-                  </td>
-                  <td className="py-3 pr-4">
+                  <td className="text-xs">{r.mode}</td>
+                  <td>
                     <Badge tone={statusTone(r.status)}>{r.status}</Badge>
                   </td>
-                  <td className="py-3 pr-4">
-                    <span className="text-xs text-slate-300">{r.stage}</span>
+                  <td className="text-xs">{r.stage}</td>
+                  <td className="text-xs text-slate-400">
+                    {fmtTs(r.created_at)}
                   </td>
-                  <td className="py-3 pr-4">
-                    <span className="text-xs text-slate-400">
-                      {fmtTs(r.created_at)}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4">
+                  <td>
                     <Link
-                      className="text-xs underline text-slate-200 hover:text-white"
-                      href={`/portal/status?run=${encodeURIComponent(r.id)}`}
+                      href={`/portal/status?run=${r.run_id}`}
+                      className="text-xs underline"
                     >
-                      View status
+                      View
                     </Link>
                   </td>
                 </tr>
               ))}
+
+              {!loading && runs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-4 text-slate-400">
+                    No runs yet.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

@@ -1,142 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import ProgressBar from "@/components/ui/ProgressBar";
-
-import { stageLabel, stageProgress } from "@/lib/runStages";
-
-type Run = {
-  id: string;
-  title: string;
-  mode: string;
-  status: string;
-  stage: string;
-};
-
-type Event = {
-  event_id?: number;
-  message?: string;
-  stage?: string;
-  status?: string;
-  heartbeat?: boolean;
-};
-
-const API = process.env.NEXT_PUBLIC_AGENT_BASE_URL;
-
-function tone(status?: string) {
-  if (status === "completed") return "success";
-  if (status === "failed") return "error";
-  if (status === "running") return "warning";
-  return "default";
-}
+import { useEffect, useState } from "react";
+import {
+  getRun,
+  getRunEvents,
+  cancelRun,
+  RunEvent,
+} from "@/lib/api";
 
 export default function StatusClient() {
-  const params = useSearchParams();
-  const runId = params.get("run");
+  const runId = useSearchParams().get("run");
 
-  const [run, setRun] = useState<Run | null>(null);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [lastId, setLastId] = useState(0);
+  const [run, setRun] = useState<any>(null);
 
-  // Fetch run summary
-  useEffect(() => {
-    if (!runId) return;
-    fetch(`${API}/api/runs/${runId}`)
-      .then((r) => r.json())
-      .then(setRun);
-  }, [runId]);
-
-  // SSE stream
   useEffect(() => {
     if (!runId) return;
 
-    const es = new EventSource(`${API}/api/runs/${runId}/events`);
+    getRun(runId).then(setRun);
 
-    es.onmessage = (evt) => {
-      const data = JSON.parse(evt.data);
-      if (!data.heartbeat) {
-        setEvents((prev) => [...prev, data]);
-        if (data.stage && data.status) {
-          setRun((r) =>
-            r ? { ...r, stage: data.stage!, status: data.status! } : r
-          );
-        }
+    const i = setInterval(async () => {
+      const ev = await getRunEvents(runId, lastId);
+      if (ev.length) {
+        setEvents((p) => [...p, ...ev]);
+        setLastId(ev[ev.length - 1].event_id);
       }
-    };
+    }, 2000);
 
-    return () => es.close();
-  }, [runId]);
+    return () => clearInterval(i);
+  }, [runId, lastId]);
 
-  if (!runId) return <div className="p-6">Missing run ID.</div>;
-  if (!run) return null;
-
-  const progress = stageProgress(run.stage);
-
-  async function cancelRun() {
-    await fetch(`${API}/api/runs/${runId}/cancel`, { method: "POST" });
-  }
-
-  async function retryRun() {
-    await fetch(`${API}/api/runs/${runId}/retry`, { method: "POST" });
+  async function handleCancel() {
+    if (!runId) return;
+    await cancelRun(runId);
+    alert("Cancel requested");
   }
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex justify-between">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">{run.title}</h1>
-          <p className="text-xs text-slate-400">{run.id}</p>
+          <h1 className="text-xl font-semibold">Run Status</h1>
+          <p className="text-sm text-slate-400">
+            {run?.title} — {run?.status}
+          </p>
         </div>
-        <Badge tone={tone(run.status)}>{run.status}</Badge>
+
+        {run?.status === "running" && (
+          <button
+            onClick={handleCancel}
+            className="rounded-md bg-red-500/20 px-4 py-2 text-sm text-red-300"
+          >
+            Cancel Run
+          </button>
+        )}
       </div>
 
-      {/* Progress */}
-      <Card>
-        <div className="space-y-2">
-          <div className="flex justify-between text-xs text-slate-400">
-            <span>{stageLabel(run.stage)}</span>
-            <span>{progress}%</span>
+      <div className="rounded-lg border border-slate-800 bg-black p-4 font-mono text-xs max-h-[400px] overflow-auto">
+        {events.map((e) => (
+          <div key={e.event_id}>
+            [{e.stage}] {e.message}
           </div>
-          <ProgressBar value={progress} />
-        </div>
-      </Card>
+        ))}
+      </div>
 
-      {/* Controls */}
-      <Card>
-        <div className="flex gap-3">
-          {(run.status === "running" || run.stage === "queued") && (
-            <button
-              onClick={cancelRun}
-              className="rounded bg-red-600 px-3 py-1 text-xs text-white hover:bg-red-700"
-            >
-              Cancel run
-            </button>
-          )}
+      {run?.status === "completed" && run?.manifest?.outputs && (
+        <TerraformOutputs outputs={run.manifest.outputs} />
+      )}
+    </div>
+  );
+}
 
-          {run.status === "failed" && (
-            <button
-              onClick={retryRun}
-              className="rounded bg-amber-600 px-3 py-1 text-xs text-white hover:bg-amber-700"
-            >
-              Retry
-            </button>
-          )}
-        </div>
-      </Card>
-
-      {/* Logs */}
-      <Card>
-        <div className="h-80 overflow-y-auto bg-black rounded p-3 font-mono text-xs text-green-400">
-          {events.map((e, i) => (
-            <div key={i}>
-              [{e.stage}] {e.message}
-            </div>
+function TerraformOutputs({ outputs }: { outputs: any }) {
+  return (
+    <div className="rounded-lg border border-slate-800 p-4">
+      <h2 className="mb-3 text-sm font-semibold">Terraform Outputs</h2>
+      <table className="w-full text-sm">
+        <tbody>
+          {Object.entries(outputs).map(([k, v]: any) => (
+            <tr key={k} className="border-t border-slate-800">
+              <td className="py-2 font-mono text-cyan-300">{k}</td>
+              <td className="py-2 font-mono text-slate-300">
+                {JSON.stringify(v.value)}
+              </td>
+            </tr>
           ))}
-        </div>
-      </Card>
+        </tbody>
+      </table>
     </div>
   );
 }
