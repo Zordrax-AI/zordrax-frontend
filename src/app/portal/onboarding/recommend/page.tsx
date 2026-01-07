@@ -1,94 +1,20 @@
-"use client";
+import { Suspense } from "react";
+import { Spinner } from "@/components/ui/Spinner";
+import RecommendClient from "./recommend-client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
+export const dynamic = "force-dynamic";
 
-type Recommendation = {
-  cloud: string;
-  warehouse: string;
-  etl: string;
-  bi: string;
-  governance: string;
-};
-
-export default function RecommendationPage() {
-  const router = useRouter();
-  const params = useSearchParams();
-
-  const [rec, setRec] = useState<Recommendation | null>(null);
-
-  // Mock AI (replace later with /ai/recommend endpoint)
-  useEffect(() => {
-    setRec({
-      cloud: params.get("cloud") || "azure",
-      warehouse: "Databricks",
-      etl: "dbt",
-      bi: "Power BI",
-      governance: "Purview",
-    });
-  }, []);
-
-  function handleDeploy() {
-    router.push("/portal/onboarding/deploy");
-  }
-
-  if (!rec) return null;
-
+export default function RecommendPage() {
   return (
-    <div className="max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">
-          AI Recommendation (Review & Edit)
-        </h1>
-        <p className="text-sm text-slate-400">
-          Review the proposed architecture. You can adjust anything before
-          deployment.
-        </p>
-      </div>
-
-      <Card className="space-y-4">
-        <Editable label="Cloud" value={rec.cloud} onChange={(v) => setRec({ ...rec, cloud: v })} />
-        <Editable label="Warehouse" value={rec.warehouse} onChange={(v) => setRec({ ...rec, warehouse: v })} />
-        <Editable label="ETL" value={rec.etl} onChange={(v) => setRec({ ...rec, etl: v })} />
-        <Editable label="BI" value={rec.bi} onChange={(v) => setRec({ ...rec, bi: v })} />
-        <Editable label="Governance" value={rec.governance} onChange={(v) => setRec({ ...rec, governance: v })} />
-
-        <div className="flex justify-end gap-3 pt-4">
-          <Button
-            variant="outline"
-            onClick={() => router.push("/portal/onboarding")}
-          >
-            Back
-          </Button>
-
-          <Button variant="primary" onClick={handleDeploy}>
-            Approve & Deploy
-          </Button>
+    <Suspense
+      fallback={
+        <div className="p-6 flex items-center gap-2 text-sm text-slate-400">
+          <Spinner />
+          Generating recommendation…
         </div>
-      </Card>
-    </div>
-  );
-}
-
-function Editable({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div className="grid grid-cols-3 items-center gap-4">
-      <div className="text-sm text-slate-400">{label}</div>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="col-span-2 rounded-md bg-slate-900 px-3 py-2 text-sm"
-      />
-    </div>
+      }
+    >
+      <RecommendClient />
+    </Suspense>
   );
 }

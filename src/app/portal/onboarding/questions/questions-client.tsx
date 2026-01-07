@@ -1,81 +1,94 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
-const API = process.env.NEXT_PUBLIC_AGENT_BASE_URL!;
-
-type Question = {
-  key: string;
-  question: string;
-  options: string[];
-  done?: boolean;
-};
+import { useEffect, useState } from "react";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 
 export default function QuestionsClient() {
   const router = useRouter();
   const params = useSearchParams();
-  const sessionId = params.get("session");
 
-  const [question, setQuestion] = useState<Question | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const mode = params.get("mode") ?? "manual";
 
-  useEffect(() => {
-    if (!sessionId) {
-      // HARD redirect — user entered illegally
-      router.replace("/portal/onboarding");
-      return;
-    }
+  // Manual flow state
+  const [industry, setIndustry] = useState("");
+  const [scale, setScale] = useState("small");
+  const [cloud, setCloud] = useState("azure");
 
-    fetch(`${API}/api/onboarding/sessions/${sessionId}/next-question`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to load question");
-        return r.json();
-      })
-      .then(setQuestion)
-      .catch((e) => setError(e.message));
-  }, [sessionId, router]);
-
-  async function answer(value: string) {
-    if (!question || !sessionId) return;
-
-    await fetch(`${API}/api/onboarding/sessions/${sessionId}/answer`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: question.key, value }),
+  function handleManualNext() {
+    const qs = new URLSearchParams({
+      mode,
+      industry,
+      scale,
+      cloud,
     });
 
-    const next = await fetch(
-      `${API}/api/onboarding/sessions/${sessionId}/next-question`
-    ).then((r) => r.json());
-
-    if (next.done) {
-      router.push(`/portal/onboarding/recommendation?session=${sessionId}`);
-    } else {
-      setQuestion(next);
-    }
-  }
-
-  if (!question && !error) {
-    return <div className="p-6">Loading question…</div>;
-  }
-
-  if (error) {
-    return <div className="p-6 text-red-400">{error}</div>;
+    router.push(`/portal/onboarding/recommend?${qs.toString()}`);
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <h2 className="text-lg font-semibold">{question!.question}</h2>
-      {question!.options.map((o) => (
-        <button
-          key={o}
-          onClick={() => answer(o)}
-          className="block w-full rounded bg-slate-800 p-3 hover:bg-slate-700"
-        >
-          {o}
-        </button>
-      ))}
+    <div className="max-w-3xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold">Onboarding Questions</h1>
+        <p className="text-sm text-slate-400">
+          Configure your platform requirements.
+        </p>
+      </div>
+
+      <Card className="space-y-4">
+        <Field label="Industry">
+          <input
+            value={industry}
+            onChange={(e) => setIndustry(e.target.value)}
+            placeholder="Government, Retail, Health…"
+            className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm"
+          />
+        </Field>
+
+        <Field label="Data Scale">
+          <select
+            value={scale}
+            onChange={(e) => setScale(e.target.value)}
+            className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm"
+          >
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+          </select>
+        </Field>
+
+        <Field label="Preferred Cloud">
+          <select
+            value={cloud}
+            onChange={(e) => setCloud(e.target.value)}
+            className="w-full rounded-md bg-slate-900 px-3 py-2 text-sm"
+          >
+            <option value="azure">Azure</option>
+            <option value="aws">AWS</option>
+            <option value="gcp">GCP</option>
+          </select>
+        </Field>
+
+        <Button variant="primary" onClick={handleManualNext}>
+          Generate Recommendation
+        </Button>
+      </Card>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1">
+      <label className="text-xs text-slate-400">{label}</label>
+      {children}
     </div>
   );
 }
