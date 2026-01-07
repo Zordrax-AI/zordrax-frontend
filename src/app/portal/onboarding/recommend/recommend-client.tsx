@@ -4,6 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
+import {
+  recommendStack,
+  saveRecommendationSnapshot,
+} from "@/lib/api";
 
 /* =========================
    Types
@@ -27,6 +32,10 @@ type DiffItem = {
   changed: boolean;
 };
 
+/* =========================
+   Constants
+========================= */
+
 const FIELDS: Array<{ key: keyof Recommendation; label: string }> = [
   { key: "cloud", label: "Cloud" },
   { key: "region", label: "Region" },
@@ -41,59 +50,10 @@ const FIELDS: Array<{ key: keyof Recommendation; label: string }> = [
    Helpers
 ========================= */
 
-function safeGet(params: URLSearchParams, key: string, fallback: string) {
-  const v = params.get(key);
-  return v && v.trim() ? v : fallback;
-}
-
-function buildAiRecommendation(params: URLSearchParams): Recommendation {
-  const mode = safeGet(params, "mode", "manual");
-  const industry = safeGet(params, "industry", "general");
-  const scale = safeGet(params, "scale", "small");
-  const cloud = safeGet(params, "cloud", "azure");
-
-  const region =
-    cloud === "azure"
-      ? "uksouth"
-      : cloud === "aws"
-      ? "eu-west-2"
-      : "europe-west2";
-
-  const env = mode === "ai" ? "prod" : "dev";
-
-  let warehouse = "Databricks";
-  let etl = "dbt";
-  let bi = cloud === "azure" ? "Power BI" : "Looker";
-  let governance = cloud === "azure" ? "Purview" : "OpenMetadata";
-
-  if (cloud === "aws") {
-    warehouse = scale === "large" ? "Redshift" : "Snowflake";
-    bi = "QuickSight";
-    governance = "OpenMetadata";
-  }
-
-  if (cloud === "gcp") {
-    warehouse = "BigQuery";
-    bi = "Looker";
-    governance = "Dataplex";
-  }
-
-  if (industry.includes("health") || industry.includes("gov")) {
-    governance = cloud === "azure" ? "Purview" : governance;
-  }
-
-  return {
-    cloud,
-    region,
-    env,
-    warehouse,
-    etl,
-    bi,
-    governance,
-  };
-}
-
-function computeDiff(ai: Recommendation, final: Recommendation): DiffItem[] {
+function computeDiff(
+  ai: Recommendation,
+  final: Recommendation
+): DiffItem[] {
   return FIELDS.map(({ key, label }) => ({
     key,
     label,
@@ -101,6 +61,26 @@ function computeDiff(ai: Recommendation, final: Recommendation): DiffItem[] {
     after: String(final[key]),
     changed: ai[key] !== final[key],
   }));
+}
+
+function fallbackFromQuery(params: URLSearchParams): Recommendation {
+  const cloud = params.get("cloud") ?? "azure";
+  const region =
+    cloud === "azure"
+      ? "uksouth"
+      : cloud === "aws"
+      ? "eu-west-2"
+      : "europe-west2";
+
+  return {
+    cloud,
+    region,
+    env: params.get("mode") === "ai" ? "prod" : "dev",
+    warehouse: "Databricks",
+    etl: "dbt",
+    bi: cloud === "azure" ? "Power BI" : "Looker",
+    governance: cloud === "azure" ? "Purview" : "OpenMetadata",
+  };
 }
 
 /* =========================
@@ -111,18 +91,93 @@ export default function RecommendClient() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const ai = useMemo(() => buildAiRecommendation(params), [params]);
+  const mode = params.get("mode") ?? "manual";
+  const industry = params.get("industry") ?? "general";
+  const scale = params.get("scale") ?? "small";
+  const cloud = params.get("cloud") ?? "azure";
 
-  const [draft, setDraft] = useState<Recommendation>(ai);
+  const [loading, setLoading] = useState(true);
+  const [ai, setAi] = useState<Recommendation>(() =>
+    fallbackFromQuery(params)
+  );
+  const [draft, setDraft] = useState<Recommendation>(() =>
+    fallbackFromQuery(params)
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  /* =========================
+     Load AI recommendation
+  ========================= */
 
   useEffect(() => {
-    setDraft(ai);
-  }, [ai]);
+    let alive = true;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const rec = await recommendStack({
+          mode,
+          industry,
+          scale,
+          cloud,
+        });
+
+        const normalized: Recommendation = {
+          cloud: rec?.cloud ?? cloud,
+          region:
+            rec?.region ??
+            (cloud === "azure"
+              ? "uksouth"
+              : cloud === "aws"
+              ? "eu-west-2"
+              : "europe-west2"),
+          env: rec?.env ?? (mode === "ai" ? "prod" : "dev"),
+          warehouse:
+            rec?.warehouse ??
+            rec?.data_warehouse ??
+            "Databricks",
+          etl: rec?.etl ?? rec?.transformation ?? "dbt",
+          bi:
+            rec?.bi ??
+            rec?.reporting ??
+            (cloud === "azure" ? "Power BI" : "Looker"),
+          governance: rec?.governance ?? "Purview",
+        };
+
+        if (!alive) return;
+        setAi(normalized);
+        setDraft(normalized);
+      } catch (e: any) {
+        if (!alive) return;
+        setError(e?.message || "Failed to generate recommendation");
+        const fb = fallbackFromQuery(params);
+        setAi(fb);
+        setDraft(fb);
+      } finally {
+        if (!alive) return;
+        setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      alive = false;
+    };
+  }, [mode, industry, scale, cloud, params]);
+
+  /* =========================
+     Diff
+  ========================= */
 
   const diff = useMemo(() => computeDiff(ai, draft), [ai, draft]);
   const changedCount = diff.filter((d) => d.changed).length;
 
-  function setField<K extends keyof Recommendation>(key: K, value: string) {
+  function setField<K extends keyof Recommendation>(
+    key: K,
+    value: string
+  ) {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -130,7 +185,11 @@ export default function RecommendClient() {
     setDraft(ai);
   }
 
-  function approveAndContinue() {
+  /* =========================
+     APPROVE (single source)
+  ========================= */
+
+  async function approveAndContinue() {
     const id = crypto.randomUUID();
 
     const snapshot = {
@@ -142,46 +201,96 @@ export default function RecommendClient() {
       source_query: Object.fromEntries(params.entries()),
     };
 
-    sessionStorage.setItem(`zordrax:rec:${id}`, JSON.stringify(snapshot));
+    // Local continuity
+    sessionStorage.setItem(
+      `zordrax:rec:${id}`,
+      JSON.stringify(snapshot)
+    );
+
+    // Backend persistence (audit-safe)
+    try {
+      await saveRecommendationSnapshot({
+        id,
+        ai,
+        final: draft,
+        diff,
+        source_query: Object.fromEntries(params.entries()),
+      });
+    } catch (e) {
+      console.warn("Snapshot backend save failed", e);
+    }
 
     router.push(`/portal/onboarding/deploy?rec=${encodeURIComponent(id)}`);
   }
 
+  /* =========================
+     Render
+  ========================= */
+
   return (
     <div className="max-w-6xl space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Recommendation Review</h1>
           <p className="text-sm text-slate-400">
-            AI baseline vs your final configuration.
+            AI recommendation with live diff & audit snapshot.
           </p>
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => router.push("/portal/onboarding/questions")}>
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push(
+                `/portal/onboarding/questions?mode=${encodeURIComponent(
+                  mode
+                )}&industry=${encodeURIComponent(
+                  industry
+                )}&scale=${encodeURIComponent(
+                  scale
+                )}&cloud=${encodeURIComponent(cloud)}`
+              )
+            }
+          >
             Back
           </Button>
+
           <Button variant="outline" onClick={resetToAi}>
             Reset to AI
           </Button>
+
           <Button variant="primary" onClick={approveAndContinue}>
             Approve & Continue
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {/* Editable */}
-        <Card className="space-y-3">
-          <h2 className="text-sm font-semibold">Final Configuration</h2>
+      {loading && (
+        <div className="flex items-center gap-2 text-sm text-slate-400">
+          <Spinner /> Generating recommendation…
+        </div>
+      )}
 
+      {error && (
+        <div className="rounded-md border border-amber-900 bg-amber-950/30 p-3 text-sm text-amber-200">
+          {error}
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Final */}
+        <Card className="space-y-3">
+          <h2 className="text-sm font-semibold">Final (Editable)</h2>
           {FIELDS.map(({ key, label }) => (
-            <div key={key} className="grid grid-cols-3 gap-3 items-center">
+            <div
+              key={key}
+              className="grid grid-cols-3 gap-3 items-center"
+            >
               <div className="text-xs text-slate-400">{label}</div>
               <input
                 value={draft[key]}
                 onChange={(e) => setField(key, e.target.value)}
-                className="col-span-2 rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="col-span-2 rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-cyan-400"
               />
             </div>
           ))}
@@ -192,7 +301,6 @@ export default function RecommendClient() {
           <h2 className="text-sm font-semibold">
             Diff (AI → Final) · {changedCount} change(s)
           </h2>
-
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-slate-400 border-b border-slate-800">
@@ -203,12 +311,19 @@ export default function RecommendClient() {
             </thead>
             <tbody>
               {diff.map((d) => (
-                <tr key={d.key} className="border-b border-slate-900">
+                <tr
+                  key={d.key}
+                  className="border-b border-slate-900"
+                >
                   <td className="py-2">{d.label}</td>
-                  <td className="font-mono text-xs text-slate-400">{d.before}</td>
+                  <td className="font-mono text-xs text-slate-400">
+                    {d.before}
+                  </td>
                   <td
                     className={`font-mono text-xs ${
-                      d.changed ? "text-amber-300" : "text-emerald-300"
+                      d.changed
+                        ? "text-amber-300"
+                        : "text-emerald-300"
                     }`}
                   >
                     {d.after}

@@ -54,8 +54,17 @@ export type RunEvent = {
   data?: any;
 };
 
+export type RecommendRequest = {
+  mode: string;
+  industry: string;
+  scale: string;
+  cloud: string;
+};
+
+export type RecommendResponse = any; // backend may return rich structure; keep flexible for now
+
 /* =========================
-   API functions
+   Run APIs
 ========================= */
 
 export function createRun(mode: string, title: string) {
@@ -66,17 +75,15 @@ export function createRun(mode: string, title: string) {
 }
 
 export function executeRun(runId: string) {
-  return request<{ run_id: string; status: string }>(
-    `/runs/${runId}/execute`,
-    { method: "POST" }
-  );
+  return request<{ run_id: string; status: string }>(`/runs/${runId}/execute`, {
+    method: "POST",
+  });
 }
 
 export function cancelRun(runId: string) {
-  return request<{ run_id: string; status: string }>(
-    `/runs/${runId}/cancel`,
-    { method: "POST" }
-  );
+  return request<{ run_id: string; status: string }>(`/runs/${runId}/cancel`, {
+    method: "POST",
+  });
 }
 
 export function listRuns() {
@@ -88,15 +95,44 @@ export function getRun(runId: string) {
 }
 
 export function getRunEvents(runId: string, afterId: number = 0) {
-  return request<RunEvent[]>(
-    `/runs/${runId}/events?after_id=${afterId}`
-  );
+  return request<RunEvent[]>(`/runs/${runId}/events?after_id=${afterId}`);
 }
-
-/* =========================
-   Optional SSE helper
-========================= */
 
 export function runEventsStreamUrl(runId: string, afterId = 0) {
   return url(`/runs/${runId}/events/stream?after_id=${afterId}`);
+}
+
+/* =========================
+   AI recommend
+========================= */
+
+export function recommendStack(payload: RecommendRequest) {
+  // IMPORTANT: your backend endpoint is /ai/recommend-stack
+  return request<RecommendResponse>(`/ai/recommend-stack`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+export function saveRecommendationSnapshot(payload: {
+  id: string;
+  ai: any;
+  final: any;
+  diff: any[];
+  source_query?: Record<string, string>;
+}) {
+  return request<{ id: string; status: string }>(`/recommendations`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function loadRecommendationSnapshot(recId: string) {
+  return request<{
+    id: string;
+    created_at: string;
+    ai: any;
+    final: any;
+    diff: any[];
+    source_query?: Record<string, string>;
+  }>(`/recommendations/${recId}`);
 }

@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Spinner } from "@/components/ui/Spinner";
-import { createRun, executeRun } from "@/lib/api";
+import { createRun, executeRun, loadRecommendationSnapshot } from "@/lib/api";
 
 export default function DeployClient() {
   const router = useRouter();
@@ -17,15 +17,55 @@ export default function DeployClient() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!recId) return;
+    let alive = true;
 
-    const raw = sessionStorage.getItem(`zordrax:rec:${recId}`);
-    if (!raw) {
-      setError("Recommendation snapshot not found.");
-      return;
+    async function load() {
+      if (!recId) {
+        setError("Missing ?rec=<id> in URL.");
+        return;
+      }
+
+      // 1) Try sessionStorage first
+      const raw = sessionStorage.getItem(`zordrax:rec:${recId}`);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (!alive) return;
+          setSnapshot(parsed);
+          return;
+        } catch {
+          // fall through to backend
+        }
+      }
+
+      // 2) Fallback to backend persistence
+      try {
+        const rec = await loadRecommendationSnapshot(recId);
+        if (!alive) return;
+
+        const rebuilt = {
+          id: rec.id,
+          created_at: rec.created_at,
+          ai: rec.ai,
+          final: rec.final,
+          diff: rec.diff,
+          source_query: rec.source_query,
+        };
+
+        setSnapshot(rebuilt);
+
+        // repopulate local for continuity
+        sessionStorage.setItem(`zordrax:rec:${recId}`, JSON.stringify(rebuilt));
+      } catch (e: any) {
+        if (!alive) return;
+        setError(e?.message || "Recommendation snapshot not found.");
+      }
     }
 
-    setSnapshot(JSON.parse(raw));
+    load();
+    return () => {
+      alive = false;
+    };
   }, [recId]);
 
   async function startRun() {
@@ -53,22 +93,32 @@ export default function DeployClient() {
         </p>
       </div>
 
-      {error && (
+      {error ? (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {snapshot && (
+      {!snapshot && !error ? (
+        <div className="flex items-center gap-2 text-sm text-slate-400">
+          <Spinner /> Loading recommendation…
+        </div>
+      ) : null}
+
+      {snapshot ? (
         <Card>
           <h2 className="mb-2 text-sm font-semibold">Approved Configuration</h2>
           <pre className="rounded bg-black p-3 text-xs overflow-auto">
             {JSON.stringify(snapshot.final, null, 2)}
           </pre>
         </Card>
-      )}
+      ) : null}
 
-      <Button variant="primary" onClick={startRun}>
+      <Button
+        variant="primary"
+        onClick={startRun}
+        className={!snapshot || creating ? "opacity-50 pointer-events-none" : ""}
+      >
         {creating ? (
           <span className="inline-flex items-center gap-2">
             <Spinner /> Starting…
