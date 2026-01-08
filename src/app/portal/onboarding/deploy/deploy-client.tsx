@@ -1,3 +1,4 @@
+// C:\Users\Zordr\Desktop\frontend-repo\src\app\portal\onboarding\deploy\deploy-client.tsx
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
@@ -10,23 +11,15 @@ import {
   executeRun,
   loadRecommendationSnapshot,
   saveRecommendationSnapshot,
+  type RecommendationSnapshot,
 } from "@/lib/api";
-
-type Snapshot = {
-  id: string;
-  created_at: string;
-  ai: any;
-  final: any;
-  diff: any[];
-  source_query?: Record<string, string>;
-};
 
 export default function DeployClient() {
   const router = useRouter();
   const params = useSearchParams();
   const recId = params.get("rec");
 
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<RecommendationSnapshot | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,37 +32,32 @@ export default function DeployClient() {
         return;
       }
 
-      // 1️⃣ Session storage
+      // 1) Try sessionStorage
       const raw = sessionStorage.getItem(`zordrax:rec:${recId}`);
       if (raw) {
-        const parsed: Snapshot = JSON.parse(raw);
-        if (alive) setSnapshot(parsed);
-        return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (!alive) return;
+          setSnapshot(parsed);
+          return;
+        } catch {
+          // fall through
+        }
       }
 
-      // 2️⃣ Backend fallback
-      const rec = await loadRecommendationSnapshot(recId);
-      const rebuilt: Snapshot = {
-        id: rec.id,
-        created_at: rec.created_at,
-        ai: rec.ai,
-        final: rec.final,
-        diff: rec.diff,
-        source_query: rec.source_query,
-      };
-
-      sessionStorage.setItem(
-        `zordrax:rec:${recId}`,
-        JSON.stringify(rebuilt)
-      );
-
-      if (alive) setSnapshot(rebuilt);
+      // 2) Fallback to backend
+      try {
+        const rec = await loadRecommendationSnapshot(recId);
+        if (!alive) return;
+        setSnapshot(rec);
+        sessionStorage.setItem(`zordrax:rec:${recId}`, JSON.stringify(rec));
+      } catch (e: any) {
+        if (!alive) return;
+        setError(e?.message || "Recommendation snapshot not found.");
+      }
     }
 
-    load().catch((e) => {
-      if (alive) setError(e.message || "Failed to load snapshot");
-    });
-
+    load();
     return () => {
       alive = false;
     };
@@ -82,24 +70,30 @@ export default function DeployClient() {
     setError(null);
 
     try {
-      const { run_id } = await createRun(
-        "manual",
-        "Onboarding Deployment"
-      );
+      // Create run
+      const res = await createRun("manual", "Onboarding Deployment");
 
-      await saveRecommendationSnapshot({
-        id: snapshot.id,
-        ai: snapshot.ai,
-        final: snapshot.final,
-        diff: snapshot.diff,
-        source_query: snapshot.source_query,
-        run_id,
-      });
+      // Bind run_id to snapshot (both local + backend)
+      const updated: RecommendationSnapshot = {
+        ...snapshot,
+        run_id: res.run_id,
+      };
 
-      await executeRun(run_id);
-      router.push(`/portal/status?run=${run_id}`);
+      sessionStorage.setItem(`zordrax:rec:${snapshot.id}`, JSON.stringify(updated));
+      setSnapshot(updated);
+
+      try {
+        await saveRecommendationSnapshot(updated);
+      } catch (e) {
+        console.warn("Snapshot update failed (non-blocking):", e);
+      }
+
+      // Execute infra
+      await executeRun(res.run_id);
+
+      router.push(`/portal/status?run=${encodeURIComponent(res.run_id)}`);
     } catch (e: any) {
-      setError(e.message || "Failed to start deployment");
+      setError(e?.message || "Failed to start deployment");
       setCreating(false);
     }
   }
@@ -113,33 +107,36 @@ export default function DeployClient() {
         </p>
       </div>
 
-      {error && (
+      {error ? (
         <div className="rounded-md border border-red-900 bg-red-950/40 p-3 text-sm text-red-300">
           {error}
         </div>
-      )}
+      ) : null}
 
-      {!snapshot && !error && (
+      {!snapshot && !error ? (
         <div className="flex items-center gap-2 text-sm text-slate-400">
           <Spinner /> Loading recommendation…
         </div>
-      )}
+      ) : null}
 
-      {snapshot && (
+      {snapshot ? (
         <Card>
-          <h2 className="mb-2 text-sm font-semibold">
-            Approved Configuration
-          </h2>
+          <h2 className="mb-2 text-sm font-semibold">Approved Configuration</h2>
           <pre className="rounded bg-black p-3 text-xs overflow-auto">
             {JSON.stringify(snapshot.final, null, 2)}
           </pre>
+          {snapshot.run_id ? (
+            <div className="mt-3 text-xs text-slate-400">
+              Bound run_id: <span className="text-slate-200 font-mono">{snapshot.run_id}</span>
+            </div>
+          ) : null}
         </Card>
-      )}
+      ) : null}
 
       <Button
         variant="primary"
         onClick={startRun}
-        disabled={!snapshot || creating}
+        className={!snapshot || creating ? "opacity-50 pointer-events-none" : ""}
       >
         {creating ? (
           <span className="inline-flex items-center gap-2">
