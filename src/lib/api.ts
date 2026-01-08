@@ -10,7 +10,10 @@ function url(path: string) {
   return `${BASE}${path}`;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
   const res = await fetch(url(path), {
     ...options,
     headers: {
@@ -29,7 +32,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 /* =========================
-   Types
+   TYPES
 ========================= */
 
 export type RunRow = {
@@ -40,7 +43,6 @@ export type RunRow = {
   stage: string;
   created_at: string;
   cancel_requested?: boolean;
-  manifest?: any;
 };
 
 export type RunEvent = {
@@ -55,16 +57,24 @@ export type RunEvent = {
 };
 
 export type RecommendRequest = {
-  mode: string;
+  mode: "manual" | "ai";
   industry: string;
   scale: string;
   cloud: string;
 };
 
-export type RecommendResponse = any; // backend may return rich structure; keep flexible for now
+export type RecommendResponse = {
+  cloud: string;
+  region: string;
+  env: string;
+  warehouse: string;
+  etl: string;
+  bi: string;
+  governance: string;
+};
 
 /* =========================
-   Run APIs
+   RUN APIS
 ========================= */
 
 export function createRun(mode: string, title: string) {
@@ -75,15 +85,17 @@ export function createRun(mode: string, title: string) {
 }
 
 export function executeRun(runId: string) {
-  return request<{ run_id: string; status: string }>(`/runs/${runId}/execute`, {
-    method: "POST",
-  });
+  return request<{ run_id: string; status: string }>(
+    `/runs/${runId}/execute`,
+    { method: "POST" }
+  );
 }
 
 export function cancelRun(runId: string) {
-  return request<{ run_id: string; status: string }>(`/runs/${runId}/cancel`, {
-    method: "POST",
-  });
+  return request<{ run_id: string; status: string }>(
+    `/runs/${runId}/cancel`,
+    { method: "POST" }
+  );
 }
 
 export function listRuns() {
@@ -95,7 +107,9 @@ export function getRun(runId: string) {
 }
 
 export function getRunEvents(runId: string, afterId: number = 0) {
-  return request<RunEvent[]>(`/runs/${runId}/events?after_id=${afterId}`);
+  return request<RunEvent[]>(
+    `/runs/${runId}/events?after_id=${afterId}`
+  );
 }
 
 export function runEventsStreamUrl(runId: string, afterId = 0) {
@@ -103,27 +117,31 @@ export function runEventsStreamUrl(runId: string, afterId = 0) {
 }
 
 /* =========================
-   AI recommend
+   AI RECOMMENDATION
 ========================= */
 
 export function recommendStack(payload: RecommendRequest) {
-  // IMPORTANT: your backend endpoint is /ai/recommend-stack
   return request<RecommendResponse>(`/ai/recommend-stack`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
+
 export function saveRecommendationSnapshot(payload: {
   id: string;
   ai: any;
   final: any;
   diff: any[];
   source_query?: Record<string, string>;
+  run_id?: string;
 }) {
-  return request<{ id: string; status: string }>(`/recommendations`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return request<{ id: string; status: string }>(
+    `/recommendations`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }
+  );
 }
 
 export function loadRecommendationSnapshot(recId: string) {
@@ -134,5 +152,6 @@ export function loadRecommendationSnapshot(recId: string) {
     final: any;
     diff: any[];
     source_query?: Record<string, string>;
+    run_id?: string;
   }>(`/recommendations/${recId}`);
 }

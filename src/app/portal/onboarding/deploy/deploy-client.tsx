@@ -9,16 +9,16 @@ import {
   createRun,
   executeRun,
   loadRecommendationSnapshot,
-  saveRecommendationSnapshot, // ✅ MISSING IMPORT (FIX)
+  saveRecommendationSnapshot,
 } from "@/lib/api";
 
-type RecommendationSnapshot = {
+type Snapshot = {
   id: string;
   created_at: string;
-  ai: Record<string, any>;
-  final: Record<string, any>;
+  ai: any;
+  final: any;
   diff: any[];
-  source_query?: Record<string, any>;
+  source_query?: Record<string, string>;
 };
 
 export default function DeployClient() {
@@ -26,7 +26,7 @@ export default function DeployClient() {
   const params = useSearchParams();
   const recId = params.get("rec");
 
-  const [snapshot, setSnapshot] = useState<RecommendationSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,45 +39,37 @@ export default function DeployClient() {
         return;
       }
 
-      // 1️⃣ sessionStorage first
+      // 1️⃣ Session storage
       const raw = sessionStorage.getItem(`zordrax:rec:${recId}`);
       if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (!alive) return;
-          setSnapshot(parsed);
-          return;
-        } catch {
-          // fallback to backend
-        }
+        const parsed: Snapshot = JSON.parse(raw);
+        if (alive) setSnapshot(parsed);
+        return;
       }
 
-      // 2️⃣ backend fallback
-      try {
-        const rec = await loadRecommendationSnapshot(recId);
-        if (!alive) return;
+      // 2️⃣ Backend fallback
+      const rec = await loadRecommendationSnapshot(recId);
+      const rebuilt: Snapshot = {
+        id: rec.id,
+        created_at: rec.created_at,
+        ai: rec.ai,
+        final: rec.final,
+        diff: rec.diff,
+        source_query: rec.source_query,
+      };
 
-        const rebuilt: RecommendationSnapshot = {
-          id: rec.id,
-          created_at: rec.created_at,
-          ai: rec.ai,
-          final: rec.final,
-          diff: rec.diff,
-          source_query: rec.source_query,
-        };
+      sessionStorage.setItem(
+        `zordrax:rec:${recId}`,
+        JSON.stringify(rebuilt)
+      );
 
-        setSnapshot(rebuilt);
-        sessionStorage.setItem(
-          `zordrax:rec:${recId}`,
-          JSON.stringify(rebuilt)
-        );
-      } catch (e: any) {
-        if (!alive) return;
-        setError(e?.message || "Recommendation snapshot not found.");
-      }
+      if (alive) setSnapshot(rebuilt);
     }
 
-    load();
+    load().catch((e) => {
+      if (alive) setError(e.message || "Failed to load snapshot");
+    });
+
     return () => {
       alive = false;
     };
@@ -90,25 +82,24 @@ export default function DeployClient() {
     setError(null);
 
     try {
-      // 1️⃣ create run
-      const res = await createRun("manual", "Onboarding Deployment");
+      const { run_id } = await createRun(
+        "manual",
+        "Onboarding Deployment"
+      );
 
-      // 2️⃣ 🔗 attach run_id to recommendation snapshot
       await saveRecommendationSnapshot({
         id: snapshot.id,
         ai: snapshot.ai,
         final: snapshot.final,
         diff: snapshot.diff,
         source_query: snapshot.source_query,
-        run_id: res.run_id,
+        run_id,
       });
 
-      // 3️⃣ execute infra
-      await executeRun(res.run_id);
-
-      router.push(`/portal/status?run=${res.run_id}`);
+      await executeRun(run_id);
+      router.push(`/portal/status?run=${run_id}`);
     } catch (e: any) {
-      setError(e?.message || "Failed to start deployment");
+      setError(e.message || "Failed to start deployment");
       setCreating(false);
     }
   }

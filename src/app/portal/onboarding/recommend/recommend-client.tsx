@@ -8,6 +8,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import {
   recommendStack,
   saveRecommendationSnapshot,
+  type RecommendMode,
 } from "@/lib/api";
 
 /* =========================
@@ -50,10 +51,11 @@ const FIELDS: Array<{ key: keyof Recommendation; label: string }> = [
    Helpers
 ========================= */
 
-function computeDiff(
-  ai: Recommendation,
-  final: Recommendation
-): DiffItem[] {
+function normalizeMode(v: string | null | undefined): RecommendMode {
+  return v === "ai" ? "ai" : "manual";
+}
+
+function computeDiff(ai: Recommendation, final: Recommendation): DiffItem[] {
   return FIELDS.map(({ key, label }) => ({
     key,
     label,
@@ -63,19 +65,18 @@ function computeDiff(
   }));
 }
 
+function defaultRegion(cloud: string) {
+  return cloud === "azure" ? "uksouth" : cloud === "aws" ? "eu-west-2" : "europe-west2";
+}
+
 function fallbackFromQuery(params: URLSearchParams): Recommendation {
   const cloud = params.get("cloud") ?? "azure";
-  const region =
-    cloud === "azure"
-      ? "uksouth"
-      : cloud === "aws"
-      ? "eu-west-2"
-      : "europe-west2";
+  const mode = normalizeMode(params.get("mode"));
 
   return {
     cloud,
-    region,
-    env: params.get("mode") === "ai" ? "prod" : "dev",
+    region: defaultRegion(cloud),
+    env: mode === "ai" ? "prod" : "dev",
     warehouse: "Databricks",
     etl: "dbt",
     bi: cloud === "azure" ? "Power BI" : "Looker",
@@ -91,18 +92,14 @@ export default function RecommendClient() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const mode = params.get("mode") ?? "manual";
+  const mode: RecommendMode = normalizeMode(params.get("mode"));
   const industry = params.get("industry") ?? "general";
   const scale = params.get("scale") ?? "small";
   const cloud = params.get("cloud") ?? "azure";
 
   const [loading, setLoading] = useState(true);
-  const [ai, setAi] = useState<Recommendation>(() =>
-    fallbackFromQuery(params)
-  );
-  const [draft, setDraft] = useState<Recommendation>(() =>
-    fallbackFromQuery(params)
-  );
+  const [ai, setAi] = useState<Recommendation>(() => fallbackFromQuery(params));
+  const [draft, setDraft] = useState<Recommendation>(() => fallbackFromQuery(params));
   const [error, setError] = useState<string | null>(null);
 
   /* =========================
@@ -126,24 +123,12 @@ export default function RecommendClient() {
 
         const normalized: Recommendation = {
           cloud: rec?.cloud ?? cloud,
-          region:
-            rec?.region ??
-            (cloud === "azure"
-              ? "uksouth"
-              : cloud === "aws"
-              ? "eu-west-2"
-              : "europe-west2"),
+          region: rec?.region ?? defaultRegion(rec?.cloud ?? cloud),
           env: rec?.env ?? (mode === "ai" ? "prod" : "dev"),
-          warehouse:
-            rec?.warehouse ??
-            rec?.data_warehouse ??
-            "Databricks",
+          warehouse: rec?.warehouse ?? rec?.data_warehouse ?? "Databricks",
           etl: rec?.etl ?? rec?.transformation ?? "dbt",
-          bi:
-            rec?.bi ??
-            rec?.reporting ??
-            (cloud === "azure" ? "Power BI" : "Looker"),
-          governance: rec?.governance ?? "Purview",
+          bi: rec?.bi ?? rec?.reporting ?? (cloud === "azure" ? "Power BI" : "Looker"),
+          governance: rec?.governance ?? (cloud === "azure" ? "Purview" : "OpenMetadata"),
         };
 
         if (!alive) return;
@@ -152,6 +137,7 @@ export default function RecommendClient() {
       } catch (e: any) {
         if (!alive) return;
         setError(e?.message || "Failed to generate recommendation");
+
         const fb = fallbackFromQuery(params);
         setAi(fb);
         setDraft(fb);
@@ -174,10 +160,7 @@ export default function RecommendClient() {
   const diff = useMemo(() => computeDiff(ai, draft), [ai, draft]);
   const changedCount = diff.filter((d) => d.changed).length;
 
-  function setField<K extends keyof Recommendation>(
-    key: K,
-    value: string
-  ) {
+  function setField<K extends keyof Recommendation>(key: K, value: string) {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
 
@@ -201,13 +184,8 @@ export default function RecommendClient() {
       source_query: Object.fromEntries(params.entries()),
     };
 
-    // Local continuity
-    sessionStorage.setItem(
-      `zordrax:rec:${id}`,
-      JSON.stringify(snapshot)
-    );
+    sessionStorage.setItem(`zordrax:rec:${id}`, JSON.stringify(snapshot));
 
-    // Backend persistence (audit-safe)
     try {
       await saveRecommendationSnapshot({
         id,
@@ -232,9 +210,7 @@ export default function RecommendClient() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Recommendation Review</h1>
-          <p className="text-sm text-slate-400">
-            AI recommendation with live diff & audit snapshot.
-          </p>
+          <p className="text-sm text-slate-400">AI recommendation with live diff & audit snapshot.</p>
         </div>
 
         <div className="flex gap-2">
@@ -242,13 +218,9 @@ export default function RecommendClient() {
             variant="outline"
             onClick={() =>
               router.push(
-                `/portal/onboarding/questions?mode=${encodeURIComponent(
-                  mode
-                )}&industry=${encodeURIComponent(
+                `/portal/onboarding/questions?mode=${encodeURIComponent(mode)}&industry=${encodeURIComponent(
                   industry
-                )}&scale=${encodeURIComponent(
-                  scale
-                )}&cloud=${encodeURIComponent(cloud)}`
+                )}&scale=${encodeURIComponent(scale)}&cloud=${encodeURIComponent(cloud)}`
               )
             }
           >
@@ -278,14 +250,10 @@ export default function RecommendClient() {
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Final */}
         <Card className="space-y-3">
           <h2 className="text-sm font-semibold">Final (Editable)</h2>
           {FIELDS.map(({ key, label }) => (
-            <div
-              key={key}
-              className="grid grid-cols-3 gap-3 items-center"
-            >
+            <div key={key} className="grid grid-cols-3 gap-3 items-center">
               <div className="text-xs text-slate-400">{label}</div>
               <input
                 value={draft[key]}
@@ -296,36 +264,23 @@ export default function RecommendClient() {
           ))}
         </Card>
 
-        {/* Diff */}
         <Card className="space-y-3">
-          <h2 className="text-sm font-semibold">
-            Diff (AI → Final) · {changedCount} change(s)
-          </h2>
+          <h2 className="text-sm font-semibold">Diff (AI → Final) · {changedCount} change(s)</h2>
+
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-slate-400 border-b border-slate-800">
-                <th className="py-2">Field</th>
-                <th>AI</th>
-                <th>Final</th>
+                <th className="py-2 text-left">Field</th>
+                <th className="text-left">AI</th>
+                <th className="text-left">Final</th>
               </tr>
             </thead>
             <tbody>
               {diff.map((d) => (
-                <tr
-                  key={d.key}
-                  className="border-b border-slate-900"
-                >
+                <tr key={d.key} className="border-b border-slate-900">
                   <td className="py-2">{d.label}</td>
-                  <td className="font-mono text-xs text-slate-400">
-                    {d.before}
-                  </td>
-                  <td
-                    className={`font-mono text-xs ${
-                      d.changed
-                        ? "text-amber-300"
-                        : "text-emerald-300"
-                    }`}
-                  >
+                  <td className="font-mono text-xs text-slate-400">{d.before}</td>
+                  <td className={`font-mono text-xs ${d.changed ? "text-amber-300" : "text-emerald-300"}`}>
                     {d.after}
                   </td>
                 </tr>
