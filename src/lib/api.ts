@@ -35,6 +35,25 @@ async function request<T>(
    TYPES
 ========================= */
 
+export type RecommendMode = "manual" | "ai";
+
+export type RecommendRequest = {
+  mode: RecommendMode;
+  industry: string;
+  scale: string;
+  cloud: string;
+};
+
+export type RecommendResponse = {
+  cloud: string;
+  region: string;
+  env: string;
+  warehouse: string;
+  etl: string;
+  bi: string;
+  governance: string;
+};
+
 export type RunRow = {
   run_id: string;
   mode: string;
@@ -54,23 +73,6 @@ export type RunEvent = {
   message: string;
   created_at: string;
   data?: any;
-};
-
-export type RecommendRequest = {
-  mode: "manual" | "ai";
-  industry: string;
-  scale: string;
-  cloud: string;
-};
-
-export type RecommendResponse = {
-  cloud: string;
-  region: string;
-  env: string;
-  warehouse: string;
-  etl: string;
-  bi: string;
-  governance: string;
 };
 
 /* =========================
