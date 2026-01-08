@@ -54,6 +54,23 @@ export type RecommendResponse = {
   governance: string;
 };
 
+/* ---------- Terraform Manifest ---------- */
+
+export type TerraformOutputValue = {
+  value: any;
+  sensitive?: boolean;
+};
+
+export type TerraformOutputs = {
+  [key: string]: TerraformOutputValue;
+};
+
+export type RunManifest = {
+  outputs?: TerraformOutputs;
+};
+
+/* ---------- Run Models ---------- */
+
 export type RunRow = {
   run_id: string;
   mode: string;
@@ -62,6 +79,7 @@ export type RunRow = {
   stage: string;
   created_at: string;
   cancel_requested?: boolean;
+  manifest?: RunManifest; // ✅ FIXED — REQUIRED BY UI
 };
 
 export type RunEvent = {

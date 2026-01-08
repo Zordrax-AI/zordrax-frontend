@@ -8,6 +8,7 @@ import {
   cancelRun,
   RunEvent,
   RunRow,
+  TerraformOutputs as TerraformOutputsType,
 } from "@/lib/api";
 
 export default function StatusClient() {
@@ -26,7 +27,7 @@ export default function StatusClient() {
     const timer = setInterval(async () => {
       const ev = await getRunEvents(runId, lastId);
       if (ev.length) {
-        setEvents(prev => [...prev, ...ev]);
+        setEvents((prev) => [...prev, ...ev]);
         setLastId(ev[ev.length - 1].event_id);
       }
     }, 2000);
@@ -81,7 +82,7 @@ export default function StatusClient() {
 
       {/* LOGS */}
       <div className="rounded-lg border border-slate-800 bg-black p-4 font-mono text-xs space-y-1 max-h-[400px] overflow-auto">
-        {events.map(e => (
+        {events.map((e) => (
           <div key={e.event_id}>
             [{e.stage}] {e.message}
           </div>
@@ -97,16 +98,26 @@ export default function StatusClient() {
   );
 }
 
-function TerraformOutputs({ outputs }: { outputs: any }) {
+/* =========================
+   Terraform Outputs
+========================= */
+
+function TerraformOutputs({
+  outputs,
+}: {
+  outputs: TerraformOutputsType;
+}) {
   return (
     <div className="rounded-lg border border-slate-800 p-4">
       <h2 className="mb-3 text-sm font-semibold">Terraform Outputs</h2>
 
       <table className="w-full text-sm">
         <tbody>
-          {Object.entries(outputs).map(([k, v]: any) => (
-            <tr key={k} className="border-t border-slate-800">
-              <td className="py-2 font-mono text-cyan-300">{k}</td>
+          {Object.entries(outputs).map(([key, v]) => (
+            <tr key={key} className="border-t border-slate-800">
+              <td className="py-2 font-mono text-cyan-300">
+                {key}
+              </td>
               <td className="py-2 font-mono text-slate-300 break-all">
                 {typeof v.value === "string"
                   ? v.value
