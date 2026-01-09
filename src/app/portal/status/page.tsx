@@ -1,19 +1,11 @@
-export const dynamic = "force-dynamic";
-
-import { Suspense } from "react";
-import { Spinner } from "@/components/ui/Spinner";
 import StatusClient from "./status-client";
+
+export const dynamic = "force-dynamic";
 
 export default function StatusPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="p-6 flex items-center gap-2">
-          <Spinner /> Loading run status…
-        </div>
-      }
-    >
+    <div className="max-w-6xl mx-auto px-6 py-8">
       <StatusClient />
-    </Suspense>
+    </div>
   );
 }
