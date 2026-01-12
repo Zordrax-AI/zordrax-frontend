@@ -1,65 +1,54 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import { listRuns, RunRow } from "@/lib/api";
-import { Card } from "@/components/ui/Card";
-import { Spinner } from "@/components/ui/Spinner";
-import { Badge } from "@/components/ui/Badge";
+import { useEffect, useState } from "react";
+import { listRuns, type RunRow } from "@/lib/api";
 
-function statusTone(status: string) {
-  const s = status?.toLowerCase();
-  if (s === "completed") return "success";
-  if (s === "failed") return "error";
-  if (s === "running") return "warning";
-  return "default";
-}
+import { RunStatusBadge } from "@/components/runs/RunStatusBadge";
+import { CancelRunButton } from "@/components/runs/CancelRunButton";
 
 export default function RunsList() {
   const [runs, setRuns] = useState<RunRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const data = await listRuns();
-    setRuns(data);
-    setLoading(false);
-  }, []);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    listRuns().then(setRuns);
+  }, []);
 
   return (
-    <Card>
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Recent Runs</h2>
-        {loading && <Spinner />}
-      </div>
+    <div className="overflow-hidden rounded-lg border border-slate-800">
+      <table className="w-full text-sm">
+        <thead className="bg-slate-900 text-slate-400">
+          <tr>
+            <th className="px-4 py-3 text-left">Title</th>
+            <th>Status</th>
+            <th>Stage</th>
+            <th>Created</th>
+            <th />
+          </tr>
+        </thead>
 
-      <table className="mt-4 w-full text-sm">
         <tbody>
           {runs.map((r) => (
-            <tr key={r.run_id} className="border-t border-slate-800">
-              <td className="py-2">
-                <div className="font-medium">{r.title}</div>
-                <div className="text-xs text-slate-500">{r.run_id}</div>
-              </td>
+            <tr
+              key={r.run_id}
+              className="border-t border-slate-800 hover:bg-slate-900/50"
+            >
+              <td className="px-4 py-3">{r.title}</td>
               <td>
-                <Badge tone={statusTone(r.status)}>{r.status}</Badge>
+                <RunStatusBadge status={r.status} />
               </td>
-              <td>
-                <Link
-                  href={`/portal/status?run=${r.run_id}`}
-                  className="text-xs underline"
-                >
-                  View
-                </Link>
+              <td>{r.stage}</td>
+              <td className="text-xs text-slate-400">
+                {r.created_at
+                  ? new Date(r.created_at).toLocaleString()
+                  : "—"}
+              </td>
+              <td className="px-4">
+                <CancelRunButton runId={r.run_id} />
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </Card>
+    </div>
   );
 }

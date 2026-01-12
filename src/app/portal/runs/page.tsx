@@ -2,12 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { listRuns, RunRow } from "@/lib/api";
+
+import { listRuns, type RunRow } from "@/lib/api";
+
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { Badge } from "@/components/ui/Badge";
 
-function fmt(ts: string) {
+/* =========================================================
+   Helpers
+========================================================= */
+
+function fmt(ts?: string) {
+  if (!ts) return "—";
   try {
     return new Date(ts).toLocaleString();
   } catch {
@@ -23,8 +30,13 @@ function tone(status: string) {
   return "default";
 }
 
+/* =========================================================
+   Page
+========================================================= */
+
 export default function RunsPage() {
   const router = useRouter();
+
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -49,9 +61,9 @@ export default function RunsPage() {
   const stats = useMemo(() => {
     return {
       total: runs.length,
-      running: runs.filter(r => r.status === "running").length,
-      completed: runs.filter(r => r.status === "completed").length,
-      failed: runs.filter(r => r.status === "failed").length,
+      running: runs.filter((r) => r.status === "running").length,
+      completed: runs.filter((r) => r.status === "completed").length,
+      failed: runs.filter((r) => r.status === "failed").length,
     };
   }, [runs]);
 
@@ -112,7 +124,7 @@ export default function RunsPage() {
                 </tr>
               )}
 
-              {runs.map(r => (
+              {runs.map((r) => (
                 <tr
                   key={r.run_id}
                   onClick={() =>
@@ -121,14 +133,14 @@ export default function RunsPage() {
                   className="cursor-pointer border-b border-slate-900 hover:bg-slate-900/40"
                 >
                   <td className="py-3">
-                    <div className="font-medium">{r.title}</div>
+                    <div className="font-medium">{r.title ?? "Run"}</div>
                     <div className="text-xs text-slate-500">{r.run_id}</div>
                   </td>
-                  <td>{r.mode}</td>
+                  <td>{r.mode ?? "—"}</td>
                   <td>
                     <Badge tone={tone(r.status)}>{r.status}</Badge>
                   </td>
-                  <td>{r.stage}</td>
+                  <td>{r.stage ?? "—"}</td>
                   <td className="text-xs text-slate-400">
                     {fmt(r.created_at)}
                   </td>
@@ -141,6 +153,10 @@ export default function RunsPage() {
     </div>
   );
 }
+
+/* =========================================================
+   Components
+========================================================= */
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (

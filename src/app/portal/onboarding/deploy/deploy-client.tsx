@@ -1,22 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 
-import { deployStack } from "@/lib/api";
-
-type Recommendation = {
-  cloud: string;
-  region?: string;
-  env?: string;
-  warehouse: string;
-  etl: string;
-  bi: string;
-  governance: string;
-};
+import { deployPlan } from "@/lib/api";
 
 export default function DeployClient() {
   const router = useRouter();
@@ -27,10 +17,6 @@ export default function DeployClient() {
   const [error, setError] = useState<string | null>(null);
   const [deploying, setDeploying] = useState(false);
 
-  // 🚨 IMPORTANT:
-  // We are NOT Zod-parsing anything here.
-  // Deploy page assumes recommendation already exists.
-  // Validation belongs on the backend.
   async function handleDeploy() {
     if (!recId) {
       setError("Missing recommendation id");
@@ -41,30 +27,32 @@ export default function DeployClient() {
     setDeploying(true);
 
     try {
-      const res = await deployStack({
+      // SSOT-compliant deploy plan
+      const res = await deployPlan({
         recommendation_id: recId,
       });
 
-      router.push(`/portal/onboarding/status?run=${res.run_id}`);
+      // Move to approval / status screen
+      router.push(`/portal/status?run=${res.run_id}`);
     } catch (e: any) {
-      setError(e.message ?? "Deploy failed");
+      setError(e?.message ?? "Deploy failed");
     } finally {
       setDeploying(false);
     }
   }
 
   return (
-    <Card>
-      <h2 className="text-xl font-semibold mb-2">Deploy Stack</h2>
+    <Card className="space-y-4">
+      <h2 className="text-xl font-semibold">Deploy Stack</h2>
 
       {error && (
-        <div className="text-red-500 text-sm mb-2">
+        <div className="text-sm text-red-500">
           {error}
         </div>
       )}
 
       <Button onClick={handleDeploy} disabled={deploying}>
-        {deploying ? "Deploying..." : "Deploy"}
+        {deploying ? "Planning…" : "Generate Terraform Plan"}
       </Button>
     </Card>
   );

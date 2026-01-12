@@ -1,11 +1,19 @@
-// C:\Users\Zordr\Desktop\frontend-repo\src\app\portal\onboarding\questions\questions-client.tsx
 "use client";
 
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import type { RecommendMode } from "@/lib/api";
+
+import type { RecommendRequest } from "@/lib/api";
+
+/* =========================================================
+   SSOT-derived types
+========================================================= */
+
+// Derive mode directly from backend contract
+type RecommendMode = RecommendRequest["mode"];
 
 type Errors = { industry?: string };
 
@@ -18,8 +26,12 @@ export default function QuestionsClient() {
   );
 
   const [industry, setIndustry] = useState(params.get("industry") ?? "");
-  const [scale, setScale] = useState(params.get("scale") ?? "small");
-  const [cloud, setCloud] = useState(params.get("cloud") ?? "azure");
+  const [scale, setScale] = useState<RecommendRequest["scale"]>(
+    (params.get("scale") as RecommendRequest["scale"]) ?? "small"
+  );
+  const [cloud, setCloud] = useState<RecommendRequest["cloud"]>(
+    (params.get("cloud") as RecommendRequest["cloud"]) ?? "azure"
+  );
 
   const [touched, setTouched] = useState(false);
 
@@ -89,7 +101,9 @@ export default function QuestionsClient() {
         <Field label="Data Scale">
           <select
             value={scale}
-            onChange={(e) => setScale(e.target.value)}
+            onChange={(e) =>
+              setScale(e.target.value as RecommendRequest["scale"])
+            }
             className="w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-cyan-400"
           >
             <option value="small">Small</option>
@@ -101,7 +115,9 @@ export default function QuestionsClient() {
         <Field label="Preferred Cloud">
           <select
             value={cloud}
-            onChange={(e) => setCloud(e.target.value)}
+            onChange={(e) =>
+              setCloud(e.target.value as RecommendRequest["cloud"])
+            }
             className="w-full rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm outline-none focus:border-cyan-400"
           >
             <option value="azure">Azure</option>

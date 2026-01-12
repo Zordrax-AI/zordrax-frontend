@@ -1,8 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listRuns, RunRow } from "@/lib/api";
+
+import { listRuns, type RunRow } from "@/lib/api";
 import RunRowActions from "./RunRowActions";
+
+/* =========================================================
+   Helpers
+========================================================= */
+
+function fmt(ts?: string) {
+  if (!ts) return "—";
+  try {
+    return new Date(ts).toLocaleString();
+  } catch {
+    return ts;
+  }
+}
+
+/* =========================================================
+   Component
+========================================================= */
 
 export default function RunTable() {
   const [runs, setRuns] = useState<RunRow[]>([]);
@@ -30,11 +48,13 @@ export default function RunTable() {
               key={run.run_id}
               className="border-t border-slate-800 hover:bg-slate-900/50"
             >
-              <td className="px-4 py-3">{run.title}</td>
+              <td className="px-4 py-3">
+                {run.title ?? "Run"}
+              </td>
               <td>{run.status}</td>
-              <td>{run.stage}</td>
+              <td>{run.stage ?? "—"}</td>
               <td className="text-xs text-slate-400">
-                {new Date(run.created_at).toLocaleString()}
+                {fmt(run.created_at)}
               </td>
               <td className="px-4">
                 <RunRowActions run={run} />

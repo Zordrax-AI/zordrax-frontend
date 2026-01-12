@@ -2,24 +2,38 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+
 import {
   getRun,
   getRunEvents,
   cancelRun,
   type RunEvent,
   type RunRow,
-  type TerraformOutputs,
-  type TerraformOutputValue,
 } from "@/lib/api";
 
-/* =========================
-   Typed Object.entries helper
-========================= */
+/* =========================================================
+   Runtime Terraform output types (INTENTIONALLY LOCAL)
+========================================================= */
+
+type TerraformOutputValue = {
+  value: unknown;
+};
+
+type TerraformOutputs = Record<string, TerraformOutputValue>;
+
+/* =========================================================
+   Helpers
+========================================================= */
+
 function typedEntries(
   outputs: TerraformOutputs
 ): [string, TerraformOutputValue][] {
-  return Object.entries(outputs) as [string, TerraformOutputValue][];
+  return Object.entries(outputs);
 }
+
+/* =========================================================
+   Component
+========================================================= */
 
 export default function StatusClient() {
   const params = useSearchParams();
@@ -53,18 +67,28 @@ export default function StatusClient() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Run Status</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Run Status</h1>
+
+        <button
+          onClick={handleCancel}
+          className="rounded-md border border-red-800 px-3 py-2 text-xs text-red-300 hover:bg-red-900/30"
+        >
+          Cancel Run
+        </button>
+      </div>
 
       {run?.manifest?.outputs && (
-        <TerraformOutputsTable outputs={run.manifest.outputs} />
+        <TerraformOutputsTable outputs={run.manifest.outputs as TerraformOutputs} />
       )}
     </div>
   );
 }
 
-/* =========================
+/* =========================================================
    Terraform Outputs Renderer
-========================= */
+========================================================= */
+
 function TerraformOutputsTable({
   outputs,
 }: {
@@ -81,7 +105,9 @@ function TerraformOutputsTable({
 
             return (
               <tr key={key} className="border-t border-slate-800">
-                <td className="py-2 font-mono text-cyan-300">{key}</td>
+                <td className="py-2 font-mono text-cyan-300">
+                  {key}
+                </td>
                 <td className="py-2 font-mono text-slate-300 break-all">
                   {typeof value === "string"
                     ? value
