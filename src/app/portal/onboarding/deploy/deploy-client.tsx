@@ -1,103 +1,108 @@
 "use client";
 
 import { useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
-
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
 
-import { deployPlan, deployApprove } from "@/lib/api";
+import {
+  deployPlan,
+  deployApprove,
+  type DeployPlanResponse,
+} from "@/lib/api";
 
-export default function DeployClient() {
-  const router = useRouter();
-  const params = useSearchParams();
-  const recId = params.get("rec");
-
-  const [error, setError] = useState<string | null>(null);
-  const [planning, setPlanning] = useState(false);
-  const [approving, setApproving] = useState(false);
-
+export default function DeployClient({
+  recommendationId,
+}: {
+  recommendationId: string;
+}) {
   const [runId, setRunId] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
-  const [planSummary, setPlanSummary] = useState<any>(null);
+  const [planSummary, setPlanSummary] = useState<Record<string, unknown> | null>(
+    null
+  );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /* =========================================================
+     PLAN (SAFE)
+     ========================================================= */
 
   async function handlePlan() {
-    if (!recId) {
-      setError("Missing recommendation id");
-      return;
-    }
-
+    setLoading(true);
     setError(null);
-    setPlanning(true);
 
     try {
-      const res = await deployPlan({ recommendation_id: recId });
+      // ✅ CORRECT: pass object matching DeployPlanRequest
+      const res: DeployPlanResponse = await deployPlan({
+        recommendation_id: recommendationId,
+      });
+
       setRunId(res.run_id);
       setWarnings(res.policy_warnings ?? []);
       setPlanSummary(res.plan_summary);
-
-      // stay on page for approval
-    } catch (e: any) {
-      setError(e.message ?? "Plan failed");
+    } catch (err: any) {
+      setError(err.message ?? "Failed to generate plan");
     } finally {
-      setPlanning(false);
+      setLoading(false);
     }
   }
+
+  /* =========================================================
+     APPROVE (APPLY)
+     ========================================================= */
 
   async function handleApprove() {
     if (!runId) return;
 
+    setLoading(true);
     setError(null);
-    setApproving(true);
 
     try {
-      const res = await deployApprove(runId);
-      router.push(`/portal/status?run=${res.run_id}`);
-    } catch (e: any) {
-      setError(e.message ?? "Approve/apply failed");
+      await deployApprove(runId);
+    } catch (err: any) {
+      setError(err.message ?? "Failed to apply infrastructure");
     } finally {
-      setApproving(false);
+      setLoading(false);
     }
   }
 
+  /* =========================================================
+     RENDER
+     ========================================================= */
+
   return (
-    <Card className="space-y-4">
-      <h2 className="text-xl font-semibold">Deploy Stack</h2>
+    <div className="space-y-4">
+      <Button onClick={handlePlan} disabled={loading}>
+        Generate Terraform Plan
+      </Button>
 
-      {error && <div className="text-red-500 text-sm">{error}</div>}
-
-      {!runId ? (
-        <Button onClick={handlePlan} disabled={planning}>
-          {planning ? "Planning..." : "Generate Terraform Plan"}
+      {runId && (
+        <Button onClick={handleApprove} disabled={loading}>
+          Approve & Apply
         </Button>
-      ) : (
-        <div className="space-y-4">
-          <div className="text-sm text-slate-300">
-            Run: <span className="font-mono">{runId}</span>
-          </div>
+      )}
 
-          {warnings.length > 0 && (
-            <div className="rounded-md border border-yellow-800 bg-yellow-950/40 p-3 text-sm text-yellow-200">
-              <div className="font-semibold mb-1">Policy Warnings</div>
-              <ul className="list-disc pl-5 space-y-1">
-                {warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {planSummary && (
-            <pre className="rounded-md border border-slate-800 bg-slate-950 p-3 text-xs overflow-x-auto">
-              {JSON.stringify(planSummary, null, 2)}
-            </pre>
-          )}
-
-          <Button onClick={handleApprove} disabled={approving}>
-            {approving ? "Applying..." : "Approve & Apply"}
-          </Button>
+      {warnings.length > 0 && (
+        <div className="rounded border border-yellow-400 p-3">
+          <h3 className="font-semibold text-yellow-700">Policy Warnings</h3>
+          <ul className="list-disc pl-5">
+            {warnings.map((w, i) => (
+              <li key={i}>{w}</li>
+            ))}
+          </ul>
         </div>
       )}
-    </Card>
+
+      {planSummary && (
+        <pre className="rounded bg-gray-100 p-3 text-sm overflow-auto">
+          {JSON.stringify(planSummary, null, 2)}
+        </pre>
+      )}
+
+      {error && (
+        <div className="rounded border border-red-500 p-3 text-red-600">
+          {error}
+        </div>
+      )}
+    </div>
   );
 }

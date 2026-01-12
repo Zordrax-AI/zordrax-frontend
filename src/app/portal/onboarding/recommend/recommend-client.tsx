@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -9,19 +9,20 @@ import { Button } from "@/components/ui/Button";
 import {
   recommendStack,
   saveRecommendationSnapshot,
-  type ArchitectureRecommendation,
   type RecommendRequest,
+  type ArchitectureRecommendation,
   type RecommendationSnapshotCreate,
 } from "@/lib/api";
 
 export default function RecommendClient() {
   const router = useRouter();
+  const params = useSearchParams();
 
   const [form, setForm] = useState<RecommendRequest>({
-    mode: "ai",
-    industry: "",
-    scale: "small",
-    cloud: "azure",
+    mode: (params.get("mode") as "manual" | "ai") ?? "ai",
+    industry: params.get("industry") ?? "",
+    scale: (params.get("scale") as any) ?? "small",
+    cloud: (params.get("cloud") as any) ?? "azure",
   });
 
   const [loading, setLoading] = useState(false);
@@ -32,24 +33,23 @@ export default function RecommendClient() {
     setError(null);
 
     try {
-      // 1️⃣ Get AI recommendation (strict SSOT output)
+      // 1️⃣ Get recommendation (typed, UI model)
       const rec: ArchitectureRecommendation = await recommendStack(form);
 
-      // 2️⃣ Persist snapshot as OPAQUE JSON (backend-defined)
+      // 2️⃣ Convert to OPAQUE JSON for SSOT persistence
+      const opaque = rec as unknown as Record<string, never>;
+
       const snapshot: RecommendationSnapshotCreate = {
-        final: rec as unknown as Record<string, never>,
-        ai:
-          rec.source === "ai"
-            ? (rec as unknown as Record<string, never>)
-            : null,
+        final: opaque,
+        ai: rec.source === "ai" ? opaque : null,
         diff: [],
         source_query: form as unknown as Record<string, never>,
       };
 
-      // 3️⃣ Persist snapshot
+      // 3️⃣ Persist immutable snapshot
       const saved = await saveRecommendationSnapshot(snapshot);
 
-      // 4️⃣ Move forward with snapshot id
+      // 4️⃣ Move to deploy step
       router.push(`/portal/onboarding/deploy?rec=${saved.id}`);
     } catch (e: any) {
       setError(e?.message ?? "Failed to generate recommendation");
@@ -80,7 +80,7 @@ export default function RecommendClient() {
       </div>
 
       <Button onClick={handleRecommend} disabled={loading}>
-        {loading ? "Thinking…" : "Generate Recommendation"}
+        {loading ? "Thinking..." : "Generate Recommendation"}
       </Button>
     </Card>
   );

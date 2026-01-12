@@ -52,7 +52,8 @@ export default function StatusClient() {
       const ev = await getRunEvents(runId, lastId);
       if (ev.length) {
         setEvents((prev) => [...prev, ...ev]);
-        setLastId(ev[ev.length - 1].event_id);
+        setLastId(ev[ev.length - 1].id);
+
       }
     }, 2000);
 

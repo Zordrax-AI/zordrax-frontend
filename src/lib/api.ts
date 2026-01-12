@@ -1,84 +1,194 @@
 // src/lib/api.ts
-import type { components } from "@/generated/api";
 
-const RAW_BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+/* =========================================================
+   Base config
+========================================================= */
 
-export const BASE =
-  RAW_BASE && RAW_BASE.trim().length > 0
-    ? RAW_BASE.trim().replace(/\/$/, "")
-    : "http://localhost:8000";
+const BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+
+if (!BASE) {
+  console.warn("NEXT_PUBLIC_ONBOARDING_API_URL is not set");
+}
 
 function url(path: string) {
-  if (!path.startsWith("/")) path = `/${path}`;
   return `${BASE}${path}`;
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  path: string,
+  options: RequestInit = {}
+): Promise<T> {
   const res = await fetch(url(path), {
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
-    cache: "no-store",
   });
 
-  if (!res.ok) throw new Error(await res.text());
-  return (await res.json()) as T;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || res.statusText);
+  }
+
+  return res.json();
 }
 
-/* =========================
-   TYPES (from SSOT)
-========================= */
+/* =========================================================
+   Core Run Types (BACKEND-ALIGNED)
+========================================================= */
 
-export type RecommendRequest = components["schemas"]["RecommendRequest"];
-export type ArchitectureRecommendation = components["schemas"]["ArchitectureRecommendation"];
+export interface RunRow {
+  run_id: string;
+  title: string;
+  mode: "ai" | "manual";
+  status: string;
+  stage: string;
+  created_at: string;
+  updated_at: string;
 
-export type RecommendationSnapshotCreate =
-  components["schemas"]["RecommendationSnapshotCreate"];
-export type RecommendationSnapshotSaved =
-  components["schemas"]["RecommendationSnapshotSaved"];
+  /** Optional runtime artifacts (Terraform, etc.) */
+  manifest?: {
+    outputs?: Record<
+      string,
+      {
+        value: unknown;
+      }
+    >;
+  };
+}
 
-export type DeployPlanRequest = components["schemas"]["DeployPlanRequest"];
-export type DeployPlanResponse = components["schemas"]["DeployPlanResponse"];
-export type DeployApproveResponse = components["schemas"]["DeployApproveResponse"];
+export interface RunEvent {
+  id: number;
+  run_id: string;
+  level: "info" | "warning" | "error";
+  stage: string;
+  status: string;
+  message: string;
+  created_at: string;
+}
 
-// convenience aliases
-export type RecommendMode = RecommendRequest["mode"];
+/* =========================================================
+   Runs API
+========================================================= */
 
-/* =========================
-   API CALLS (SSOT)
-========================= */
+export async function listRuns(limit = 50): Promise<RunRow[]> {
+  return request(`/runs?limit=${limit}`);
+}
 
-export function recommendStack(payload: RecommendRequest) {
-  return request<ArchitectureRecommendation>(`/ai/recommend-stack`, {
+export async function getRun(runId: string): Promise<RunRow> {
+  return request(`/runs/${runId}`);
+}
+
+export async function getRunEvents(
+  runId: string,
+  afterId = 0
+): Promise<RunEvent[]> {
+  return request(`/runs/${runId}/events?after_id=${afterId}`);
+}
+
+export async function cancelRun(runId: string): Promise<void> {
+  await request(`/runs/${runId}/cancel`, {
+    method: "POST",
+  });
+}
+
+/* =========================================================
+   AI Recommendation
+========================================================= */
+
+export interface RecommendRequest {
+  mode: "ai" | "manual";
+  industry: string;
+  scale: "small" | "medium" | "large";
+  cloud: "azure" | "aws" | "gcp";
+}
+
+export interface ArchitectureRecommendation {
+  cloud: string;
+  region: string;
+  env: string;
+  warehouse: string;
+  etl: string;
+  bi: string;
+  governance: string;
+  source: "ai" | "manual";
+  warnings?: string[];
+  reasoning?: string[];
+}
+
+export async function recommendStack(
+  payload: RecommendRequest
+): Promise<ArchitectureRecommendation> {
+  return request("/ai/recommend-stack", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function saveRecommendationSnapshot(payload: RecommendationSnapshotCreate) {
-  return request<RecommendationSnapshotSaved>(`/recommendations`, {
+/* =========================================================
+   Recommendation Snapshots (IMMUTABLE)
+========================================================= */
+
+export interface RecommendationSnapshotCreate {
+  final: Record<string, unknown>;
+  ai?: Record<string, unknown> | null;
+  diff?: unknown[];
+  source_query?: Record<string, unknown> | null;
+  run_id?: string | null;
+}
+
+export interface RecommendationSnapshotSaved {
+  id: string;
+  status: "saved";
+}
+
+export async function saveRecommendationSnapshot(
+  payload: RecommendationSnapshotCreate
+): Promise<RecommendationSnapshotSaved> {
+  return request("/recommendations", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function deployPlan(payload: DeployPlanRequest) {
-  return request<DeployPlanResponse>(`/deploy/plan`, {
+/* =========================================================
+   Deploy (Terraform)
+========================================================= */
+
+export interface DeployPlanRequest {
+  recommendation_id: string;
+}
+
+export interface DeployPlanResponse {
+  run_id: string;
+  status: "awaiting_approval";
+  plan_summary: Record<string, unknown>;
+  policy_warnings: string[];
+}
+
+export async function deployPlan(
+  payload: DeployPlanRequest
+): Promise<DeployPlanResponse> {
+  return request("/deploy/plan", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function deployApprove(runId: string) {
-  return request<DeployApproveResponse>(`/deploy/${runId}/approve`, {
+export async function deployApprove(
+  runId: string
+): Promise<{ run_id: string; status: string }> {
+  return request(`/deploy/${runId}/approve`, {
     method: "POST",
   });
 }
 
-export function deployReject(runId: string, reason?: string) {
-  return request(`/deploy/${runId}/reject`, {
+export async function deployReject(
+  runId: string,
+  reason?: string
+): Promise<void> {
+  await request(`/deploy/${runId}/reject`, {
     method: "POST",
     body: JSON.stringify({ reason }),
   });

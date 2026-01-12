@@ -85,3 +85,46 @@ export interface ArchitectureRecommendation {
   bi: any;
   summary?: string;
 }
+
+
+// =====================================================
+// Runs (SSOT onboarding runs)
+// Backend: /runs, /runs/{id}, /runs/{id}/events
+// =====================================================
+
+export interface RunRow {
+  run_id: string;
+  title: string;
+  mode: "ai" | "manual";
+  status: string;        // pending | running | completed | failed
+  stage: string;         // e.g. plan | apply | finalize
+  created_at: string;    // ISO timestamp
+  updated_at: string;    // ISO timestamp
+  manifest?: {
+    outputs?: TerraformOutputs;
+  } | null;
+}
+
+// -------------------------
+// Run events (append-only log)
+// Backend: /runs/{id}/events
+// -------------------------
+export interface RunEvent {
+  event_id: number;
+  run_id: string;
+  level: "info" | "warning" | "error";
+  stage: string;
+  status: string;
+  message: string;
+  created_at: string;
+}
+
+// -------------------------
+// Terraform outputs (status page)
+// -------------------------
+export type TerraformOutputValue = {
+  value: any;
+  sensitive?: boolean;
+};
+
+export type TerraformOutputs = Record<string, TerraformOutputValue>;
