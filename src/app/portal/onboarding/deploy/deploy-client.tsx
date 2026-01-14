@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/Button";
 import {
   deployPlan,
   deployApprove,
+  deployApply,
   type DeployPlanResponse,
+  type DeployApplyResponse,
 } from "@/lib/api";
 
 export default function DeployClient({
@@ -19,22 +21,29 @@ export default function DeployClient({
   const [planSummary, setPlanSummary] = useState<Record<string, unknown> | null>(
     null
   );
+  const [pipelineRunId, setPipelineRunId] = useState<number | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function idemKey(prefix: string, id?: string | null) {
+    // Deterministic keys = retry safe if user double-clicks
+    return id ? `${prefix}:${id}` : `${prefix}:${recommendationId}`;
+  }
 
   /* =========================================================
      PLAN (SAFE)
      ========================================================= */
-
   async function handlePlan() {
     setLoading(true);
     setError(null);
+    setPipelineRunId(null);
 
     try {
-      // ✅ CORRECT: pass object matching DeployPlanRequest
-      const res: DeployPlanResponse = await deployPlan({
-        recommendation_id: recommendationId,
-      });
+      const res: DeployPlanResponse = await deployPlan(
+        { recommendation_id: recommendationId },
+        idemKey("deploy-plan")
+      );
 
       setRunId(res.run_id);
       setWarnings(res.policy_warnings ?? []);
@@ -47,19 +56,29 @@ export default function DeployClient({
   }
 
   /* =========================================================
-     APPROVE (APPLY)
+     APPROVE + APPLY (TRIGGERS PIPELINE)
      ========================================================= */
-
-  async function handleApprove() {
+  async function handleApproveAndApply() {
     if (!runId) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      await deployApprove(runId);
+      // 1) Approve
+      await deployApprove(runId, idemKey("deploy-approve", runId));
+
+      // 2) Apply (trigger pipeline)
+      const res: DeployApplyResponse = await deployApply(
+        runId,
+        idemKey("deploy-apply", runId)
+      );
+
+      if (res?.pipeline_run_id) {
+        setPipelineRunId(res.pipeline_run_id);
+      }
     } catch (err: any) {
-      setError(err.message ?? "Failed to apply infrastructure");
+      setError(err.message ?? "Failed to approve/apply infrastructure");
     } finally {
       setLoading(false);
     }
@@ -76,9 +95,15 @@ export default function DeployClient({
       </Button>
 
       {runId && (
-        <Button onClick={handleApprove} disabled={loading}>
+        <Button onClick={handleApproveAndApply} disabled={loading}>
           Approve & Apply
         </Button>
+      )}
+
+      {pipelineRunId && (
+        <div className="rounded border border-green-500 p-3 text-green-700">
+          Pipeline triggered. Run ID: <b>{pipelineRunId}</b>
+        </div>
       )}
 
       {warnings.length > 0 && (

@@ -14,21 +14,40 @@ function url(path: string) {
   return `${BASE}${path}`;
 }
 
+/**
+ * Enterprise-safe request helper:
+ * - Adds JSON headers by default
+ * - Supports optional idempotency keys (retry-safe UX)
+ * - Throws server error text for easier debugging
+ */
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  idempotencyKey?: string
 ): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string> | undefined),
+  };
+
+  if (idempotencyKey) {
+    headers["X-Idempotency-Key"] = idempotencyKey;
+  }
+
   const res = await fetch(url(path), {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+    headers,
   });
 
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || res.statusText);
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    // @ts-expect-error allow non-json/no-body responses
+    return undefined;
   }
 
   return res.json();
@@ -168,28 +187,54 @@ export interface DeployPlanResponse {
 }
 
 export async function deployPlan(
-  payload: DeployPlanRequest
+  payload: DeployPlanRequest,
+  idempotencyKey?: string
 ): Promise<DeployPlanResponse> {
-  return request("/deploy/plan", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return request(
+    "/deploy/plan",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    idempotencyKey
+  );
 }
 
 export async function deployApprove(
-  runId: string
+  runId: string,
+  idempotencyKey?: string
 ): Promise<{ run_id: string; status: string }> {
-  return request(`/deploy/${runId}/approve`, {
-    method: "POST",
-  });
+  return request(`/deploy/${runId}/approve`, { method: "POST" }, idempotencyKey);
 }
 
 export async function deployReject(
   runId: string,
-  reason?: string
+  reason?: string,
+  idempotencyKey?: string
 ): Promise<void> {
-  await request(`/deploy/${runId}/reject`, {
-    method: "POST",
-    body: JSON.stringify({ reason }),
-  });
+  await request(
+    `/deploy/${runId}/reject`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    },
+    idempotencyKey
+  );
+}
+
+/**
+ * NEW: Apply endpoint (triggers the Azure DevOps pipeline)
+ * Backend must expose: POST /deploy/{runId}/apply
+ */
+export interface DeployApplyResponse {
+  run_id: string;
+  status: "pipeline_started" | string;
+  pipeline_run_id: number;
+}
+
+export async function deployApply(
+  runId: string,
+  idempotencyKey?: string
+): Promise<DeployApplyResponse> {
+  return request(`/deploy/${runId}/apply`, { method: "POST" }, idempotencyKey);
 }
