@@ -12,13 +12,13 @@ const BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL;
 
 if (!BASE) {
+  // This runs at build time too; don't crash the build.
   console.warn(
     "Missing API base URL. Set NEXT_PUBLIC_AGENT_BASE_URL in .env / Vercel."
   );
 }
 
 function url(path: string) {
-  // Avoid double slashes
   const b = (BASE || "").replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${b}${p}`;
@@ -26,7 +26,7 @@ function url(path: string) {
 
 /**
  * Request helper:
- * - JSON when sending a body (or non-GET)
+ * - JSON by default when sending a body
  * - Optional idempotency keys
  * - Throws server text for debugging
  */
@@ -63,26 +63,30 @@ async function request<T>(
     // @ts-expect-error allow non-json/no-body responses
     return undefined;
   }
+
   return res.json();
 }
 
 /* =========================================================
-   Types (SSOT-friendly / backend-aligned where possible)
+   Types (backend-aligned)
 ========================================================= */
 
 export interface RunRow {
   run_id: string;
-  title: string;
   mode: "ai" | "manual";
+  title: string;
+
   status: string;
   stage: string;
+
+  cancel_requested?: boolean;
+
   created_at: string;
   updated_at: string;
 
-  // pipeline linkage metadata (what you showed in curl output)
   deploy?: {
     status?: string;
-    pipeline_run_id?: string; // ADO build/run number, e.g. "860"
+    pipeline_run_id?: string; // ADO run number as string in your backend payload
     region?: string;
     environment?: string;
   };
@@ -99,7 +103,7 @@ export interface RunEvent {
 }
 
 /* =========================================================
-   Runs API (Agent exposes /api/runs/*)
+   Runs API (Agent: /api/runs/*)
 ========================================================= */
 
 export async function listRuns(limit = 50): Promise<RunRow[]> {
@@ -122,7 +126,7 @@ export async function cancelRun(runId: string): Promise<void> {
 }
 
 /* =========================================================
-   Deploy (Agent exposes /api/deploy/*)
+   Deploy (Agent: /api/deploy/*)
 ========================================================= */
 
 export interface DeployPlanRequest {
@@ -136,7 +140,7 @@ export interface DeployPlanRequest {
 
 export interface DeployPlanResponse {
   run_id: string;
-  status: string;
+  status: string; // awaiting_approval
   plan_summary: Record<string, unknown>;
   policy_warnings: string[];
 }
@@ -206,18 +210,20 @@ export interface DeployRefreshResponse {
   };
 }
 
-export async function deployRefresh(runId: string): Promise<DeployRefreshResponse> {
+export async function deployRefresh(
+  runId: string
+): Promise<DeployRefreshResponse> {
   return request(`/api/deploy/${runId}/refresh`);
 }
 
 /* =========================================================
-   Infra Outputs (Agent exposes /api/infra/outputs/{run_id})
+   Infra Outputs (Agent: /api/infra/outputs/{run_id})
 ========================================================= */
 
 export interface InfraOutputsResponse {
   run_id: string;
   found: boolean;
-  status?: string; // "succeeded", etc.
+  status?: string;
   outputs?: Record<
     string,
     {
@@ -229,14 +235,16 @@ export interface InfraOutputsResponse {
   updated_at?: string;
 }
 
-export async function getInfraOutputs(runId: string): Promise<InfraOutputsResponse> {
+export async function getInfraOutputs(
+  runId: string
+): Promise<InfraOutputsResponse> {
   return request(`/api/infra/outputs/${runId}`);
 }
 
 /* =========================================================
-   AI Recommendation + Snapshots (TYPES MUST EXIST for build)
-   NOTE: Your current Agent does NOT expose these routes yet.
-   So functions THROW (compile OK, runtime explains why).
+   AI Recommendation + Snapshots (NOT LIVE YET ON AGENT)
+   - Keep types exported so frontend compiles
+   - Functions throw so UI shows honest message
 ========================================================= */
 
 export interface RecommendRequest {
@@ -275,6 +283,7 @@ export interface RecommendationSnapshotSaved {
 export async function recommendStack(
   _payload: RecommendRequest
 ): Promise<ArchitectureRecommendation> {
+  // When implemented on Agent: POST /api/ai/recommend-stack
   throw new Error(
     "recommendStack not available: Agent does not expose /api/ai/recommend-stack yet."
   );
@@ -283,6 +292,7 @@ export async function recommendStack(
 export async function saveRecommendationSnapshot(
   _payload: RecommendationSnapshotCreate
 ): Promise<RecommendationSnapshotSaved> {
+  // When implemented on Agent: POST /api/recommendations
   throw new Error(
     "saveRecommendationSnapshot not available: Agent does not expose /api/recommendations yet."
   );

@@ -1,16 +1,21 @@
 import { Suspense } from "react";
 import DeployClient from "./deploy-client";
 
+export const dynamic = "force-dynamic";
+
 export default function DeployPage({
   searchParams,
 }: {
-  searchParams?: { rec?: string };
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
-  const recommendationId = searchParams?.rec || "test-001"; // MVP fallback
+  const recRaw = searchParams?.rec;
+  const rec =
+    (Array.isArray(recRaw) ? recRaw[0] : recRaw) ||
+    "test-001";
 
   return (
     <Suspense fallback={<div>Loading deploy...</div>}>
-      <DeployClient recommendationId={recommendationId} />
+      <DeployClient recommendationId={rec} />
     </Suspense>
   );
 }

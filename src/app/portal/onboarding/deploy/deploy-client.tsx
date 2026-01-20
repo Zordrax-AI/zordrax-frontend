@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 
 import {
@@ -17,6 +17,8 @@ export default function DeployClient({
 }: {
   recommendationId: string;
 }) {
+  const router = useRouter();
+
   const [runId, setRunId] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [planSummary, setPlanSummary] = useState<Record<string, unknown> | null>(
@@ -76,6 +78,11 @@ export default function DeployClient({
     }
   }
 
+  function goToStatus() {
+    if (!runId) return;
+    router.push(`/portal/status?run=${encodeURIComponent(runId)}`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
@@ -83,37 +90,25 @@ export default function DeployClient({
           Generate Terraform Plan
         </Button>
 
-        {runId && (
-          <Button onClick={handleApproveAndApply} disabled={loading}>
-            Approve &amp; Apply
-          </Button>
-        )}
+        <Button onClick={handleApproveAndApply} disabled={loading || !runId}>
+          Approve & Apply
+        </Button>
 
-        {runId && (
-          <Link
-            href={`/portal/status?run=${encodeURIComponent(runId)}`}
-            className="inline-flex items-center rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-900"
-          >
-            Open Status
-          </Link>
-        )}
+        <Button onClick={goToStatus} disabled={!runId}>
+          View Status
+        </Button>
       </div>
 
       {pipelineRunId && (
-        <div className="rounded border border-green-600/60 bg-green-950/20 p-3 text-green-300">
-          Pipeline triggered. ADO Run ID: <b>{pipelineRunId}</b>
-          {runId ? (
-            <div className="mt-1 text-xs text-green-300/80 font-mono break-all">
-              SSOT Run UUID: {runId}
-            </div>
-          ) : null}
+        <div className="rounded border border-green-500 p-3 text-green-700">
+          Pipeline triggered. Run ID: <b>{pipelineRunId}</b>
         </div>
       )}
 
       {warnings.length > 0 && (
-        <div className="rounded border border-yellow-600/50 bg-yellow-950/20 p-3">
-          <h3 className="font-semibold text-yellow-300">Policy Warnings</h3>
-          <ul className="mt-2 list-disc pl-5 text-yellow-200/90">
+        <div className="rounded border border-yellow-400 p-3">
+          <h3 className="font-semibold text-yellow-700">Policy Warnings</h3>
+          <ul className="list-disc pl-5">
             {warnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
@@ -122,13 +117,13 @@ export default function DeployClient({
       )}
 
       {planSummary && (
-        <pre className="rounded bg-slate-950/40 border border-slate-800 p-3 text-xs overflow-auto text-slate-200">
+        <pre className="rounded bg-gray-100 p-3 text-sm overflow-auto">
           {JSON.stringify(planSummary, null, 2)}
         </pre>
       )}
 
       {error && (
-        <div className="rounded border border-red-600/60 bg-red-950/20 p-3 text-red-200">
+        <div className="rounded border border-red-500 p-3 text-red-600">
           {error}
         </div>
       )}
