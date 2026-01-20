@@ -1,28 +1,26 @@
 // src/lib/api.ts
 
 /* =========================================================
-   Base config (LIVE)
-   - Backend exposes routes under /api/*
-   - We keep BASE as the app root (so /health still works)
-   - API_BASE = `${BASE}/api`
+   Base config
 ========================================================= */
 
-const RAW_BASE =
+const BASE =
   process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
-  process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+  process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "";
 
-if (!RAW_BASE) {
+if (!BASE) {
   console.warn(
-    "NEXT_PUBLIC_AGENT_BASE_URL (or NEXT_PUBLIC_ONBOARDING_API_URL) is not set"
+    "API base URL is not set. Set NEXT_PUBLIC_AGENT_BASE_URL (preferred)."
   );
 }
 
-const BASE = (RAW_BASE || "").replace(/\/+$/, ""); // strip trailing slashes
-const API_BASE = `${BASE}/api`;
-
-function apiUrl(path: string) {
-  if (!path.startsWith("/")) path = `/${path}`;
-  return `${API_BASE}${path}`;
+function url(path: string) {
+  // ensure we never end up with double slashes
+  const base = BASE.replace(/\/$/, "");
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${p}`;
 }
 
 /**
@@ -41,24 +39,16 @@ async function request<T>(
     ...(options.headers as Record<string, string> | undefined),
   };
 
-  if (idempotencyKey) {
-    headers["X-Idempotency-Key"] = idempotencyKey;
-  }
+  if (idempotencyKey) headers["X-Idempotency-Key"] = idempotencyKey;
 
-  const res = await fetch(apiUrl(path), {
+  const res = await fetch(url(path), {
     ...options,
     headers,
   });
 
   if (!res.ok) {
-    // Try to surface FastAPI {"detail": "..."} nicely
     const text = await res.text();
-    try {
-      const j = JSON.parse(text);
-      throw new Error(j?.detail ? JSON.stringify(j.detail) : text);
-    } catch {
-      throw new Error(text || res.statusText);
-    }
+    throw new Error(text || res.statusText);
   }
 
   const contentType = res.headers.get("content-type") || "";
@@ -80,15 +70,11 @@ export interface RunRow {
   mode: "ai" | "manual";
   status: string;
   stage: string;
-  cancel_requested?: boolean;
   created_at: string;
   updated_at: string;
 
-  deploy?: {
-    status?: string;
-    pipeline_run_id?: string | number;
-    region?: string;
-    environment?: string;
+  manifest?: {
+    outputs?: Record<string, { value: unknown }>;
   };
 }
 
@@ -103,37 +89,95 @@ export interface RunEvent {
 }
 
 /* =========================================================
-   Runs API (LIVE: /api/runs/*)
+   Runs API  (NOTE: backend is /api/runs/*)
 ========================================================= */
 
 export async function listRuns(limit = 50): Promise<RunRow[]> {
-  // Backend route is /api/runs/ (note trailing slash)
-  return request(`/runs/?limit=${limit}`);
+  return request(`/api/runs/?limit=${limit}`);
 }
 
 export async function getRun(runId: string): Promise<RunRow> {
-  return request(`/runs/${runId}`);
+  return request(`/api/runs/${runId}`);
 }
 
 export async function getRunEvents(
   runId: string,
   afterId = 0
 ): Promise<RunEvent[]> {
-  return request(`/runs/${runId}/events?after_id=${afterId}`);
+  return request(`/api/runs/${runId}/events?after_id=${afterId}`);
 }
 
 export async function cancelRun(runId: string): Promise<void> {
-  await request(`/runs/${runId}/cancel`, { method: "POST" });
+  await request(`/api/runs/${runId}/cancel`, { method: "POST" });
 }
 
 /* =========================================================
-   Deploy (Terraform) (LIVE: /api/deploy/*)
+   AI Recommendation  (frontend expects these exports)
+   IMPORTANT: Only works if backend exposes /api/ai/recommend-stack
+========================================================= */
+
+export interface RecommendRequest {
+  mode: "ai" | "manual";
+  industry: string;
+  scale: "small" | "medium" | "large";
+  cloud: "azure" | "aws" | "gcp";
+}
+
+export interface ArchitectureRecommendation {
+  cloud: string;
+  region: string;
+  env: string;
+  warehouse: string;
+  etl: string;
+  bi: string;
+  governance: string;
+  source: "ai" | "manual";
+  warnings?: string[];
+  reasoning?: string[];
+}
+
+export async function recommendStack(
+  payload: RecommendRequest
+): Promise<ArchitectureRecommendation> {
+  return request("/api/ai/recommend-stack", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/* =========================================================
+   Recommendation Snapshots (frontend expects these exports)
+   IMPORTANT: Only works if backend exposes /api/recommendations
+========================================================= */
+
+export interface RecommendationSnapshotCreate {
+  final: Record<string, unknown>;
+  ai?: Record<string, unknown> | null;
+  diff?: unknown[];
+  source_query?: Record<string, unknown> | null;
+  run_id?: string | null;
+}
+
+export interface RecommendationSnapshotSaved {
+  id: string;
+  status: "saved";
+}
+
+export async function saveRecommendationSnapshot(
+  payload: RecommendationSnapshotCreate
+): Promise<RecommendationSnapshotSaved> {
+  return request("/api/recommendations", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/* =========================================================
+   Deploy (Terraform)  (backend is /api/deploy/*)
 ========================================================= */
 
 export interface DeployPlanRequest {
   recommendation_id: string;
-
-  // Optional backend-supported fields (you used these in curl)
   name_prefix?: string;
   region?: string;
   environment?: string;
@@ -143,7 +187,7 @@ export interface DeployPlanRequest {
 
 export interface DeployPlanResponse {
   run_id: string;
-  status: "awaiting_approval";
+  status: string;
   plan_summary: Record<string, unknown>;
   policy_warnings: string[];
 }
@@ -153,11 +197,8 @@ export async function deployPlan(
   idempotencyKey?: string
 ): Promise<DeployPlanResponse> {
   return request(
-    `/deploy/plan`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload),
-    },
+    "/api/deploy/plan",
+    { method: "POST", body: JSON.stringify(payload) },
     idempotencyKey
   );
 }
@@ -166,7 +207,11 @@ export async function deployApprove(
   runId: string,
   idempotencyKey?: string
 ): Promise<{ run_id: string; status: string }> {
-  return request(`/deploy/${runId}/approve`, { method: "POST" }, idempotencyKey);
+  return request(
+    `/api/deploy/${runId}/approve`,
+    { method: "POST" },
+    idempotencyKey
+  );
 }
 
 export async function deployReject(
@@ -175,18 +220,15 @@ export async function deployReject(
   idempotencyKey?: string
 ): Promise<void> {
   await request(
-    `/deploy/${runId}/reject`,
-    {
-      method: "POST",
-      body: JSON.stringify({ reason }),
-    },
+    `/api/deploy/${runId}/reject`,
+    { method: "POST", body: JSON.stringify({ reason }) },
     idempotencyKey
   );
 }
 
 export interface DeployApplyResponse {
   run_id: string;
-  status: string; // pipeline_started | infra_succeeded | ...
+  status: string;
   pipeline_run_id: number;
 }
 
@@ -194,7 +236,11 @@ export async function deployApply(
   runId: string,
   idempotencyKey?: string
 ): Promise<DeployApplyResponse> {
-  return request(`/deploy/${runId}/apply`, { method: "POST" }, idempotencyKey);
+  return request(
+    `/api/deploy/${runId}/apply`,
+    { method: "POST" },
+    idempotencyKey
+  );
 }
 
 export interface DeployRefreshResponse {
@@ -202,7 +248,7 @@ export interface DeployRefreshResponse {
   previous_status: string;
   current_status: string;
   changed: boolean;
-  pipeline: {
+  pipeline?: {
     pipeline_id: number;
     pipeline_run_id: number;
     state: string;
@@ -212,13 +258,9 @@ export interface DeployRefreshResponse {
 }
 
 export async function deployRefresh(runId: string): Promise<DeployRefreshResponse> {
-  return request(`/deploy/${runId}/refresh`);
+  return request(`/api/deploy/${runId}/refresh`);
 }
 
-/* =========================================================
-   Infra Outputs (LIVE: /api/infra/outputs/*)
-========================================================= */
-
 export async function getInfraOutputs(runId: string): Promise<any> {
-  return request(`/infra/outputs/${runId}`);
+  return request(`/api/infra/outputs/${runId}`);
 }
