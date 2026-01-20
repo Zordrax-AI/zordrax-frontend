@@ -3,6 +3,9 @@
    Zordrax Frontend <-> Onboarding Agent API (SSOT-ish)
    - Forces HTTPS for non-localhost to prevent Mixed Content
    - Central fetch helper + typed endpoints
+   - Approve/Apply: supports BOTH route styles:
+     A) /api/deploy/approve/{runId}
+     B) /api/deploy/approve   (body: { run_id })
 ========================================================= */
 
 export type RecommendRequest = {
@@ -15,21 +18,18 @@ export type RecommendRequest = {
 export type ArchitectureRecommendation = {
   source: "ai" | "manual";
   title?: string;
-  // Keep the rest flexible until backend contract is finalized
   [k: string]: unknown;
 };
 
 export type RecommendationSnapshotCreate = {
-  final: Record<string, unknown>;
-  ai: Record<string, unknown> | null;
+  final: Record<string, never>;
+  ai: Record<string, never> | null;
   diff: unknown[];
-  source_query: Record<string, unknown>;
+  source_query: Record<string, never>;
 };
 
 export type DeployPlanRequest = {
   recommendation_id: string;
-
-  // Optional overrides (backend can default)
   name_prefix?: string;
   region?: string;
   environment?: string;
@@ -39,7 +39,7 @@ export type DeployPlanRequest = {
 
 export type DeployPlanResponse = {
   run_id: string;
-  status: string; // awaiting_approval, etc.
+  status: string;
   plan_summary: Record<string, unknown>;
   policy_warnings?: string[];
 };
@@ -54,13 +54,12 @@ export type RunRow = {
   run_id: string;
   mode: "manual" | "ai";
   title?: string;
-  status: string; // infra_succeeded, pipeline_running, etc.
-  stage: string; // deploy, infra, pipeline...
+  status: string;
+  stage: string;
   cancel_requested: boolean;
   created_at: string;
   updated_at: string;
 
-  // present in your backend response
   deploy?: {
     status?: string;
     pipeline_run_id?: number | string;
@@ -97,7 +96,6 @@ function normalizeBaseUrl(raw: string): string {
   const trimmed = (raw || "").trim();
   if (!trimmed) return "";
 
-  // If user forgot protocol, assume https (unless localhost)
   const hasProtocol = /^https?:\/\//i.test(trimmed);
   const withProto = hasProtocol
     ? trimmed
@@ -109,17 +107,12 @@ function normalizeBaseUrl(raw: string): string {
   try {
     url = new URL(withProto);
   } catch {
-    // last resort: treat as https host
     url = new URL(`https://${trimmed.replace(/^\/+/, "")}`);
   }
 
-  // HARD FIX: upgrade http->https for anything not localhost
   const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
-  if (!isLocal && url.protocol === "http:") {
-    url.protocol = "https:";
-  }
+  if (!isLocal && url.protocol === "http:") url.protocol = "https:";
 
-  // Remove trailing slash for consistent joins
   return url.toString().replace(/\/+$/, "");
 }
 
@@ -127,12 +120,10 @@ function resolveApiBase(): string {
   const env =
     process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_ONBOARDING_API_URL || // optional compatibility
+    process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
     "http://localhost:8000";
 
   const base = normalizeBaseUrl(env);
-
-  // In production, refuse empty
   if (!base) {
     throw new Error(
       "API base URL is not set. Set NEXT_PUBLIC_AGENT_BASE_URL in Vercel."
@@ -147,8 +138,6 @@ export const API_BASE = resolveApiBase();
    Fetch helper
 ========================================================= */
 
-type FetchJsonOptions = RequestInit & { idempotencyKey?: string };
-
 async function readErrorBody(res: Response): Promise<string> {
   try {
     const ct = res.headers.get("content-type") || "";
@@ -162,7 +151,10 @@ async function readErrorBody(res: Response): Promise<string> {
   }
 }
 
-async function fetchJson<T>(path: string, opts?: FetchJsonOptions): Promise<T> {
+async function fetchJson<T>(
+  path: string,
+  opts?: RequestInit & { idempotencyKey?: string }
+): Promise<T> {
   const url = `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
   const headers: Record<string, string> = {
@@ -170,31 +162,54 @@ async function fetchJson<T>(path: string, opts?: FetchJsonOptions): Promise<T> {
     ...(opts?.headers as Record<string, string> | undefined),
   };
 
-  if (opts?.idempotencyKey) {
-    headers["Idempotency-Key"] = opts.idempotencyKey;
-  }
+  if (opts?.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
-  const res = await fetch(url, {
-    ...opts,
-    headers,
-    // IMPORTANT: do not force credentials unless you need cookies
-    // credentials: "include",
-  });
+  const res = await fetch(url, { ...opts, headers });
 
   if (!res.ok) {
     const body = await readErrorBody(res);
-    throw new Error(body || `Request failed: ${res.status} ${res.statusText}`);
+    const err = new Error(body || `Request failed: ${res.status} ${res.statusText}`) as Error & {
+      status?: number;
+      url?: string;
+    };
+    err.status = res.status;
+    err.url = url;
+    throw err;
   }
 
-  // Some endpoints may return empty body
   const text = await res.text();
   if (!text) return {} as T;
 
   try {
     return JSON.parse(text) as T;
   } catch {
-    // If backend returns plain text
     return text as unknown as T;
+  }
+}
+
+/** Try one endpoint, but if it 404s, try the fallback. */
+async function tryPostWithFallback<T>(
+  primaryPath: string,
+  primaryBody: unknown,
+  fallbackPath: string,
+  fallbackBody: unknown,
+  idempotencyKey?: string
+): Promise<T> {
+  try {
+    return await fetchJson<T>(primaryPath, {
+      method: "POST",
+      body: JSON.stringify(primaryBody ?? {}),
+      idempotencyKey,
+    });
+  } catch (e: any) {
+    const status = typeof e?.status === "number" ? e.status : undefined;
+    if (status !== 404) throw e;
+
+    return fetchJson<T>(fallbackPath, {
+      method: "POST",
+      body: JSON.stringify(fallbackBody ?? {}),
+      idempotencyKey,
+    });
   }
 }
 
@@ -219,26 +234,40 @@ export async function deployPlan(
   });
 }
 
+/**
+ * Supports:
+ *  - POST /api/deploy/approve/{runId}
+ *  - POST /api/deploy/approve   body: { run_id }
+ */
 export async function deployApprove(
   runId: string,
   idempotencyKey?: string
 ): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/api/deploy/approve/${runId}`, {
-    method: "POST",
-    body: JSON.stringify({}),
-    idempotencyKey,
-  });
+  return tryPostWithFallback<{ ok: boolean }>(
+    `/api/deploy/approve/${runId}`,
+    {},
+    `/api/deploy/approve`,
+    { run_id: runId },
+    idempotencyKey
+  );
 }
 
+/**
+ * Supports:
+ *  - POST /api/deploy/apply/{runId}
+ *  - POST /api/deploy/apply   body: { run_id }
+ */
 export async function deployApply(
   runId: string,
   idempotencyKey?: string
 ): Promise<DeployApplyResponse> {
-  return fetchJson<DeployApplyResponse>(`/api/deploy/apply/${runId}`, {
-    method: "POST",
-    body: JSON.stringify({}),
-    idempotencyKey,
-  });
+  return tryPostWithFallback<DeployApplyResponse>(
+    `/api/deploy/apply/${runId}`,
+    {},
+    `/api/deploy/apply`,
+    { run_id: runId },
+    idempotencyKey
+  );
 }
 
 /* ---------- Runs + status ---------- */
@@ -251,16 +280,11 @@ export async function getRunEvents(runId: string, afterId = 0): Promise<RunEvent
   const qs = new URLSearchParams();
   if (afterId > 0) qs.set("after_id", String(afterId));
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
-
-  return fetchJson<RunEvent[]>(`/api/runs/${runId}/events${suffix}`, {
-    method: "GET",
-  });
+  return fetchJson<RunEvent[]>(`/api/runs/${runId}/events${suffix}`, { method: "GET" });
 }
 
 export async function getInfraOutputs(runId: string): Promise<InfraOutputsResponse> {
-  return fetchJson<InfraOutputsResponse>(`/api/infra/outputs/${runId}`, {
-    method: "GET",
-  });
+  return fetchJson<InfraOutputsResponse>(`/api/infra/outputs/${runId}`, { method: "GET" });
 }
 
 export async function cancelRun(runId: string): Promise<{ ok: boolean }> {
@@ -270,29 +294,34 @@ export async function cancelRun(runId: string): Promise<{ ok: boolean }> {
   });
 }
 
-/* List runs (supports a few likely backend shapes) */
+/**
+ * List runs:
+ * - if backend doesn't implement /api/runs yet, return []
+ */
 export async function listRuns(): Promise<RunRow[]> {
-  const data = await fetchJson<RunsListResponse>("/api/runs", { method: "GET" });
+  try {
+    const data = await fetchJson<RunsListResponse>("/api/runs", { method: "GET" });
 
-  if (Array.isArray(data)) return data;
-  if ("items" in data && Array.isArray(data.items)) return data.items;
-  if ("runs" in data && Array.isArray(data.runs)) return data.runs;
+    if (Array.isArray(data)) return data;
+    if ("items" in data && Array.isArray(data.items)) return data.items;
+    if ("runs" in data && Array.isArray(data.runs)) return data.runs;
 
-  return [];
+    return [];
+  } catch (e: any) {
+    if (e?.status === 404) return [];
+    throw e;
+  }
 }
 
 /* ---------- AI Recommend (backend not live yet) ---------- */
 
 export async function recommendStack(req: RecommendRequest): Promise<ArchitectureRecommendation> {
-  // Your UI shows this error: agent does not expose /api/ai/recommend-stack yet.
-  // Keep the call, but make the error clean.
   return fetchJson<ArchitectureRecommendation>("/api/ai/recommend-stack", {
     method: "POST",
     body: JSON.stringify(req),
   });
 }
 
-/* Optional: snapshot endpoint (only if you’ve actually implemented it server-side) */
 export async function saveRecommendationSnapshot(
   snapshot: RecommendationSnapshotCreate
 ): Promise<{ id: string }> {
