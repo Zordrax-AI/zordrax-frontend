@@ -20,10 +20,10 @@ export type ArchitectureRecommendation = {
 };
 
 export type RecommendationSnapshotCreate = {
-  final: Record<string, never>;
-  ai: Record<string, never> | null;
+  final: Record<string, unknown>;
+  ai: Record<string, unknown> | null;
   diff: unknown[];
-  source_query: Record<string, never>;
+  source_query: Record<string, unknown>;
 };
 
 export type DeployPlanRequest = {
@@ -55,7 +55,7 @@ export type RunRow = {
   mode: "manual" | "ai";
   title?: string;
   status: string; // infra_succeeded, pipeline_running, etc.
-  stage: string;  // deploy, infra, pipeline...
+  stage: string; // deploy, infra, pipeline...
   cancel_requested: boolean;
   created_at: string;
   updated_at: string;
@@ -87,10 +87,7 @@ export type InfraOutputsResponse = {
   updated_at?: string;
 };
 
-export type RunsListResponse =
-  | RunRow[]
-  | { items: RunRow[] }
-  | { runs: RunRow[] };
+export type RunsListResponse = RunRow[] | { items: RunRow[] } | { runs: RunRow[] };
 
 /* =========================================================
    Base URL (FORCE HTTPS to prevent Mixed Content)
@@ -117,9 +114,7 @@ function normalizeBaseUrl(raw: string): string {
   }
 
   // HARD FIX: upgrade http->https for anything not localhost
-  const isLocal =
-    url.hostname === "localhost" || url.hostname === "127.0.0.1";
-
+  const isLocal = url.hostname === "localhost" || url.hostname === "127.0.0.1";
   if (!isLocal && url.protocol === "http:") {
     url.protocol = "https:";
   }
@@ -152,6 +147,8 @@ export const API_BASE = resolveApiBase();
    Fetch helper
 ========================================================= */
 
+type FetchJsonOptions = RequestInit & { idempotencyKey?: string };
+
 async function readErrorBody(res: Response): Promise<string> {
   try {
     const ct = res.headers.get("content-type") || "";
@@ -165,10 +162,7 @@ async function readErrorBody(res: Response): Promise<string> {
   }
 }
 
-async function fetchJson<T>(
-  path: string,
-  opts?: RequestInit & { idempotencyKey?: string }
-): Promise<T> {
+async function fetchJson<T>(path: string, opts?: FetchJsonOptions): Promise<T> {
   const url = `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
   const headers: Record<string, string> = {
@@ -253,21 +247,17 @@ export async function getRun(runId: string): Promise<RunRow> {
   return fetchJson<RunRow>(`/api/runs/${runId}`, { method: "GET" });
 }
 
-export async function getRunEvents(
-  runId: string,
-  afterId = 0
-): Promise<RunEvent[]> {
+export async function getRunEvents(runId: string, afterId = 0): Promise<RunEvent[]> {
   const qs = new URLSearchParams();
   if (afterId > 0) qs.set("after_id", String(afterId));
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
+
   return fetchJson<RunEvent[]>(`/api/runs/${runId}/events${suffix}`, {
     method: "GET",
   });
 }
 
-export async function getInfraOutputs(
-  runId: string
-): Promise<InfraOutputsResponse> {
+export async function getInfraOutputs(runId: string): Promise<InfraOutputsResponse> {
   return fetchJson<InfraOutputsResponse>(`/api/infra/outputs/${runId}`, {
     method: "GET",
   });
@@ -293,9 +283,7 @@ export async function listRuns(): Promise<RunRow[]> {
 
 /* ---------- AI Recommend (backend not live yet) ---------- */
 
-export async function recommendStack(
-  req: RecommendRequest
-): Promise<ArchitectureRecommendation> {
+export async function recommendStack(req: RecommendRequest): Promise<ArchitectureRecommendation> {
   // Your UI shows this error: agent does not expose /api/ai/recommend-stack yet.
   // Keep the call, but make the error clean.
   return fetchJson<ArchitectureRecommendation>("/api/ai/recommend-stack", {

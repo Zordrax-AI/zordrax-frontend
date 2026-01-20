@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/Button";
 
 import {
   deployPlan,
-  deployApprove,
   deployApply,
+  deployApprove,
   type DeployPlanResponse,
   type DeployApplyResponse,
 } from "@/lib/api";
@@ -20,56 +19,66 @@ export default function DeployClient({
   const router = useRouter();
 
   const [runId, setRunId] = useState<string | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [planSummary, setPlanSummary] = useState<Record<string, unknown> | null>(
-    null
-  );
+  const [plan, setPlan] = useState<DeployPlanResponse | null>(null);
+
+  // ✅ keep as number (UI-friendly)
   const [pipelineRunId, setPipelineRunId] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function idemKey(prefix: string, id?: string | null) {
-    return id ? `${prefix}:${id}` : `${prefix}:${recommendationId}`;
-  }
+  // Optional: load last runId from session/local storage if you want
+  useEffect(() => {
+    // no-op
+  }, []);
 
   async function handlePlan() {
-    setLoading(true);
     setError(null);
-    setPipelineRunId(null);
+    setLoading(true);
 
     try {
-      const res: DeployPlanResponse = await deployPlan(
-        { recommendation_id: recommendationId },
-        idemKey("deploy-plan")
-      );
+      const res = await deployPlan({
+        recommendation_id: recommendationId,
+        name_prefix: "zordrax",
+        region: "westeurope",
+        environment: "dev",
+        enable_apim: false,
+        backend_app_hostname: "example.azurewebsites.net",
+      });
 
+      setPlan(res);
       setRunId(res.run_id);
-      setWarnings(res.policy_warnings ?? []);
-      setPlanSummary(res.plan_summary);
     } catch (err: any) {
-      setError(err?.message ?? "Failed to generate plan");
+      setError(err?.message ?? "Failed to generate terraform plan");
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleApproveAndApply() {
-    if (!runId) return;
+  async function handleApproveApply() {
+    if (!runId) {
+      setError("No run_id yet. Generate plan first.");
+      return;
+    }
 
-    setLoading(true);
     setError(null);
+    setLoading(true);
 
     try {
-      await deployApprove(runId, idemKey("deploy-approve", runId));
+      // approve (optional depending on your backend)
+      await deployApprove(runId);
 
-      const res: DeployApplyResponse = await deployApply(
-        runId,
-        idemKey("deploy-apply", runId)
-      );
+      // apply
+      const res: DeployApplyResponse = await deployApply(runId);
 
-      if (res?.pipeline_run_id) {
-        setPipelineRunId(res.pipeline_run_id);
+      // ✅ FIX: pipeline_run_id can be string OR number -> coerce to number
+      if (res?.pipeline_run_id !== undefined && res.pipeline_run_id !== null) {
+        const n =
+          typeof res.pipeline_run_id === "number"
+            ? res.pipeline_run_id
+            : Number(res.pipeline_run_id);
+
+        setPipelineRunId(Number.isFinite(n) ? n : null);
       }
     } catch (err: any) {
       setError(err?.message ?? "Failed to approve/apply infrastructure");
@@ -78,53 +87,62 @@ export default function DeployClient({
     }
   }
 
-  function goToStatus() {
-    if (!runId) return;
-    router.push(`/portal/status?run=${encodeURIComponent(runId)}`);
+  function handleViewStatus() {
+    if (!runId) {
+      setError("No run_id yet. Generate plan first.");
+      return;
+    }
+    router.push(`/portal/status?run=${runId}`);
   }
 
   return (
     <div className="space-y-4">
       <div className="flex gap-3">
-        <Button onClick={handlePlan} disabled={loading}>
+        <button
+          onClick={handlePlan}
+          disabled={loading}
+          className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-60"
+        >
           Generate Terraform Plan
-        </Button>
+        </button>
 
-        <Button onClick={handleApproveAndApply} disabled={loading || !runId}>
-          Approve & Apply
-        </Button>
+        <button
+          onClick={handleApproveApply}
+          disabled={loading || !runId}
+          className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-60"
+        >
+          Approve &amp; Apply
+        </button>
 
-        <Button onClick={goToStatus} disabled={!runId}>
+        <button
+          onClick={handleViewStatus}
+          disabled={!runId}
+          className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-60"
+        >
           View Status
-        </Button>
+        </button>
       </div>
 
-      {pipelineRunId && (
-        <div className="rounded border border-green-500 p-3 text-green-700">
-          Pipeline triggered. Run ID: <b>{pipelineRunId}</b>
+      {pipelineRunId !== null && (
+        <div className="rounded-md border border-emerald-700 bg-emerald-900/20 p-3 text-sm text-emerald-200">
+          Pipeline triggered. Run ID: <span className="font-mono">{pipelineRunId}</span>
         </div>
-      )}
-
-      {warnings.length > 0 && (
-        <div className="rounded border border-yellow-400 p-3">
-          <h3 className="font-semibold text-yellow-700">Policy Warnings</h3>
-          <ul className="list-disc pl-5">
-            {warnings.map((w, i) => (
-              <li key={i}>{w}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {planSummary && (
-        <pre className="rounded bg-gray-100 p-3 text-sm overflow-auto">
-          {JSON.stringify(planSummary, null, 2)}
-        </pre>
       )}
 
       {error && (
-        <div className="rounded border border-red-500 p-3 text-red-600">
+        <div className="rounded-md border border-red-800 bg-red-900/20 p-3 text-sm text-red-200">
           {error}
+        </div>
+      )}
+
+      {plan && (
+        <div className="rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-sm">
+          <div className="mb-2 text-slate-200">
+            Run ID: <span className="font-mono">{plan.run_id}</span>
+          </div>
+          <pre className="overflow-auto text-xs text-slate-300">
+            {JSON.stringify(plan, null, 2)}
+          </pre>
         </div>
       )}
     </div>
