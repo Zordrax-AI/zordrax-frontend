@@ -1,217 +1,210 @@
+// src/app/portal/status/status-client.tsx
 "use client";
 
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-
 import {
+  cancelRun,
+  getInfraOutputs,
   getRun,
   getRunEvents,
-  getInfraOutputs,
-  cancelRun,
-  type RunEvent,
-  type RunRow,
-  type InfraOutputsResponse,
+  InfraOutputsResponse,
+  RunEvent,
+  RunRow,
 } from "@/lib/api";
 
-type TerraformOutputs = Record<
-  string,
-  { type: string; value: unknown; sensitive: boolean }
->;
-
-function entries(obj: TerraformOutputs): [string, TerraformOutputs[string]][] {
-  return Object.entries(obj);
+function classNames(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
 }
 
 export default function StatusClient() {
-  const params = useSearchParams();
-  const runId = params.get("run") ?? ""; // <- FIX: never string|null
+  const sp = useSearchParams();
+
+  // support multiple param keys so old links still work
+  const runId = useMemo(() => {
+    return (
+      sp.get("run") ||
+      sp.get("run_id") ||
+      sp.get("id") ||
+      sp.get("runId") ||
+      null
+    );
+  }, [sp]);
 
   const [run, setRun] = useState<RunRow | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
-  const [lastId, setLastId] = useState(0);
+  const [outputs, setOutputs] = useState<InfraOutputsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busyCancel, setBusyCancel] = useState(false);
 
-  const [outputsResp, setOutputsResp] = useState<InfraOutputsResponse | null>(null);
-  const [error, setError] = useState<string>("");
-
-  const outputs = useMemo(() => {
-    const o = outputsResp?.outputs;
-    return o && typeof o === "object" ? (o as TerraformOutputs) : null;
-  }, [outputsResp]);
+  const lastEventIdRef = useRef<number>(0);
 
   useEffect(() => {
+    let alive = true;
     if (!runId) return;
 
-    let alive = true;
+    const rid = runId; // <-- TS narrowing
 
     async function bootstrap() {
       try {
-        const r = await getRun(runId);
+        const r = await getRun(rid);
         if (!alive) return;
         setRun(r);
 
-        const out = await getInfraOutputs(runId);
+        const es = await getRunEvents(rid, 0);
         if (!alive) return;
-        setOutputsResp(out);
+        setEvents(es);
+        lastEventIdRef.current = es.length ? es[es.length - 1].id : 0;
+
+        const out = await getInfraOutputs(rid);
+        if (!alive) return;
+        setOutputs(out);
       } catch (e: any) {
         if (!alive) return;
-        setError(e?.message ?? "Failed to load run");
+        setError(e?.message ?? "Failed to load run status");
       }
     }
 
     bootstrap();
+    return () => {
+      alive = false;
+    };
+  }, [runId]);
 
-    const timer = setInterval(async () => {
+  // Poll for new events + run status + outputs
+  useEffect(() => {
+    if (!runId) return;
+    const rid = runId;
+
+    const t = setInterval(async () => {
       try {
-        const ev = await getRunEvents(runId, lastId);
-        if (!alive) return;
+        const [r, newEvents, out] = await Promise.all([
+          getRun(rid),
+          getRunEvents(rid, lastEventIdRef.current),
+          getInfraOutputs(rid),
+        ]);
 
-        if (ev.length) {
-          setEvents((prev) => [...prev, ...ev]);
-          setLastId(ev[ev.length - 1].id);
-        }
-
-        const r = await getRun(runId);
-        if (!alive) return;
         setRun(r);
 
-        const out = await getInfraOutputs(runId);
-        if (!alive) return;
-        setOutputsResp(out);
+        if (newEvents?.length) {
+          setEvents((prev) => [...prev, ...newEvents]);
+          lastEventIdRef.current = newEvents[newEvents.length - 1].id;
+        }
+
+        setOutputs(out);
       } catch {
-        // keep polling; don’t spam UI
+        // ignore transient polling errors
       }
     }, 2000);
 
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [runId, lastId]);
+    return () => clearInterval(t);
+  }, [runId]);
 
-  async function handleCancel() {
+  async function onCancel() {
     if (!runId) return;
-    await cancelRun(runId);
-    alert("Cancel requested");
+    const rid = runId;
+
+    setBusyCancel(true);
+    setError(null);
+    try {
+      await cancelRun(rid);
+    } catch (e: any) {
+      setError(e?.message ?? "Cancel failed");
+    } finally {
+      setBusyCancel(false);
+    }
   }
 
   if (!runId) {
     return (
-      <div className="rounded-lg border border-slate-800 p-4 text-sm text-slate-200">
-        No run id provided. Open a status page like:
-        <div className="mt-2 font-mono text-cyan-300">/portal/status?run=&lt;uuid&gt;</div>
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="rounded-lg border border-white/10 p-4">
+          <div className="opacity-80">
+            No run id provided. Open a status page like:
+          </div>
+          <pre className="mt-2 text-sm bg-black/30 p-3 rounded">
+            /portal/status?run=&lt;uuid&gt;
+          </pre>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-6">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Run Status</h1>
-          <div className="text-xs text-slate-300 font-mono break-all">{runId}</div>
+    <div className="max-w-6xl mx-auto p-6 space-y-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Run Status</h1>
+          <div className="mt-1 text-sm opacity-80">{runId}</div>
 
           {run && (
-            <div className="text-sm text-slate-200">
-              Status: <span className="text-cyan-300">{run.status}</span> • Stage:{" "}
-              <span className="text-cyan-300">{run.stage}</span>
-              {run.deploy?.pipeline_run_id != null && (
-                <>
-                  {" "}
-                  • Pipeline Run:{" "}
-                  <span className="text-cyan-300">{String(run.deploy.pipeline_run_id)}</span>
-                </>
-              )}
-              {run.deploy?.region && (
-                <>
-                  {" "}
-                  • Region: <span className="text-cyan-300">{run.deploy.region}</span>
-                </>
-              )}
-              {run.deploy?.environment && (
-                <>
-                  {" "}
-                  • Env: <span className="text-cyan-300">{run.deploy.environment}</span>
-                </>
-              )}
+            <div className="mt-2 text-sm">
+              <span className="opacity-70">Status:</span>{" "}
+              <span className="font-medium">{run.status}</span>
+              <span className="opacity-70"> • Stage:</span>{" "}
+              <span className="font-medium">{run.stage}</span>
+              <span className="opacity-70"> • Region:</span>{" "}
+              <span className="font-medium">{run.deploy?.region ?? "-"}</span>
+              <span className="opacity-70"> • Env:</span>{" "}
+              <span className="font-medium">{run.deploy?.environment ?? "-"}</span>
             </div>
           )}
         </div>
 
         <button
-          onClick={handleCancel}
-          className="rounded-md border border-red-800 px-3 py-2 text-xs text-red-300 hover:bg-red-900/30"
+          onClick={onCancel}
+          disabled={busyCancel}
+          className={classNames(
+            "px-4 py-2 rounded border",
+            "border-red-400/40 text-red-200 hover:bg-red-500/10",
+            busyCancel && "opacity-60 cursor-not-allowed"
+          )}
         >
-          Cancel Run
+          {busyCancel ? "Cancelling..." : "Cancel Run"}
         </button>
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">
+        <div className="rounded-lg border border-red-400/30 bg-red-500/10 p-3 text-red-100">
           {error}
         </div>
       )}
 
-      {outputs && (
-        <TerraformOutputsTable outputs={outputs} status={outputsResp?.status ?? ""} />
-      )}
-
-      <EventLog events={events} />
-    </div>
-  );
-}
-
-function TerraformOutputsTable({
-  outputs,
-  status,
-}: {
-  outputs: TerraformOutputs;
-  status: string;
-}) {
-  return (
-    <div className="rounded-lg border border-slate-800 p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Terraform Outputs</h2>
-        <div className="text-xs text-slate-400">status: {status}</div>
+      <div className="rounded-xl border border-white/10 p-4">
+        <h2 className="text-lg font-semibold mb-3">Event Log</h2>
+        {events.length === 0 ? (
+          <div className="text-sm opacity-70">No events yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {events.slice(-200).map((e) => (
+              <div
+                key={e.id}
+                className="text-sm rounded border border-white/10 bg-black/20 px-3 py-2"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="opacity-70">
+                    {new Date(e.created_at).toLocaleString()}
+                  </div>
+                  <div className="opacity-80">
+                    {e.stage} • {e.status}
+                  </div>
+                </div>
+                <div className="mt-1">{e.message}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      <table className="w-full text-sm">
-        <tbody>
-          {entries(outputs).map(([key, output]) => {
-            const value = output?.value;
-            return (
-              <tr key={key} className="border-t border-slate-800">
-                <td className="py-2 font-mono text-cyan-300">{key}</td>
-                <td className="py-2 font-mono text-slate-300 break-all">
-                  {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function EventLog({ events }: { events: RunEvent[] }) {
-  return (
-    <div className="rounded-lg border border-slate-800 p-4">
-      <h2 className="mb-3 text-sm font-semibold">Event Log</h2>
-
-      <div className="space-y-3">
-        {events.length === 0 && (
-          <div className="text-sm text-slate-400">No events yet.</div>
+      <div className="rounded-xl border border-white/10 p-4">
+        <h2 className="text-lg font-semibold mb-3">Terraform Outputs</h2>
+        {!outputs?.found ? (
+          <div className="text-sm opacity-70">No outputs found yet.</div>
+        ) : (
+          <pre className="text-xs bg-black/30 p-3 rounded overflow-auto">
+            {JSON.stringify(outputs, null, 2)}
+          </pre>
         )}
-
-        {events.map((e) => (
-          <div key={e.id} className="rounded-md border border-slate-800 bg-slate-950/40 p-3">
-            <div className="text-xs text-slate-400 font-mono">
-              #{e.id} • {e.level} • {e.stage} • {e.status} •{" "}
-              {new Date(e.created_at).toLocaleString()}
-            </div>
-            <div className="text-sm text-slate-200">{e.message}</div>
-          </div>
-        ))}
       </div>
     </div>
   );

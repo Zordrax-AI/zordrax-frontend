@@ -1,18 +1,38 @@
+// src/components/runs/CancelRunButton.tsx
 "use client";
 
-export function CancelRunButton({ runId }: { runId: string }) {
-  const base = process.env.NEXT_PUBLIC_ONBOARDING_API_URL;
+import { useState } from "react";
+import { cancelRun } from "@/lib/api";
 
-  const cancel = async () => {
-    await fetch(`${base}/api/runs/${runId}/cancel`, { method: "POST" });
-  };
+export function CancelRunButton({ runId }: { runId: string }) {
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function onCancel() {
+    setLoading(true);
+    setMsg(null);
+    try {
+      await cancelRun(runId);
+      setMsg("Cancel requested.");
+    } catch (e: any) {
+      setMsg(e?.message ?? "Cancel failed");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
-    <button
-      onClick={cancel}
-      className="rounded bg-red-600 px-3 py-1 text-sm text-white hover:bg-red-700"
-    >
-      Cancel run
-    </button>
+    <div className="flex items-center gap-3">
+      <button
+        onClick={onCancel}
+        disabled={loading}
+        className="px-3 py-2 rounded border border-red-400/40 text-red-200 hover:bg-red-500/10 disabled:opacity-60"
+      >
+        {loading ? "Cancelling..." : "Cancel"}
+      </button>
+      {msg && <div className="text-sm opacity-80">{msg}</div>}
+    </div>
   );
 }
+
+export default CancelRunButton;
