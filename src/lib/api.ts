@@ -1,98 +1,75 @@
 // src/lib/api.ts
-
 /* =========================================================
-   Base config (CANONICAL)
-   - Frontend talks to the Agent service only
-   - Agent exposes routes under /api/*
+   Zordrax Frontend <-> Onboarding Agent API (SSOT-ish)
+   - Forces HTTPS for non-localhost to prevent Mixed Content
+   - Central fetch helper + typed endpoints
 ========================================================= */
 
-const BASE =
-  process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
-  process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL;
+export type RecommendRequest = {
+  mode: "manual" | "ai";
+  industry: string;
+  scale: "small" | "medium" | "large";
+  cloud: "azure" | "aws" | "gcp";
+};
 
-if (!BASE) {
-  // This runs at build time too; don't crash the build.
-  console.warn(
-    "Missing API base URL. Set NEXT_PUBLIC_AGENT_BASE_URL in .env / Vercel."
-  );
-}
+export type ArchitectureRecommendation = {
+  source: "ai" | "manual";
+  title?: string;
+  // Keep the rest flexible until backend contract is finalized
+  [k: string]: unknown;
+};
 
-function url(path: string) {
-  const b = (BASE || "").replace(/\/+$/, "");
-  const p = path.startsWith("/") ? path : `/${path}`;
-  return `${b}${p}`;
-}
+export type RecommendationSnapshotCreate = {
+  final: Record<string, never>;
+  ai: Record<string, never> | null;
+  diff: unknown[];
+  source_query: Record<string, never>;
+};
 
-/**
- * Request helper:
- * - JSON by default when sending a body
- * - Optional idempotency keys
- * - Throws server text for debugging
- */
-async function request<T>(
-  path: string,
-  options: RequestInit = {},
-  idempotencyKey?: string
-): Promise<T> {
-  const headers: Record<string, string> = {
-    ...(options.headers as Record<string, string> | undefined),
-  };
+export type DeployPlanRequest = {
+  recommendation_id: string;
 
-  const method = (options.method || "GET").toUpperCase();
-  const hasBody =
-    typeof options.body !== "undefined" &&
-    options.body !== null &&
-    options.body !== "";
+  // Optional overrides (backend can default)
+  name_prefix?: string;
+  region?: string;
+  environment?: string;
+  enable_apim?: boolean;
+  backend_app_hostname?: string;
+};
 
-  if (!headers["Content-Type"] && (hasBody || method !== "GET")) {
-    headers["Content-Type"] = "application/json";
-  }
-
-  if (idempotencyKey) headers["X-Idempotency-Key"] = idempotencyKey;
-
-  const res = await fetch(url(path), { ...options, headers });
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `${res.status} ${res.statusText}`);
-  }
-
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.includes("application/json")) {
-    // @ts-expect-error allow non-json/no-body responses
-    return undefined;
-  }
-
-  return res.json();
-}
-
-/* =========================================================
-   Types (backend-aligned)
-========================================================= */
-
-export interface RunRow {
+export type DeployPlanResponse = {
   run_id: string;
-  mode: "ai" | "manual";
-  title: string;
+  status: string; // awaiting_approval, etc.
+  plan_summary: Record<string, unknown>;
+  policy_warnings?: string[];
+};
 
+export type DeployApplyResponse = {
+  run_id: string;
   status: string;
-  stage: string;
+  pipeline_run_id?: number | string;
+};
 
-  cancel_requested?: boolean;
-
+export type RunRow = {
+  run_id: string;
+  mode: "manual" | "ai";
+  title?: string;
+  status: string; // infra_succeeded, pipeline_running, etc.
+  stage: string;  // deploy, infra, pipeline...
+  cancel_requested: boolean;
   created_at: string;
   updated_at: string;
 
+  // present in your backend response
   deploy?: {
     status?: string;
-    pipeline_run_id?: string; // ADO run number as string in your backend payload
+    pipeline_run_id?: number | string;
     region?: string;
     environment?: string;
   };
-}
+};
 
-export interface RunEvent {
+export type RunEvent = {
   id: number;
   run_id: string;
   level: "info" | "warning" | "error";
@@ -100,200 +77,239 @@ export interface RunEvent {
   status: string;
   message: string;
   created_at: string;
-}
+};
 
-/* =========================================================
-   Runs API (Agent: /api/runs/*)
-========================================================= */
-
-export async function listRuns(limit = 50): Promise<RunRow[]> {
-  return request(`/api/runs?limit=${limit}`);
-}
-
-export async function getRun(runId: string): Promise<RunRow> {
-  return request(`/api/runs/${runId}`);
-}
-
-export async function getRunEvents(
-  runId: string,
-  afterId = 0
-): Promise<RunEvent[]> {
-  return request(`/api/runs/${runId}/events?after_id=${afterId}`);
-}
-
-export async function cancelRun(runId: string): Promise<void> {
-  await request(`/api/runs/${runId}/cancel`, { method: "POST" });
-}
-
-/* =========================================================
-   Deploy (Agent: /api/deploy/*)
-========================================================= */
-
-export interface DeployPlanRequest {
-  recommendation_id: string;
-  name_prefix?: string;
-  region?: string;
-  environment?: string;
-  enable_apim?: boolean;
-  backend_app_hostname?: string;
-}
-
-export interface DeployPlanResponse {
+export type InfraOutputsResponse = {
   run_id: string;
-  status: string; // awaiting_approval
-  plan_summary: Record<string, unknown>;
-  policy_warnings: string[];
+  found: boolean;
+  status: "succeeded" | "failed" | "running" | string;
+  outputs?: Record<string, { type: string; value: unknown; sensitive: boolean }>;
+  updated_at?: string;
+};
+
+export type RunsListResponse =
+  | RunRow[]
+  | { items: RunRow[] }
+  | { runs: RunRow[] };
+
+/* =========================================================
+   Base URL (FORCE HTTPS to prevent Mixed Content)
+========================================================= */
+
+function normalizeBaseUrl(raw: string): string {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) return "";
+
+  // If user forgot protocol, assume https (unless localhost)
+  const hasProtocol = /^https?:\/\//i.test(trimmed);
+  const withProto = hasProtocol
+    ? trimmed
+    : trimmed.includes("localhost") || trimmed.includes("127.0.0.1")
+      ? `http://${trimmed}`
+      : `https://${trimmed}`;
+
+  let url: URL;
+  try {
+    url = new URL(withProto);
+  } catch {
+    // last resort: treat as https host
+    url = new URL(`https://${trimmed.replace(/^\/+/, "")}`);
+  }
+
+  // HARD FIX: upgrade http->https for anything not localhost
+  const isLocal =
+    url.hostname === "localhost" || url.hostname === "127.0.0.1";
+
+  if (!isLocal && url.protocol === "http:") {
+    url.protocol = "https:";
+  }
+
+  // Remove trailing slash for consistent joins
+  return url.toString().replace(/\/+$/, "");
 }
+
+function resolveApiBase(): string {
+  const env =
+    process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_ONBOARDING_API_URL || // optional compatibility
+    "http://localhost:8000";
+
+  const base = normalizeBaseUrl(env);
+
+  // In production, refuse empty
+  if (!base) {
+    throw new Error(
+      "API base URL is not set. Set NEXT_PUBLIC_AGENT_BASE_URL in Vercel."
+    );
+  }
+  return base;
+}
+
+export const API_BASE = resolveApiBase();
+
+/* =========================================================
+   Fetch helper
+========================================================= */
+
+async function readErrorBody(res: Response): Promise<string> {
+  try {
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      const j = await res.json();
+      return typeof j === "string" ? j : JSON.stringify(j);
+    }
+    return await res.text();
+  } catch {
+    return `${res.status} ${res.statusText}`;
+  }
+}
+
+async function fetchJson<T>(
+  path: string,
+  opts?: RequestInit & { idempotencyKey?: string }
+): Promise<T> {
+  const url = `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(opts?.headers as Record<string, string> | undefined),
+  };
+
+  if (opts?.idempotencyKey) {
+    headers["Idempotency-Key"] = opts.idempotencyKey;
+  }
+
+  const res = await fetch(url, {
+    ...opts,
+    headers,
+    // IMPORTANT: do not force credentials unless you need cookies
+    // credentials: "include",
+  });
+
+  if (!res.ok) {
+    const body = await readErrorBody(res);
+    throw new Error(body || `Request failed: ${res.status} ${res.statusText}`);
+  }
+
+  // Some endpoints may return empty body
+  const text = await res.text();
+  if (!text) return {} as T;
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // If backend returns plain text
+    return text as unknown as T;
+  }
+}
+
+/* =========================================================
+   Endpoints
+========================================================= */
+
+export async function health(): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>("/health", { method: "GET" });
+}
+
+/* ---------- Deploy flow ---------- */
 
 export async function deployPlan(
-  payload: DeployPlanRequest,
+  req: DeployPlanRequest,
   idempotencyKey?: string
 ): Promise<DeployPlanResponse> {
-  return request(
-    "/api/deploy/plan",
-    { method: "POST", body: JSON.stringify(payload) },
-    idempotencyKey
-  );
+  return fetchJson<DeployPlanResponse>("/api/deploy/plan", {
+    method: "POST",
+    body: JSON.stringify(req),
+    idempotencyKey,
+  });
 }
 
 export async function deployApprove(
   runId: string,
   idempotencyKey?: string
-): Promise<{ run_id: string; status: string }> {
-  return request(
-    `/api/deploy/${runId}/approve`,
-    { method: "POST" },
-    idempotencyKey
-  );
-}
-
-export async function deployReject(
-  runId: string,
-  reason?: string,
-  idempotencyKey?: string
-): Promise<{ run_id: string; status: string }> {
-  return request(
-    `/api/deploy/${runId}/reject`,
-    { method: "POST", body: JSON.stringify({ reason }) },
-    idempotencyKey
-  );
-}
-
-export interface DeployApplyResponse {
-  run_id: string;
-  status: string;
-  pipeline_run_id: number;
+): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/api/deploy/approve/${runId}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+    idempotencyKey,
+  });
 }
 
 export async function deployApply(
   runId: string,
   idempotencyKey?: string
 ): Promise<DeployApplyResponse> {
-  return request(
-    `/api/deploy/${runId}/apply`,
-    { method: "POST" },
-    idempotencyKey
-  );
+  return fetchJson<DeployApplyResponse>(`/api/deploy/apply/${runId}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+    idempotencyKey,
+  });
 }
 
-export interface DeployRefreshResponse {
-  run_id: string;
-  previous_status: string;
-  current_status: string;
-  changed: boolean;
-  pipeline: {
-    pipeline_id: number;
-    pipeline_run_id: number;
-    state: string;
-    result?: string | null;
-    url?: string | null;
-  };
+/* ---------- Runs + status ---------- */
+
+export async function getRun(runId: string): Promise<RunRow> {
+  return fetchJson<RunRow>(`/api/runs/${runId}`, { method: "GET" });
 }
 
-export async function deployRefresh(
-  runId: string
-): Promise<DeployRefreshResponse> {
-  return request(`/api/deploy/${runId}/refresh`);
-}
-
-/* =========================================================
-   Infra Outputs (Agent: /api/infra/outputs/{run_id})
-========================================================= */
-
-export interface InfraOutputsResponse {
-  run_id: string;
-  found: boolean;
-  status?: string;
-  outputs?: Record<
-    string,
-    {
-      type?: string;
-      value?: unknown;
-      sensitive?: boolean;
-    }
-  >;
-  updated_at?: string;
+export async function getRunEvents(
+  runId: string,
+  afterId = 0
+): Promise<RunEvent[]> {
+  const qs = new URLSearchParams();
+  if (afterId > 0) qs.set("after_id", String(afterId));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return fetchJson<RunEvent[]>(`/api/runs/${runId}/events${suffix}`, {
+    method: "GET",
+  });
 }
 
 export async function getInfraOutputs(
   runId: string
 ): Promise<InfraOutputsResponse> {
-  return request(`/api/infra/outputs/${runId}`);
+  return fetchJson<InfraOutputsResponse>(`/api/infra/outputs/${runId}`, {
+    method: "GET",
+  });
 }
 
-/* =========================================================
-   AI Recommendation + Snapshots (NOT LIVE YET ON AGENT)
-   - Keep types exported so frontend compiles
-   - Functions throw so UI shows honest message
-========================================================= */
-
-export interface RecommendRequest {
-  mode: "ai" | "manual";
-  industry: string;
-  scale: "small" | "medium" | "large";
-  cloud: "azure" | "aws" | "gcp";
+export async function cancelRun(runId: string): Promise<{ ok: boolean }> {
+  return fetchJson<{ ok: boolean }>(`/api/runs/${runId}/cancel`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
-export interface ArchitectureRecommendation {
-  cloud: string;
-  region: string;
-  env: string;
-  warehouse: string;
-  etl: string;
-  bi: string;
-  governance: string;
-  source: "ai" | "manual";
-  warnings?: string[];
-  reasoning?: string[];
+/* List runs (supports a few likely backend shapes) */
+export async function listRuns(): Promise<RunRow[]> {
+  const data = await fetchJson<RunsListResponse>("/api/runs", { method: "GET" });
+
+  if (Array.isArray(data)) return data;
+  if ("items" in data && Array.isArray(data.items)) return data.items;
+  if ("runs" in data && Array.isArray(data.runs)) return data.runs;
+
+  return [];
 }
 
-export interface RecommendationSnapshotCreate {
-  final: Record<string, unknown>;
-  ai?: Record<string, unknown> | null;
-  diff?: unknown[];
-  source_query?: Record<string, unknown> | null;
-  run_id?: string | null;
-}
-
-export interface RecommendationSnapshotSaved {
-  id: string;
-  status: "saved";
-}
+/* ---------- AI Recommend (backend not live yet) ---------- */
 
 export async function recommendStack(
-  _payload: RecommendRequest
+  req: RecommendRequest
 ): Promise<ArchitectureRecommendation> {
-  // When implemented on Agent: POST /api/ai/recommend-stack
-  throw new Error(
-    "recommendStack not available: Agent does not expose /api/ai/recommend-stack yet."
-  );
+  // Your UI shows this error: agent does not expose /api/ai/recommend-stack yet.
+  // Keep the call, but make the error clean.
+  return fetchJson<ArchitectureRecommendation>("/api/ai/recommend-stack", {
+    method: "POST",
+    body: JSON.stringify(req),
+  });
 }
 
+/* Optional: snapshot endpoint (only if you’ve actually implemented it server-side) */
 export async function saveRecommendationSnapshot(
-  _payload: RecommendationSnapshotCreate
-): Promise<RecommendationSnapshotSaved> {
-  // When implemented on Agent: POST /api/recommendations
-  throw new Error(
-    "saveRecommendationSnapshot not available: Agent does not expose /api/recommendations yet."
-  );
+  snapshot: RecommendationSnapshotCreate
+): Promise<{ id: string }> {
+  return fetchJson<{ id: string }>("/api/recommendations/snapshots", {
+    method: "POST",
+    body: JSON.stringify(snapshot),
+  });
 }

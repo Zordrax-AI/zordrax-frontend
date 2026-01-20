@@ -1,17 +1,14 @@
 import { Suspense } from "react";
 import DeployClient from "./deploy-client";
 
-export const dynamic = "force-dynamic";
-
 export default function DeployPage({
   searchParams,
 }: {
-  searchParams?: Record<string, string | string[] | undefined>;
+  searchParams?: { rec?: string };
 }) {
-  const recRaw = searchParams?.rec;
-  const rec =
-    (Array.isArray(recRaw) ? recRaw[0] : recRaw) ||
-    "test-001";
+  // If you haven't implemented recommendation snapshots yet,
+  // this will still work with a fallback value.
+  const rec = searchParams?.rec ?? "test-001";
 
   return (
     <Suspense fallback={<div>Loading deploy...</div>}>
