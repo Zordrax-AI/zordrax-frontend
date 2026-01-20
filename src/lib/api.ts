@@ -2,7 +2,7 @@
 
 /* =========================================================
    Base config (CANONICAL)
-   - Frontend talks to the Agent service ONLY
+   - Frontend talks to the Agent service only
    - Agent exposes routes under /api/*
 ========================================================= */
 
@@ -12,14 +12,13 @@ const BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL;
 
 if (!BASE) {
-  // Safe warning; build still succeeds
   console.warn(
     "Missing API base URL. Set NEXT_PUBLIC_AGENT_BASE_URL in .env / Vercel."
   );
 }
 
 function url(path: string) {
-  // Ensure we don't double-slash
+  // Avoid double slashes
   const b = (BASE || "").replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${b}${p}`;
@@ -27,9 +26,9 @@ function url(path: string) {
 
 /**
  * Request helper:
- * - JSON by default (when body exists OR method isn't GET)
+ * - JSON when sending a body (or non-GET)
  * - Optional idempotency keys
- * - Throws server response text for debugging
+ * - Throws server text for debugging
  */
 async function request<T>(
   path: string,
@@ -50,9 +49,7 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  if (idempotencyKey) {
-    headers["X-Idempotency-Key"] = idempotencyKey;
-  }
+  if (idempotencyKey) headers["X-Idempotency-Key"] = idempotencyKey;
 
   const res = await fetch(url(path), { ...options, headers });
 
@@ -66,7 +63,6 @@ async function request<T>(
     // @ts-expect-error allow non-json/no-body responses
     return undefined;
   }
-
   return res.json();
 }
 
@@ -83,25 +79,12 @@ export interface RunRow {
   created_at: string;
   updated_at: string;
 
-  // Deploy metadata (present for deploy runs)
+  // pipeline linkage metadata (what you showed in curl output)
   deploy?: {
     status?: string;
-    pipeline_run_id?: string;
+    pipeline_run_id?: string; // ADO build/run number, e.g. "860"
     region?: string;
     environment?: string;
-  };
-
-  /**
-   * Some pages in your frontend still reference run.manifest.outputs.
-   * Backend may or may not populate this; keep it optional.
-   */
-  manifest?: {
-    outputs?: Record<
-      string,
-      {
-        value: unknown;
-      }
-    >;
   };
 }
 
@@ -153,7 +136,7 @@ export interface DeployPlanRequest {
 
 export interface DeployPlanResponse {
   run_id: string;
-  status: string; // awaiting_approval (expected) but keep string for safety
+  status: string;
   plan_summary: Record<string, unknown>;
   policy_warnings: string[];
 }
@@ -234,7 +217,7 @@ export async function deployRefresh(runId: string): Promise<DeployRefreshRespons
 export interface InfraOutputsResponse {
   run_id: string;
   found: boolean;
-  status?: string;
+  status?: string; // "succeeded", etc.
   outputs?: Record<
     string,
     {
@@ -246,18 +229,14 @@ export interface InfraOutputsResponse {
   updated_at?: string;
 }
 
-export async function getInfraOutputs(
-  runId: string
-): Promise<InfraOutputsResponse> {
+export async function getInfraOutputs(runId: string): Promise<InfraOutputsResponse> {
   return request(`/api/infra/outputs/${runId}`);
 }
 
 /* =========================================================
-   AI Recommendation + Snapshots
-   NOTE:
-   Your CURRENT Agent OpenAPI does NOT expose these routes yet.
-   These types MUST exist so the frontend builds, but functions
-   throw at runtime until backend endpoints are added.
+   AI Recommendation + Snapshots (TYPES MUST EXIST for build)
+   NOTE: Your current Agent does NOT expose these routes yet.
+   So functions THROW (compile OK, runtime explains why).
 ========================================================= */
 
 export interface RecommendRequest {
@@ -296,7 +275,6 @@ export interface RecommendationSnapshotSaved {
 export async function recommendStack(
   _payload: RecommendRequest
 ): Promise<ArchitectureRecommendation> {
-  // When implemented on Agent: POST /api/ai/recommend-stack
   throw new Error(
     "recommendStack not available: Agent does not expose /api/ai/recommend-stack yet."
   );
@@ -305,7 +283,6 @@ export async function recommendStack(
 export async function saveRecommendationSnapshot(
   _payload: RecommendationSnapshotCreate
 ): Promise<RecommendationSnapshotSaved> {
-  // When implemented on Agent: POST /api/recommendations
   throw new Error(
     "saveRecommendationSnapshot not available: Agent does not expose /api/recommendations yet."
   );

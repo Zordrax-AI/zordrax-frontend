@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 
 import {
@@ -27,13 +28,9 @@ export default function DeployClient({
   const [error, setError] = useState<string | null>(null);
 
   function idemKey(prefix: string, id?: string | null) {
-    // Deterministic keys = retry safe if user double-clicks
     return id ? `${prefix}:${id}` : `${prefix}:${recommendationId}`;
   }
 
-  /* =========================================================
-     PLAN (SAFE)
-     ========================================================= */
   async function handlePlan() {
     setLoading(true);
     setError(null);
@@ -49,15 +46,12 @@ export default function DeployClient({
       setWarnings(res.policy_warnings ?? []);
       setPlanSummary(res.plan_summary);
     } catch (err: any) {
-      setError(err.message ?? "Failed to generate plan");
+      setError(err?.message ?? "Failed to generate plan");
     } finally {
       setLoading(false);
     }
   }
 
-  /* =========================================================
-     APPROVE + APPLY (TRIGGERS PIPELINE)
-     ========================================================= */
   async function handleApproveAndApply() {
     if (!runId) return;
 
@@ -65,10 +59,8 @@ export default function DeployClient({
     setError(null);
 
     try {
-      // 1) Approve
       await deployApprove(runId, idemKey("deploy-approve", runId));
 
-      // 2) Apply (trigger pipeline)
       const res: DeployApplyResponse = await deployApply(
         runId,
         idemKey("deploy-apply", runId)
@@ -78,38 +70,50 @@ export default function DeployClient({
         setPipelineRunId(res.pipeline_run_id);
       }
     } catch (err: any) {
-      setError(err.message ?? "Failed to approve/apply infrastructure");
+      setError(err?.message ?? "Failed to approve/apply infrastructure");
     } finally {
       setLoading(false);
     }
   }
 
-  /* =========================================================
-     RENDER
-     ========================================================= */
-
   return (
     <div className="space-y-4">
-      <Button onClick={handlePlan} disabled={loading}>
-        Generate Terraform Plan
-      </Button>
-
-      {runId && (
-        <Button onClick={handleApproveAndApply} disabled={loading}>
-          Approve & Apply
+      <div className="flex gap-3">
+        <Button onClick={handlePlan} disabled={loading}>
+          Generate Terraform Plan
         </Button>
-      )}
+
+        {runId && (
+          <Button onClick={handleApproveAndApply} disabled={loading}>
+            Approve &amp; Apply
+          </Button>
+        )}
+
+        {runId && (
+          <Link
+            href={`/portal/status?run=${encodeURIComponent(runId)}`}
+            className="inline-flex items-center rounded-md border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-900"
+          >
+            Open Status
+          </Link>
+        )}
+      </div>
 
       {pipelineRunId && (
-        <div className="rounded border border-green-500 p-3 text-green-700">
-          Pipeline triggered. Run ID: <b>{pipelineRunId}</b>
+        <div className="rounded border border-green-600/60 bg-green-950/20 p-3 text-green-300">
+          Pipeline triggered. ADO Run ID: <b>{pipelineRunId}</b>
+          {runId ? (
+            <div className="mt-1 text-xs text-green-300/80 font-mono break-all">
+              SSOT Run UUID: {runId}
+            </div>
+          ) : null}
         </div>
       )}
 
       {warnings.length > 0 && (
-        <div className="rounded border border-yellow-400 p-3">
-          <h3 className="font-semibold text-yellow-700">Policy Warnings</h3>
-          <ul className="list-disc pl-5">
+        <div className="rounded border border-yellow-600/50 bg-yellow-950/20 p-3">
+          <h3 className="font-semibold text-yellow-300">Policy Warnings</h3>
+          <ul className="mt-2 list-disc pl-5 text-yellow-200/90">
             {warnings.map((w, i) => (
               <li key={i}>{w}</li>
             ))}
@@ -118,13 +122,13 @@ export default function DeployClient({
       )}
 
       {planSummary && (
-        <pre className="rounded bg-gray-100 p-3 text-sm overflow-auto">
+        <pre className="rounded bg-slate-950/40 border border-slate-800 p-3 text-xs overflow-auto text-slate-200">
           {JSON.stringify(planSummary, null, 2)}
         </pre>
       )}
 
       {error && (
-        <div className="rounded border border-red-500 p-3 text-red-600">
+        <div className="rounded border border-red-600/60 bg-red-950/20 p-3 text-red-200">
           {error}
         </div>
       )}
