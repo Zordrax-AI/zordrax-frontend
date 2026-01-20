@@ -1,11 +1,9 @@
-// C:\Users\Zordr\Desktop\frontend-repo\src\lib\api.ts
+// src/lib/api.ts
 
 /* =========================================================
    Base config (CANONICAL)
    - Frontend talks to the Agent service only
    - Agent exposes routes under /api/*
-   - We support multiple env var names for backward compatibility,
-     but NEXT_PUBLIC_AGENT_BASE_URL is the canonical one.
 ========================================================= */
 
 const BASE =
@@ -27,9 +25,9 @@ function url(path: string) {
 
 /**
  * Request helper:
- * - Adds JSON header only when needed
- * - Optional idempotency key support
- * - Throws server response text for easier debugging
+ * - JSON by default when we send a body or method isn't GET
+ * - Optional idempotency keys
+ * - Throws server text for debugging
  */
 async function request<T>(
   path: string,
@@ -42,13 +40,18 @@ async function request<T>(
 
   const method = (options.method || "GET").toUpperCase();
   const hasBody =
-    typeof options.body !== "undefined" && options.body !== null && options.body !== "";
+    typeof options.body !== "undefined" &&
+    options.body !== null &&
+    options.body !== "";
 
+  // Only set JSON header when sending a body (or non-GET)
   if (!headers["Content-Type"] && (hasBody || method !== "GET")) {
     headers["Content-Type"] = "application/json";
   }
 
-  if (idempotencyKey) headers["X-Idempotency-Key"] = idempotencyKey;
+  if (idempotencyKey) {
+    headers["X-Idempotency-Key"] = idempotencyKey;
+  }
 
   const res = await fetch(url(path), { ...options, headers });
 
@@ -79,23 +82,12 @@ export interface RunRow {
   created_at: string;
   updated_at: string;
 
-  /**
-   * Optional runtime artifacts (Terraform, etc.)
-   * Some UI pages expect this field to exist.
-   */
+  // Present on some pages in the repo (keep optional so build is stable)
   manifest?: {
-    outputs?: Record<
-      string,
-      {
-        value: unknown;
-      }
-    >;
+    outputs?: Record<string, { value: unknown }>;
   };
 
-  /**
-   * Deploy stage info (what your agent currently returns)
-   * Example: run.deploy.status = "infra_succeeded"
-   */
+  // Present in your agent responses for deploy runs
   deploy?: {
     status?: string;
     pipeline_run_id?: string;
@@ -126,7 +118,10 @@ export async function getRun(runId: string): Promise<RunRow> {
   return request(`/api/runs/${runId}`);
 }
 
-export async function getRunEvents(runId: string, afterId = 0): Promise<RunEvent[]> {
+export async function getRunEvents(
+  runId: string,
+  afterId = 0
+): Promise<RunEvent[]> {
   return request(`/api/runs/${runId}/events?after_id=${afterId}`);
 }
 
@@ -149,7 +144,7 @@ export interface DeployPlanRequest {
 
 export interface DeployPlanResponse {
   run_id: string;
-  status: string;
+  status: string; // awaiting_approval
   plan_summary: Record<string, unknown>;
   policy_warnings: string[];
 }
@@ -190,7 +185,7 @@ export async function deployReject(
 
 export interface DeployApplyResponse {
   run_id: string;
-  status: string;
+  status: string; // pipeline_started, infra_succeeded, etc.
   pipeline_run_id: number;
 }
 
@@ -248,10 +243,9 @@ export async function getInfraOutputs(runId: string): Promise<InfraOutputsRespon
 
 /* =========================================================
    AI Recommendation + Snapshots
-   NOTE:
-   Your CURRENT Agent OpenAPI does NOT expose these routes yet.
-   We still export types + functions so the frontend compiles,
-   but the functions throw at runtime until backend is added.
+   NOTE: Your LIVE Agent OpenAPI does NOT expose these routes yet.
+   We export types so the frontend compiles, but functions throw
+   so you get a clear message (NOT a confusing {"detail":"Not Found"}).
 ========================================================= */
 
 export interface RecommendRequest {
@@ -292,7 +286,7 @@ export async function recommendStack(
 ): Promise<ArchitectureRecommendation> {
   // When implemented on Agent: POST /api/ai/recommend-stack
   throw new Error(
-    "recommendStack not available: Agent does not expose /api/ai/recommend-stack yet."
+    "AI recommend not live yet: Agent does not expose POST /api/ai/recommend-stack."
   );
 }
 
@@ -301,6 +295,6 @@ export async function saveRecommendationSnapshot(
 ): Promise<RecommendationSnapshotSaved> {
   // When implemented on Agent: POST /api/recommendations
   throw new Error(
-    "saveRecommendationSnapshot not available: Agent does not expose /api/recommendations yet."
+    "Snapshots not live yet: Agent does not expose POST /api/recommendations."
   );
 }
