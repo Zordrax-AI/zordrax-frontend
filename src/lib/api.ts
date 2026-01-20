@@ -2,7 +2,7 @@
 
 /* =========================================================
    Base config (CANONICAL)
-   - Frontend talks to the Agent service only
+   - Frontend talks to the Agent service ONLY
    - Agent exposes routes under /api/*
 ========================================================= */
 
@@ -12,12 +12,14 @@ const BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL;
 
 if (!BASE) {
+  // Safe warning; build still succeeds
   console.warn(
     "Missing API base URL. Set NEXT_PUBLIC_AGENT_BASE_URL in .env / Vercel."
   );
 }
 
 function url(path: string) {
+  // Ensure we don't double-slash
   const b = (BASE || "").replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${b}${p}`;
@@ -25,9 +27,9 @@ function url(path: string) {
 
 /**
  * Request helper:
- * - JSON by default when we send a body or method isn't GET
+ * - JSON by default (when body exists OR method isn't GET)
  * - Optional idempotency keys
- * - Throws server text for debugging
+ * - Throws server response text for debugging
  */
 async function request<T>(
   path: string,
@@ -44,7 +46,6 @@ async function request<T>(
     options.body !== null &&
     options.body !== "";
 
-  // Only set JSON header when sending a body (or non-GET)
   if (!headers["Content-Type"] && (hasBody || method !== "GET")) {
     headers["Content-Type"] = "application/json";
   }
@@ -82,17 +83,25 @@ export interface RunRow {
   created_at: string;
   updated_at: string;
 
-  // Present on some pages in the repo (keep optional so build is stable)
-  manifest?: {
-    outputs?: Record<string, { value: unknown }>;
-  };
-
-  // Present in your agent responses for deploy runs
+  // Deploy metadata (present for deploy runs)
   deploy?: {
     status?: string;
     pipeline_run_id?: string;
     region?: string;
     environment?: string;
+  };
+
+  /**
+   * Some pages in your frontend still reference run.manifest.outputs.
+   * Backend may or may not populate this; keep it optional.
+   */
+  manifest?: {
+    outputs?: Record<
+      string,
+      {
+        value: unknown;
+      }
+    >;
   };
 }
 
@@ -144,7 +153,7 @@ export interface DeployPlanRequest {
 
 export interface DeployPlanResponse {
   run_id: string;
-  status: string; // awaiting_approval
+  status: string; // awaiting_approval (expected) but keep string for safety
   plan_summary: Record<string, unknown>;
   policy_warnings: string[];
 }
@@ -185,7 +194,7 @@ export async function deployReject(
 
 export interface DeployApplyResponse {
   run_id: string;
-  status: string; // pipeline_started, infra_succeeded, etc.
+  status: string;
   pipeline_run_id: number;
 }
 
@@ -237,15 +246,18 @@ export interface InfraOutputsResponse {
   updated_at?: string;
 }
 
-export async function getInfraOutputs(runId: string): Promise<InfraOutputsResponse> {
+export async function getInfraOutputs(
+  runId: string
+): Promise<InfraOutputsResponse> {
   return request(`/api/infra/outputs/${runId}`);
 }
 
 /* =========================================================
    AI Recommendation + Snapshots
-   NOTE: Your LIVE Agent OpenAPI does NOT expose these routes yet.
-   We export types so the frontend compiles, but functions throw
-   so you get a clear message (NOT a confusing {"detail":"Not Found"}).
+   NOTE:
+   Your CURRENT Agent OpenAPI does NOT expose these routes yet.
+   These types MUST exist so the frontend builds, but functions
+   throw at runtime until backend endpoints are added.
 ========================================================= */
 
 export interface RecommendRequest {
@@ -286,7 +298,7 @@ export async function recommendStack(
 ): Promise<ArchitectureRecommendation> {
   // When implemented on Agent: POST /api/ai/recommend-stack
   throw new Error(
-    "AI recommend not live yet: Agent does not expose POST /api/ai/recommend-stack."
+    "recommendStack not available: Agent does not expose /api/ai/recommend-stack yet."
   );
 }
 
@@ -295,6 +307,6 @@ export async function saveRecommendationSnapshot(
 ): Promise<RecommendationSnapshotSaved> {
   // When implemented on Agent: POST /api/recommendations
   throw new Error(
-    "Snapshots not live yet: Agent does not expose POST /api/recommendations."
+    "saveRecommendationSnapshot not available: Agent does not expose /api/recommendations yet."
   );
 }
