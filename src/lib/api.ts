@@ -1,9 +1,11 @@
-// src/lib/api.ts
+// C:\Users\Zordr\Desktop\frontend-repo\src\lib\api.ts
 
 /* =========================================================
    Base config (CANONICAL)
-   - Frontend should talk to the Agent service only
+   - Frontend talks to the Agent service only
    - Agent exposes routes under /api/*
+   - We support multiple env var names for backward compatibility,
+     but NEXT_PUBLIC_AGENT_BASE_URL is the canonical one.
 ========================================================= */
 
 const BASE =
@@ -18,7 +20,6 @@ if (!BASE) {
 }
 
 function url(path: string) {
-  // Ensure we don't double-slash
   const b = (BASE || "").replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
   return `${b}${p}`;
@@ -26,9 +27,9 @@ function url(path: string) {
 
 /**
  * Request helper:
- * - JSON by default
- * - Optional idempotency keys
- * - Throws server text for debugging
+ * - Adds JSON header only when needed
+ * - Optional idempotency key support
+ * - Throws server response text for easier debugging
  */
 async function request<T>(
   path: string,
@@ -39,8 +40,11 @@ async function request<T>(
     ...(options.headers as Record<string, string> | undefined),
   };
 
-  // Only add JSON headers if body exists or method is not GET
-  if (!headers["Content-Type"] && options.method && options.method !== "GET") {
+  const method = (options.method || "GET").toUpperCase();
+  const hasBody =
+    typeof options.body !== "undefined" && options.body !== null && options.body !== "";
+
+  if (!headers["Content-Type"] && (hasBody || method !== "GET")) {
     headers["Content-Type"] = "application/json";
   }
 
@@ -58,11 +62,12 @@ async function request<T>(
     // @ts-expect-error allow non-json/no-body responses
     return undefined;
   }
+
   return res.json();
 }
 
 /* =========================================================
-   Types (frontend-level)
+   Types (SSOT-friendly / backend-aligned where possible)
 ========================================================= */
 
 export interface RunRow {
@@ -73,6 +78,24 @@ export interface RunRow {
   stage: string;
   created_at: string;
   updated_at: string;
+
+  /**
+   * Optional runtime artifacts (Terraform, etc.)
+   * Some UI pages expect this field to exist.
+   */
+  manifest?: {
+    outputs?: Record<
+      string,
+      {
+        value: unknown;
+      }
+    >;
+  };
+
+  /**
+   * Deploy stage info (what your agent currently returns)
+   * Example: run.deploy.status = "infra_succeeded"
+   */
   deploy?: {
     status?: string;
     pipeline_run_id?: string;
@@ -146,7 +169,11 @@ export async function deployApprove(
   runId: string,
   idempotencyKey?: string
 ): Promise<{ run_id: string; status: string }> {
-  return request(`/api/deploy/${runId}/approve`, { method: "POST" }, idempotencyKey);
+  return request(
+    `/api/deploy/${runId}/approve`,
+    { method: "POST" },
+    idempotencyKey
+  );
 }
 
 export async function deployReject(
@@ -171,7 +198,11 @@ export async function deployApply(
   runId: string,
   idempotencyKey?: string
 ): Promise<DeployApplyResponse> {
-  return request(`/api/deploy/${runId}/apply`, { method: "POST" }, idempotencyKey);
+  return request(
+    `/api/deploy/${runId}/apply`,
+    { method: "POST" },
+    idempotencyKey
+  );
 }
 
 export interface DeployRefreshResponse {
@@ -193,9 +224,34 @@ export async function deployRefresh(runId: string): Promise<DeployRefreshRespons
 }
 
 /* =========================================================
-   AI + Snapshots (ONLY if agent exposes them)
-   Right now your agent OpenAPI shows NO /api/ai/* and NO /api/recommendations.
-   So these will 404 until you add them on the backend.
+   Infra Outputs (Agent exposes /api/infra/outputs/{run_id})
+========================================================= */
+
+export interface InfraOutputsResponse {
+  run_id: string;
+  found: boolean;
+  status?: string;
+  outputs?: Record<
+    string,
+    {
+      type?: string;
+      value?: unknown;
+      sensitive?: boolean;
+    }
+  >;
+  updated_at?: string;
+}
+
+export async function getInfraOutputs(runId: string): Promise<InfraOutputsResponse> {
+  return request(`/api/infra/outputs/${runId}`);
+}
+
+/* =========================================================
+   AI Recommendation + Snapshots
+   NOTE:
+   Your CURRENT Agent OpenAPI does NOT expose these routes yet.
+   We still export types + functions so the frontend compiles,
+   but the functions throw at runtime until backend is added.
 ========================================================= */
 
 export interface RecommendRequest {
@@ -205,14 +261,46 @@ export interface RecommendRequest {
   cloud: "azure" | "aws" | "gcp";
 }
 
-export async function recommendStack(_payload: RecommendRequest) {
+export interface ArchitectureRecommendation {
+  cloud: string;
+  region: string;
+  env: string;
+  warehouse: string;
+  etl: string;
+  bi: string;
+  governance: string;
+  source: "ai" | "manual";
+  warnings?: string[];
+  reasoning?: string[];
+}
+
+export interface RecommendationSnapshotCreate {
+  final: Record<string, unknown>;
+  ai?: Record<string, unknown> | null;
+  diff?: unknown[];
+  source_query?: Record<string, unknown> | null;
+  run_id?: string | null;
+}
+
+export interface RecommendationSnapshotSaved {
+  id: string;
+  status: "saved";
+}
+
+export async function recommendStack(
+  _payload: RecommendRequest
+): Promise<ArchitectureRecommendation> {
+  // When implemented on Agent: POST /api/ai/recommend-stack
   throw new Error(
-    "recommendStack not available: backend does not expose /api/ai/recommend-stack yet."
+    "recommendStack not available: Agent does not expose /api/ai/recommend-stack yet."
   );
 }
 
-export async function saveRecommendationSnapshot(_payload: unknown) {
+export async function saveRecommendationSnapshot(
+  _payload: RecommendationSnapshotCreate
+): Promise<RecommendationSnapshotSaved> {
+  // When implemented on Agent: POST /api/recommendations
   throw new Error(
-    "saveRecommendationSnapshot not available: backend does not expose /api/recommendations yet."
+    "saveRecommendationSnapshot not available: Agent does not expose /api/recommendations yet."
   );
 }
