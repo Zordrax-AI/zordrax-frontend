@@ -4,162 +4,165 @@ import { useMemo, useState } from "react";
 
 import {
   deployPlan,
-  deployApprove,
   deployApply,
+  deployApprove,
   type DeployPlanResponse,
   type DeployApplyResponse,
 } from "@/lib/api";
 
-type Props = {
-  recommendationId: string;
-};
-
-function toNumberOrNull(v: unknown): number | null {
+function safeNumber(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
-  if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+  if (typeof v === "string") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
   return null;
 }
 
-export default function DeployClient({ recommendationId }: Props) {
+type Props = {
+  recommendationId?: string;
+};
+
+export default function DeployClient({ recommendationId = "test-001" }: Props) {
+  const [runId, setRunId] = useState<string>("");
   const [plan, setPlan] = useState<DeployPlanResponse | null>(null);
   const [apply, setApply] = useState<DeployApplyResponse | null>(null);
-
-  const [runId, setRunId] = useState<string | null>(null);
   const [pipelineRunId, setPipelineRunId] = useState<number | null>(null);
 
-  const [busy, setBusy] = useState<null | "plan" | "apply">(null);
-  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>("");
 
-  const statusHref = useMemo(() => {
-    return runId ? `/portal/status?run=${encodeURIComponent(runId)}` : null;
-  }, [runId]);
+  const prettyPlan = useMemo(
+    () => (plan ? JSON.stringify(plan, null, 2) : ""),
+    [plan]
+  );
+  const prettyApply = useMemo(
+    () => (apply ? JSON.stringify(apply, null, 2) : ""),
+    [apply]
+  );
 
   async function handlePlan() {
-    setError(null);
+    setError("");
     setApply(null);
     setPipelineRunId(null);
+    setBusy(true);
 
     try {
-      setBusy("plan");
-
-      const res = await deployPlan(
-        {
-          recommendation_id: recommendationId,
-          name_prefix: "zordrax",
-          region: "westeurope",
-          environment: "dev",
-          enable_apim: false,
-          backend_app_hostname: "example.azurewebsites.net",
-        },
-        // idempotency key: safe to re-click plan without creating duplicates (optional)
-        `plan:${recommendationId}:${Date.now()}`
-      );
+      const res = await deployPlan({
+        recommendation_id: recommendationId,
+        name_prefix: "zordrax",
+        region: "westeurope",
+        environment: "dev",
+        enable_apim: false,
+        backend_app_hostname: "example.azurewebsites.net",
+      });
 
       setPlan(res);
       setRunId(res.run_id);
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to generate terraform plan");
+
+      try {
+        localStorage.setItem("zordrax:last_run_id", res.run_id);
+      } catch {}
+    } catch (e: any) {
+      setError(e?.message ?? "Plan failed");
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   }
 
-  async function handleApproveAndApply() {
-    setError(null);
-    setApply(null);
-
+  async function handleApproveApply() {
+    setError("");
     if (!runId) {
-      setError("No runId. Click Generate Terraform Plan first.");
+      setError("No run_id yet. Click Generate Terraform Plan first.");
       return;
     }
 
+    setBusy(true);
     try {
-      setBusy("apply");
+      // OPTIONAL approve step — ignore 404 if backend doesn’t implement it
+      try {
+        await deployApprove(runId);
+      } catch (e: any) {
+        const msg = String(e?.message ?? "");
+        const is404 =
+          msg.includes("404") ||
+          msg.includes("Not Found") ||
+          msg.includes('"detail":"Not Found"');
+        if (!is404) throw e;
+      }
 
-      // approve (supports both backend route styles)
-      await deployApprove(runId, `approve:${runId}:${Date.now()}`);
-
-      // apply (supports both backend route styles)
-      const res = await deployApply(runId, `apply:${runId}:${Date.now()}`);
+      const res = await deployApply(runId);
       setApply(res);
 
-      const pr = toNumberOrNull(res.pipeline_run_id);
-      setPipelineRunId(pr);
-    } catch (err: any) {
-      setError(err?.message ?? "Failed to approve/apply infrastructure");
+      const n = safeNumber(res?.pipeline_run_id);
+      if (n !== null) setPipelineRunId(n);
+    } catch (e: any) {
+      setError(e?.message ?? "Apply failed");
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
+  }
+
+  function handleViewStatus() {
+    if (!runId) {
+      setError("No run_id yet. Click Generate Terraform Plan first.");
+      return;
+    }
+    window.location.href = `/portal/status?run=${encodeURIComponent(runId)}`;
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-3">
+      <div className="flex gap-3">
         <button
           onClick={handlePlan}
-          disabled={busy !== null}
+          disabled={busy}
           className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
         >
-          {busy === "plan" ? "Planning..." : "Generate Terraform Plan"}
+          Generate Terraform Plan
         </button>
 
         <button
-          onClick={handleApproveAndApply}
-          disabled={busy !== null || !runId}
+          onClick={handleApproveApply}
+          disabled={busy || !runId}
           className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
         >
-          {busy === "apply" ? "Applying..." : "Approve & Apply"}
+          Approve &amp; Apply
         </button>
 
-        {statusHref && (
-          <a
-            href={statusHref}
-            className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950"
-          >
-            View Status
-          </a>
-        )}
+        <button
+          onClick={handleViewStatus}
+          disabled={!runId}
+          className="rounded-md bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-950 disabled:opacity-60"
+        >
+          View Status
+        </button>
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-900 bg-red-950/40 p-3 text-sm text-red-200">
+        <div className="rounded-md border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">
           {error}
         </div>
       )}
 
-      {(runId || pipelineRunId !== null) && (
+      {runId && (
         <div className="text-sm text-slate-200">
-          {runId && (
-            <div>
-              <span className="text-slate-400">Run ID:</span>{" "}
-              <span className="font-mono">{runId}</span>
-            </div>
-          )}
+          <span className="font-semibold">Run ID:</span> {runId}
           {pipelineRunId !== null && (
-            <div>
-              <span className="text-slate-400">Pipeline Run:</span>{" "}
-              <span className="font-mono">{pipelineRunId}</span>
-            </div>
+            <>
+              {" "}
+              • <span className="font-semibold">Pipeline Run:</span>{" "}
+              {pipelineRunId}
+            </>
           )}
         </div>
       )}
 
-      {plan && (
-        <div className="rounded-lg border border-slate-800 bg-slate-950/30 p-4">
-          <h3 className="mb-2 text-sm font-semibold text-slate-100">Plan Response</h3>
-          <pre className="overflow-auto text-xs text-slate-200">
-            {JSON.stringify(plan, null, 2)}
-          </pre>
-        </div>
-      )}
-
-      {apply && (
-        <div className="rounded-lg border border-slate-800 bg-slate-950/30 p-4">
-          <h3 className="mb-2 text-sm font-semibold text-slate-100">Apply Response</h3>
-          <pre className="overflow-auto text-xs text-slate-200">
-            {JSON.stringify(apply, null, 2)}
-          </pre>
-        </div>
+      {(plan || apply) && (
+        <pre className="max-h-[420px] overflow-auto rounded-lg border border-slate-800 bg-slate-950/40 p-4 text-xs text-slate-200">
+          {plan ? `Plan Response\n${prettyPlan}\n\n` : ""}
+          {apply ? `Apply Response\n${prettyApply}\n` : ""}
+        </pre>
       )}
     </div>
   );

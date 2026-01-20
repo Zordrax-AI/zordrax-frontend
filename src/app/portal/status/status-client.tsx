@@ -13,48 +13,30 @@ import {
   type InfraOutputsResponse,
 } from "@/lib/api";
 
-/* =========================================================
-   Local types for rendering outputs
-========================================================= */
+type TerraformOutputs = Record<
+  string,
+  { type: string; value: unknown; sensitive: boolean }
+>;
 
-type TerraformOutputValue = {
-  value: unknown;
-};
-
-type TerraformOutputs = Record<string, TerraformOutputValue>;
-
-function toTerraformOutputs(resp: InfraOutputsResponse | null): TerraformOutputs | null {
-  if (!resp?.outputs) return null;
-
-  const mapped: TerraformOutputs = {};
-  for (const [k, v] of Object.entries(resp.outputs)) {
-    mapped[k] = { value: v.value };
-  }
-  return mapped;
+function entries(obj: TerraformOutputs): [string, TerraformOutputs[string]][] {
+  return Object.entries(obj);
 }
-
-function typedEntries(outputs: TerraformOutputs): [string, TerraformOutputValue][] {
-  return Object.entries(outputs);
-}
-
-/* =========================================================
-   Component
-========================================================= */
 
 export default function StatusClient() {
   const params = useSearchParams();
-  const runIdParam = params.get("run");
-
-  // Make a stable string for TS + memo
-  const runId = useMemo(() => (runIdParam ? String(runIdParam) : ""), [runIdParam]);
+  const runId = params.get("run") ?? ""; // <- FIX: never string|null
 
   const [run, setRun] = useState<RunRow | null>(null);
   const [events, setEvents] = useState<RunEvent[]>([]);
   const [lastId, setLastId] = useState(0);
-  const [infra, setInfra] = useState<InfraOutputsResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const outputs = useMemo(() => toTerraformOutputs(infra), [infra]);
+  const [outputsResp, setOutputsResp] = useState<InfraOutputsResponse | null>(null);
+  const [error, setError] = useState<string>("");
+
+  const outputs = useMemo(() => {
+    const o = outputsResp?.outputs;
+    return o && typeof o === "object" ? (o as TerraformOutputs) : null;
+  }, [outputsResp]);
 
   useEffect(() => {
     if (!runId) return;
@@ -63,38 +45,20 @@ export default function StatusClient() {
 
     async function bootstrap() {
       try {
-        setError(null);
-
         const r = await getRun(runId);
         if (!alive) return;
         setRun(r);
 
         const out = await getInfraOutputs(runId);
         if (!alive) return;
-        setInfra(out);
-
-        const ev = await getRunEvents(runId, 0);
-        if (!alive) return;
-        setEvents(ev);
-        if (ev.length) setLastId(ev[ev.length - 1].id);
+        setOutputsResp(out);
       } catch (e: any) {
         if (!alive) return;
-        setError(e?.message ?? "Failed to load run status");
+        setError(e?.message ?? "Failed to load run");
       }
     }
 
     bootstrap();
-
-    return () => {
-      alive = false;
-    };
-  }, [runId]);
-
-  // Poll events
-  useEffect(() => {
-    if (!runId) return;
-
-    let alive = true;
 
     const timer = setInterval(async () => {
       try {
@@ -105,8 +69,16 @@ export default function StatusClient() {
           setEvents((prev) => [...prev, ...ev]);
           setLastId(ev[ev.length - 1].id);
         }
+
+        const r = await getRun(runId);
+        if (!alive) return;
+        setRun(r);
+
+        const out = await getInfraOutputs(runId);
+        if (!alive) return;
+        setOutputsResp(out);
       } catch {
-        // ignore
+        // keep polling; don’t spam UI
       }
     }, 2000);
 
@@ -116,32 +88,6 @@ export default function StatusClient() {
     };
   }, [runId, lastId]);
 
-  // Poll run + outputs
-  useEffect(() => {
-    if (!runId) return;
-
-    let alive = true;
-
-    const timer = setInterval(async () => {
-      try {
-        const r = await getRun(runId);
-        if (!alive) return;
-        setRun(r);
-
-        const out = await getInfraOutputs(runId);
-        if (!alive) return;
-        setInfra(out);
-      } catch {
-        // ignore
-      }
-    }, 5000);
-
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [runId]);
-
   async function handleCancel() {
     if (!runId) return;
     await cancelRun(runId);
@@ -150,7 +96,7 @@ export default function StatusClient() {
 
   if (!runId) {
     return (
-      <div className="rounded-lg border border-slate-800 p-4 text-sm text-slate-300">
+      <div className="rounded-lg border border-slate-800 p-4 text-sm text-slate-200">
         No run id provided. Open a status page like:
         <div className="mt-2 font-mono text-cyan-300">/portal/status?run=&lt;uuid&gt;</div>
       </div>
@@ -159,33 +105,32 @@ export default function StatusClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-6">
+        <div className="space-y-1">
           <h1 className="text-xl font-semibold">Run Status</h1>
-          <div className="mt-2 text-xs text-slate-400 font-mono">{runId}</div>
+          <div className="text-xs text-slate-300 font-mono break-all">{runId}</div>
 
           {run && (
-            <div className="mt-2 text-sm text-slate-300">
-              Status: <span className="text-slate-100">{run.status}</span>
-              {" • "}
-              Stage: <span className="text-slate-100">{run.stage}</span>
+            <div className="text-sm text-slate-200">
+              Status: <span className="text-cyan-300">{run.status}</span> • Stage:{" "}
+              <span className="text-cyan-300">{run.stage}</span>
               {run.deploy?.pipeline_run_id != null && (
                 <>
-                  {" • "}
-                  Pipeline Run:{" "}
-                  <span className="text-slate-100">{String(run.deploy.pipeline_run_id)}</span>
+                  {" "}
+                  • Pipeline Run:{" "}
+                  <span className="text-cyan-300">{String(run.deploy.pipeline_run_id)}</span>
                 </>
               )}
               {run.deploy?.region && (
                 <>
-                  {" • "}
-                  Region: <span className="text-slate-100">{run.deploy.region}</span>
+                  {" "}
+                  • Region: <span className="text-cyan-300">{run.deploy.region}</span>
                 </>
               )}
               {run.deploy?.environment && (
                 <>
-                  {" • "}
-                  Env: <span className="text-slate-100">{run.deploy.environment}</span>
+                  {" "}
+                  • Env: <span className="text-cyan-300">{run.deploy.environment}</span>
                 </>
               )}
             </div>
@@ -201,61 +146,42 @@ export default function StatusClient() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-800 bg-red-950/30 p-3 text-sm text-red-200">
+        <div className="rounded-md border border-red-800 bg-red-950/40 p-3 text-sm text-red-200">
           {error}
         </div>
       )}
 
-      {/* Terraform outputs */}
       {outputs && (
-        <TerraformOutputsTable outputs={outputs} />
+        <TerraformOutputsTable outputs={outputs} status={outputsResp?.status ?? ""} />
       )}
 
-      {/* Event log */}
-      <div className="rounded-lg border border-slate-800 p-4">
-        <h2 className="mb-3 text-sm font-semibold">Event Log</h2>
-
-        {events.length === 0 ? (
-          <div className="text-sm text-slate-400">No events yet.</div>
-        ) : (
-          <div className="space-y-3">
-            {events.map((e) => (
-              <div key={e.id} className="rounded-md border border-slate-800 p-3">
-                <div className="text-xs text-slate-400">
-                  #{e.id} • {e.level} • {e.stage} • {e.status} •{" "}
-                  {new Date(e.created_at).toLocaleString()}
-                </div>
-                <div className="mt-1 text-sm text-slate-200">{e.message}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <EventLog events={events} />
     </div>
   );
 }
 
-/* =========================================================
-   Terraform Outputs Renderer
-========================================================= */
-
-function TerraformOutputsTable({ outputs }: { outputs: TerraformOutputs }) {
+function TerraformOutputsTable({
+  outputs,
+  status,
+}: {
+  outputs: TerraformOutputs;
+  status: string;
+}) {
   return (
     <div className="rounded-lg border border-slate-800 p-4">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Terraform Outputs</h2>
-        <div className="text-xs text-slate-400">status: succeeded</div>
+        <div className="text-xs text-slate-400">status: {status}</div>
       </div>
 
       <table className="w-full text-sm">
         <tbody>
-          {typedEntries(outputs).map(([key, output]) => {
-            const value = output.value;
-
+          {entries(outputs).map(([key, output]) => {
+            const value = output?.value;
             return (
-              <tr key={key} className="border-t border-slate-800 align-top">
-                <td className="py-2 pr-4 font-mono text-cyan-300">{key}</td>
-                <td className="py-2 font-mono text-slate-300 break-all whitespace-pre-wrap">
+              <tr key={key} className="border-t border-slate-800">
+                <td className="py-2 font-mono text-cyan-300">{key}</td>
+                <td className="py-2 font-mono text-slate-300 break-all">
                   {typeof value === "string" ? value : JSON.stringify(value, null, 2)}
                 </td>
               </tr>
@@ -263,6 +189,30 @@ function TerraformOutputsTable({ outputs }: { outputs: TerraformOutputs }) {
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function EventLog({ events }: { events: RunEvent[] }) {
+  return (
+    <div className="rounded-lg border border-slate-800 p-4">
+      <h2 className="mb-3 text-sm font-semibold">Event Log</h2>
+
+      <div className="space-y-3">
+        {events.length === 0 && (
+          <div className="text-sm text-slate-400">No events yet.</div>
+        )}
+
+        {events.map((e) => (
+          <div key={e.id} className="rounded-md border border-slate-800 bg-slate-950/40 p-3">
+            <div className="text-xs text-slate-400 font-mono">
+              #{e.id} • {e.level} • {e.stage} • {e.status} •{" "}
+              {new Date(e.created_at).toLocaleString()}
+            </div>
+            <div className="text-sm text-slate-200">{e.message}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

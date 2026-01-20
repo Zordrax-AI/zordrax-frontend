@@ -5,9 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { listRuns, type RunRow } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
-
-export default function RunsPage() {
+export default function RunsClient() {
   const [runs, setRuns] = useState<RunRow[]>([]);
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState(false);

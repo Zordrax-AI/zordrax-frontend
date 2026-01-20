@@ -3,9 +3,6 @@
    Zordrax Frontend <-> Onboarding Agent API (SSOT-ish)
    - Forces HTTPS for non-localhost to prevent Mixed Content
    - Central fetch helper + typed endpoints
-   - Approve/Apply supports BOTH backend route styles:
-       A) /api/deploy/approve/{runId} + /api/deploy/apply/{runId}
-       B) /api/deploy/approve (body: {run_id}) + /api/deploy/apply (body: {run_id})
 ========================================================= */
 
 export type RecommendRequest = {
@@ -30,6 +27,7 @@ export type RecommendationSnapshotCreate = {
 
 export type DeployPlanRequest = {
   recommendation_id: string;
+
   name_prefix?: string;
   region?: string;
   environment?: string;
@@ -39,7 +37,7 @@ export type DeployPlanRequest = {
 
 export type DeployPlanResponse = {
   run_id: string;
-  status: string; // awaiting_approval, etc.
+  status: string;
   plan_summary: Record<string, unknown>;
   policy_warnings?: string[];
 };
@@ -143,20 +141,8 @@ function resolveApiBase(): string {
 export const API_BASE = resolveApiBase();
 
 /* =========================================================
-   Fetch helper + typed error
+   Fetch helper
 ========================================================= */
-
-export class ApiError extends Error {
-  status: number;
-  body: string;
-
-  constructor(status: number, body: string) {
-    super(body || `Request failed with status ${status}`);
-    this.name = "ApiError";
-    this.status = status;
-    this.body = body;
-  }
-}
 
 async function readErrorBody(res: Response): Promise<string> {
   try {
@@ -193,7 +179,7 @@ async function fetchJson<T>(
 
   if (!res.ok) {
     const body = await readErrorBody(res);
-    throw new ApiError(res.status, body || `${res.status} ${res.statusText}`);
+    throw new Error(body || `Request failed: ${res.status} ${res.statusText}`);
   }
 
   const text = await res.text();
@@ -228,57 +214,29 @@ export async function deployPlan(
 }
 
 /**
- * Approve supports BOTH:
- *  - POST /api/deploy/approve/{runId}
- *  - POST /api/deploy/approve   body:{run_id}
+ * OPTIONAL endpoint.
+ * If your backend doesn't implement it, caller should ignore 404 and continue.
  */
 export async function deployApprove(
   runId: string,
   idempotencyKey?: string
 ): Promise<{ ok: boolean }> {
-  try {
-    return await fetchJson<{ ok: boolean }>(`/api/deploy/approve/${runId}`, {
-      method: "POST",
-      body: JSON.stringify({}),
-      idempotencyKey,
-    });
-  } catch (e: any) {
-    if (e?.name === "ApiError" && e.status === 404) {
-      return fetchJson<{ ok: boolean }>(`/api/deploy/approve`, {
-        method: "POST",
-        body: JSON.stringify({ run_id: runId }),
-        idempotencyKey,
-      });
-    }
-    throw e;
-  }
+  return fetchJson<{ ok: boolean }>(`/api/deploy/approve/${runId}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+    idempotencyKey,
+  });
 }
 
-/**
- * Apply supports BOTH:
- *  - POST /api/deploy/apply/{runId}
- *  - POST /api/deploy/apply   body:{run_id}
- */
 export async function deployApply(
   runId: string,
   idempotencyKey?: string
 ): Promise<DeployApplyResponse> {
-  try {
-    return await fetchJson<DeployApplyResponse>(`/api/deploy/apply/${runId}`, {
-      method: "POST",
-      body: JSON.stringify({}),
-      idempotencyKey,
-    });
-  } catch (e: any) {
-    if (e?.name === "ApiError" && e.status === 404) {
-      return fetchJson<DeployApplyResponse>(`/api/deploy/apply`, {
-        method: "POST",
-        body: JSON.stringify({ run_id: runId }),
-        idempotencyKey,
-      });
-    }
-    throw e;
-  }
+  return fetchJson<DeployApplyResponse>(`/api/deploy/apply/${runId}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+    idempotencyKey,
+  });
 }
 
 /* ---------- Runs + status ---------- */
@@ -314,13 +272,12 @@ export async function cancelRun(runId: string): Promise<{ ok: boolean }> {
   });
 }
 
-/* List runs (supports a few likely backend shapes) */
 export async function listRuns(): Promise<RunRow[]> {
   const data = await fetchJson<RunsListResponse>("/api/runs", { method: "GET" });
 
   if (Array.isArray(data)) return data;
-  if ("items" in data && Array.isArray((data as any).items)) return (data as any).items;
-  if ("runs" in data && Array.isArray((data as any).runs)) return (data as any).runs;
+  if ("items" in data && Array.isArray(data.items)) return data.items;
+  if ("runs" in data && Array.isArray(data.runs)) return data.runs;
 
   return [];
 }
