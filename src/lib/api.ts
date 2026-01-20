@@ -1,33 +1,34 @@
 // src/lib/api.ts
 
 /* =========================================================
-   Base config
+   Base config (CANONICAL)
+   - Frontend should talk to the Agent service only
+   - Agent exposes routes under /api/*
 ========================================================= */
 
 const BASE =
   process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
   process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "";
+  process.env.NEXT_PUBLIC_API_BASE_URL;
 
 if (!BASE) {
   console.warn(
-    "API base URL is not set. Set NEXT_PUBLIC_AGENT_BASE_URL (preferred)."
+    "Missing API base URL. Set NEXT_PUBLIC_AGENT_BASE_URL in .env / Vercel."
   );
 }
 
 function url(path: string) {
-  // ensure we never end up with double slashes
-  const base = BASE.replace(/\/$/, "");
+  // Ensure we don't double-slash
+  const b = (BASE || "").replace(/\/+$/, "");
   const p = path.startsWith("/") ? path : `/${path}`;
-  return `${base}${p}`;
+  return `${b}${p}`;
 }
 
 /**
- * Enterprise-safe request helper:
- * - Adds JSON headers by default
- * - Supports optional idempotency keys (retry-safe UX)
- * - Throws server error text for easier debugging
+ * Request helper:
+ * - JSON by default
+ * - Optional idempotency keys
+ * - Throws server text for debugging
  */
 async function request<T>(
   path: string,
@@ -35,20 +36,21 @@ async function request<T>(
   idempotencyKey?: string
 ): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options.headers as Record<string, string> | undefined),
   };
 
+  // Only add JSON headers if body exists or method is not GET
+  if (!headers["Content-Type"] && options.method && options.method !== "GET") {
+    headers["Content-Type"] = "application/json";
+  }
+
   if (idempotencyKey) headers["X-Idempotency-Key"] = idempotencyKey;
 
-  const res = await fetch(url(path), {
-    ...options,
-    headers,
-  });
+  const res = await fetch(url(path), { ...options, headers });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || res.statusText);
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `${res.status} ${res.statusText}`);
   }
 
   const contentType = res.headers.get("content-type") || "";
@@ -56,12 +58,11 @@ async function request<T>(
     // @ts-expect-error allow non-json/no-body responses
     return undefined;
   }
-
   return res.json();
 }
 
 /* =========================================================
-   Core Run Types (BACKEND-ALIGNED)
+   Types (frontend-level)
 ========================================================= */
 
 export interface RunRow {
@@ -72,9 +73,11 @@ export interface RunRow {
   stage: string;
   created_at: string;
   updated_at: string;
-
-  manifest?: {
-    outputs?: Record<string, { value: unknown }>;
+  deploy?: {
+    status?: string;
+    pipeline_run_id?: string;
+    region?: string;
+    environment?: string;
   };
 }
 
@@ -89,21 +92,18 @@ export interface RunEvent {
 }
 
 /* =========================================================
-   Runs API  (NOTE: backend is /api/runs/*)
+   Runs API (Agent exposes /api/runs/*)
 ========================================================= */
 
 export async function listRuns(limit = 50): Promise<RunRow[]> {
-  return request(`/api/runs/?limit=${limit}`);
+  return request(`/api/runs?limit=${limit}`);
 }
 
 export async function getRun(runId: string): Promise<RunRow> {
   return request(`/api/runs/${runId}`);
 }
 
-export async function getRunEvents(
-  runId: string,
-  afterId = 0
-): Promise<RunEvent[]> {
+export async function getRunEvents(runId: string, afterId = 0): Promise<RunEvent[]> {
   return request(`/api/runs/${runId}/events?after_id=${afterId}`);
 }
 
@@ -112,68 +112,7 @@ export async function cancelRun(runId: string): Promise<void> {
 }
 
 /* =========================================================
-   AI Recommendation  (frontend expects these exports)
-   IMPORTANT: Only works if backend exposes /api/ai/recommend-stack
-========================================================= */
-
-export interface RecommendRequest {
-  mode: "ai" | "manual";
-  industry: string;
-  scale: "small" | "medium" | "large";
-  cloud: "azure" | "aws" | "gcp";
-}
-
-export interface ArchitectureRecommendation {
-  cloud: string;
-  region: string;
-  env: string;
-  warehouse: string;
-  etl: string;
-  bi: string;
-  governance: string;
-  source: "ai" | "manual";
-  warnings?: string[];
-  reasoning?: string[];
-}
-
-export async function recommendStack(
-  payload: RecommendRequest
-): Promise<ArchitectureRecommendation> {
-  return request("/api/ai/recommend-stack", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-/* =========================================================
-   Recommendation Snapshots (frontend expects these exports)
-   IMPORTANT: Only works if backend exposes /api/recommendations
-========================================================= */
-
-export interface RecommendationSnapshotCreate {
-  final: Record<string, unknown>;
-  ai?: Record<string, unknown> | null;
-  diff?: unknown[];
-  source_query?: Record<string, unknown> | null;
-  run_id?: string | null;
-}
-
-export interface RecommendationSnapshotSaved {
-  id: string;
-  status: "saved";
-}
-
-export async function saveRecommendationSnapshot(
-  payload: RecommendationSnapshotCreate
-): Promise<RecommendationSnapshotSaved> {
-  return request("/api/recommendations", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-}
-
-/* =========================================================
-   Deploy (Terraform)  (backend is /api/deploy/*)
+   Deploy (Agent exposes /api/deploy/*)
 ========================================================= */
 
 export interface DeployPlanRequest {
@@ -207,19 +146,15 @@ export async function deployApprove(
   runId: string,
   idempotencyKey?: string
 ): Promise<{ run_id: string; status: string }> {
-  return request(
-    `/api/deploy/${runId}/approve`,
-    { method: "POST" },
-    idempotencyKey
-  );
+  return request(`/api/deploy/${runId}/approve`, { method: "POST" }, idempotencyKey);
 }
 
 export async function deployReject(
   runId: string,
   reason?: string,
   idempotencyKey?: string
-): Promise<void> {
-  await request(
+): Promise<{ run_id: string; status: string }> {
+  return request(
     `/api/deploy/${runId}/reject`,
     { method: "POST", body: JSON.stringify({ reason }) },
     idempotencyKey
@@ -236,11 +171,7 @@ export async function deployApply(
   runId: string,
   idempotencyKey?: string
 ): Promise<DeployApplyResponse> {
-  return request(
-    `/api/deploy/${runId}/apply`,
-    { method: "POST" },
-    idempotencyKey
-  );
+  return request(`/api/deploy/${runId}/apply`, { method: "POST" }, idempotencyKey);
 }
 
 export interface DeployRefreshResponse {
@@ -248,7 +179,7 @@ export interface DeployRefreshResponse {
   previous_status: string;
   current_status: string;
   changed: boolean;
-  pipeline?: {
+  pipeline: {
     pipeline_id: number;
     pipeline_run_id: number;
     state: string;
@@ -261,6 +192,27 @@ export async function deployRefresh(runId: string): Promise<DeployRefreshRespons
   return request(`/api/deploy/${runId}/refresh`);
 }
 
-export async function getInfraOutputs(runId: string): Promise<any> {
-  return request(`/api/infra/outputs/${runId}`);
+/* =========================================================
+   AI + Snapshots (ONLY if agent exposes them)
+   Right now your agent OpenAPI shows NO /api/ai/* and NO /api/recommendations.
+   So these will 404 until you add them on the backend.
+========================================================= */
+
+export interface RecommendRequest {
+  mode: "ai" | "manual";
+  industry: string;
+  scale: "small" | "medium" | "large";
+  cloud: "azure" | "aws" | "gcp";
+}
+
+export async function recommendStack(_payload: RecommendRequest) {
+  throw new Error(
+    "recommendStack not available: backend does not expose /api/ai/recommend-stack yet."
+  );
+}
+
+export async function saveRecommendationSnapshot(_payload: unknown) {
+  throw new Error(
+    "saveRecommendationSnapshot not available: backend does not expose /api/recommendations yet."
+  );
 }
