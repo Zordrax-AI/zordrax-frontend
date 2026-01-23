@@ -1,38 +1,43 @@
-// src/components/runs/CancelRunButton.tsx
 "use client";
 
 import { useState } from "react";
 import { cancelRun } from "@/lib/api";
 
-export function CancelRunButton({ runId }: { runId: string }) {
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+type Props = {
+  runId: string;
+  onDone?: () => void;
+};
 
-  async function onCancel() {
+export function CancelRunButton({ runId, onDone }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handleCancel() {
     setLoading(true);
-    setMsg(null);
+    setErr(null);
     try {
       await cancelRun(runId);
-      setMsg("Cancel requested.");
+      onDone?.();
     } catch (e: any) {
-      setMsg(e?.message ?? "Cancel failed");
+      setErr(e?.message ?? "Cancel failed");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="flex items-center gap-3">
+    <div className="space-y-2">
       <button
-        onClick={onCancel}
+        onClick={handleCancel}
         disabled={loading}
-        className="px-3 py-2 rounded border border-red-400/40 text-red-200 hover:bg-red-500/10 disabled:opacity-60"
+        className="rounded border border-red-800 bg-red-950/40 px-3 py-1 text-sm text-red-200 hover:bg-red-950/60 disabled:opacity-50"
       >
-        {loading ? "Cancelling..." : "Cancel"}
+        {loading ? "Cancelling..." : "Cancel Run"}
       </button>
-      {msg && <div className="text-sm opacity-80">{msg}</div>}
+      {err && <div className="text-xs text-red-300">{err}</div>}
     </div>
   );
 }
 
+// Support both import styles:
 export default CancelRunButton;

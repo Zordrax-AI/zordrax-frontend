@@ -2,10 +2,9 @@
 /* =========================================================
    Zordrax Frontend <-> Onboarding Agent API (SSOT)
    - Forces HTTPS for non-localhost to prevent Mixed Content
-   - Central fetch helper + typed endpoints
-   - Approve/Apply supports BOTH backend route shapes:
-       A) /api/deploy/approve/{runId}
-       B) /api/deploy/approve   body: { run_id }
+   - Typed endpoints
+   - Robust ApiError w/ status codes
+   - Fallbacks for approve/apply in case backend route differs
 ========================================================= */
 
 export type RecommendRequest = {
@@ -22,15 +21,15 @@ export type ArchitectureRecommendation = {
 };
 
 export type RecommendationSnapshotCreate = {
-  final: Record<string, never>;
-  ai: Record<string, never> | null;
+  final: Record<string, unknown>;
+  ai: Record<string, unknown> | null;
   diff: unknown[];
-  source_query: Record<string, never>;
+  source_query: Record<string, unknown>;
 };
+
 
 export type DeployPlanRequest = {
   recommendation_id: string;
-
   name_prefix?: string;
   region?: string;
   environment?: string;
@@ -40,7 +39,7 @@ export type DeployPlanRequest = {
 
 export type DeployPlanResponse = {
   run_id: string;
-  status: string; // awaiting_approval, etc.
+  status: string;
   plan_summary: Record<string, unknown>;
   policy_warnings?: string[];
 };
@@ -55,8 +54,8 @@ export type RunRow = {
   run_id: string;
   mode: "manual" | "ai";
   title?: string;
-  status: string; // infra_succeeded, pipeline_running, etc.
-  stage: string; // deploy, infra, pipeline...
+  status: string;
+  stage: string;
   cancel_requested: boolean;
   created_at: string;
   updated_at: string;
@@ -87,10 +86,21 @@ export type InfraOutputsResponse = {
   updated_at?: string;
 };
 
-export type RunsListResponse =
-  | RunRow[]
-  | { items: RunRow[] }
-  | { runs: RunRow[] };
+export type RunsListResponse = RunRow[] | { items: RunRow[] } | { runs: RunRow[] };
+
+export class ApiError extends Error {
+  status: number;
+  url: string;
+  body: string;
+
+  constructor(args: { status: number; url: string; body: string; message?: string }) {
+    super(args.message ?? `Request failed (${args.status})`);
+    this.name = "ApiError";
+    this.status = args.status;
+    this.url = args.url;
+    this.body = args.body;
+  }
+}
 
 /* =========================================================
    Base URL (FORCE HTTPS to prevent Mixed Content)
@@ -124,14 +134,13 @@ function resolveApiBase(): string {
   const env =
     process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
     process.env.NEXT_PUBLIC_API_BASE_URL ||
-    process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
+    process.env.NEXT_PUBLIC_ONBOARDING_API_URL || // legacy compatibility
     "http://localhost:8000";
 
   const base = normalizeBaseUrl(env);
+
   if (!base) {
-    throw new Error(
-      "API base URL is not set. Set NEXT_PUBLIC_AGENT_BASE_URL in Vercel."
-    );
+    throw new Error("API base URL is not set. Set NEXT_PUBLIC_AGENT_BASE_URL in Vercel.");
   }
   return base;
 }
@@ -155,16 +164,6 @@ async function readErrorBody(res: Response): Promise<string> {
   }
 }
 
-function isNotFoundErrorMessage(msg: string): boolean {
-  const m = (msg || "").toLowerCase();
-  return (
-    m.includes("not found") ||
-    m.includes('"detail"') ||
-    m.includes("404") ||
-    m.includes("status code 404")
-  );
-}
-
 async function fetchJson<T>(
   path: string,
   opts?: RequestInit & { idempotencyKey?: string }
@@ -172,12 +171,9 @@ async function fetchJson<T>(
   const url = `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
 
   const headers: Record<string, string> = {
+    "Content-Type": "application/json",
     ...(opts?.headers as Record<string, string> | undefined),
   };
-
-  // Only set JSON content-type if we actually have a body
-  const hasBody = typeof opts?.body !== "undefined" && opts?.body !== null;
-  if (hasBody && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
 
   if (opts?.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
@@ -185,7 +181,12 @@ async function fetchJson<T>(
 
   if (!res.ok) {
     const body = await readErrorBody(res);
-    throw new Error(body || `Request failed: ${res.status} ${res.statusText}`);
+    throw new ApiError({
+      status: res.status,
+      url,
+      body,
+      message: body || `Request failed: ${res.status} ${res.statusText}`,
+    });
   }
 
   const text = await res.text();
@@ -195,6 +196,18 @@ async function fetchJson<T>(
     return JSON.parse(text) as T;
   } catch {
     return text as unknown as T;
+  }
+}
+
+/* helper: try A, if 404 then try B */
+async function tryOr404<T>(primary: () => Promise<T>, fallback: () => Promise<T>): Promise<T> {
+  try {
+    return await primary();
+  } catch (e: any) {
+    if (e instanceof ApiError && e.status === 404) {
+      return await fallback();
+    }
+    throw e;
   }
 }
 
@@ -220,59 +233,52 @@ export async function deployPlan(
 }
 
 /**
- * Approve supports:
- *  A) POST /api/deploy/approve/{runId}
- *  B) POST /api/deploy/approve   { run_id }
+ * Some backend builds expose:
+ *   POST /api/deploy/approve/{runId}
+ * Others expose:
+ *   POST /api/deploy/approve   body: { run_id }
  */
-export async function deployApprove(
-  runId: string,
-  idempotencyKey?: string
-): Promise<{ ok: boolean }> {
-  try {
-    return await fetchJson<{ ok: boolean }>(`/api/deploy/approve/${runId}`, {
-      method: "POST",
-      body: JSON.stringify({}),
-      idempotencyKey,
-    });
-  } catch (e: any) {
-    const msg = e?.message ?? "";
-    if (isNotFoundErrorMessage(msg)) {
-      return fetchJson<{ ok: boolean }>(`/api/deploy/approve`, {
+export async function deployApprove(runId: string, idempotencyKey?: string): Promise<{ ok: boolean }> {
+  return tryOr404(
+    () =>
+      fetchJson<{ ok: boolean }>(`/api/deploy/approve/${runId}`, {
+        method: "POST",
+        body: JSON.stringify({}),
+        idempotencyKey,
+      }),
+    () =>
+      fetchJson<{ ok: boolean }>(`/api/deploy/approve`, {
         method: "POST",
         body: JSON.stringify({ run_id: runId }),
         idempotencyKey,
-      });
-    }
-    throw e;
-  }
+      })
+  );
 }
 
 /**
- * Apply supports:
- *  A) POST /api/deploy/apply/{runId}
- *  B) POST /api/deploy/apply   { run_id }
+ * Some backend builds expose:
+ *   POST /api/deploy/apply/{runId}
+ * Others expose:
+ *   POST /api/deploy/apply   body: { run_id }
  */
 export async function deployApply(
   runId: string,
   idempotencyKey?: string
 ): Promise<DeployApplyResponse> {
-  try {
-    return await fetchJson<DeployApplyResponse>(`/api/deploy/apply/${runId}`, {
-      method: "POST",
-      body: JSON.stringify({}),
-      idempotencyKey,
-    });
-  } catch (e: any) {
-    const msg = e?.message ?? "";
-    if (isNotFoundErrorMessage(msg)) {
-      return fetchJson<DeployApplyResponse>(`/api/deploy/apply`, {
+  return tryOr404(
+    () =>
+      fetchJson<DeployApplyResponse>(`/api/deploy/apply/${runId}`, {
+        method: "POST",
+        body: JSON.stringify({}),
+        idempotencyKey,
+      }),
+    () =>
+      fetchJson<DeployApplyResponse>(`/api/deploy/apply`, {
         method: "POST",
         body: JSON.stringify({ run_id: runId }),
         idempotencyKey,
-      });
-    }
-    throw e;
-  }
+      })
+  );
 }
 
 /* ---------- Runs + status ---------- */
@@ -301,13 +307,20 @@ export async function cancelRun(runId: string): Promise<{ ok: boolean }> {
 
 /* List runs (supports a few likely backend shapes) */
 export async function listRuns(): Promise<RunRow[]> {
-  const data = await fetchJson<RunsListResponse>("/api/runs", { method: "GET" });
+  // Some builds might not expose list; keep UI stable.
+  try {
+    const data = await fetchJson<RunsListResponse>("/api/runs", { method: "GET" });
 
-  if (Array.isArray(data)) return data;
-  if ("items" in data && Array.isArray(data.items)) return data.items;
-  if ("runs" in data && Array.isArray(data.runs)) return data.runs;
+    if (Array.isArray(data)) return data;
+    if ("items" in data && Array.isArray(data.items)) return data.items;
+    if ("runs" in data && Array.isArray(data.runs)) return data.runs;
 
-  return [];
+    return [];
+  } catch (e: any) {
+    // If backend truly doesn’t expose this route yet, don’t crash the page.
+    if (e instanceof ApiError && e.status === 404) return [];
+    throw e;
+  }
 }
 
 /* ---------- AI Recommend ---------- */
@@ -319,11 +332,24 @@ export async function recommendStack(req: RecommendRequest): Promise<Architectur
   });
 }
 
+/**
+ * Optional snapshot endpoint.
+ * If backend not implemented yet -> return a clean error.
+ */
 export async function saveRecommendationSnapshot(
   snapshot: RecommendationSnapshotCreate
 ): Promise<{ id: string }> {
-  return fetchJson<{ id: string }>("/api/recommendations/snapshots", {
-    method: "POST",
-    body: JSON.stringify(snapshot),
-  });
+  try {
+    return await fetchJson<{ id: string }>("/api/recommendations/snapshots", {
+      method: "POST",
+      body: JSON.stringify(snapshot),
+    });
+  } catch (e: any) {
+    if (e instanceof ApiError && e.status === 404) {
+      throw new Error(
+        "Snapshots aren’t enabled on the backend yet (endpoint /api/recommendations/snapshots not found)."
+      );
+    }
+    throw e;
+  }
 }

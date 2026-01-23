@@ -1,87 +1,75 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  recommendStack,
+  type RecommendRequest,
+  type ArchitectureRecommendation,
+} from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
-import {
-  recommendStack,
-  saveRecommendationSnapshot,
-  type RecommendRequest,
-  type ArchitectureRecommendation,
-  type RecommendationSnapshotCreate,
-} from "@/lib/api";
-
 export default function RecommendClient() {
-  const router = useRouter();
   const params = useSearchParams();
 
-  const [form, setForm] = useState<RecommendRequest>({
-    mode: (params.get("mode") as "manual" | "ai") ?? "ai",
-    industry: params.get("industry") ?? "",
-    scale: (params.get("scale") as any) ?? "small",
-    cloud: (params.get("cloud") as any) ?? "azure",
-  });
+  const mode = (params.get("mode") || "ai") as "manual" | "ai";
+  const industry = params.get("industry") || "Health";
+  const scale = (params.get("scale") || "small") as "small" | "medium" | "large";
+  const cloud = (params.get("cloud") || "azure") as "azure" | "aws" | "gcp";
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rec, setRec] = useState<ArchitectureRecommendation | null>(null);
 
-  async function handleRecommend() {
+  const req: RecommendRequest = useMemo(
+    () => ({ mode, industry, scale, cloud }),
+    [mode, industry, scale, cloud]
+  );
+
+  async function handleGenerate() {
     setLoading(true);
     setError(null);
-
     try {
-      // 1️⃣ Get recommendation (typed, UI model)
-      const rec: ArchitectureRecommendation = await recommendStack(form);
-
-      // 2️⃣ Convert to OPAQUE JSON for SSOT persistence
-      const opaque = rec as unknown as Record<string, never>;
-
-      const snapshot: RecommendationSnapshotCreate = {
-        final: opaque,
-        ai: rec.source === "ai" ? opaque : null,
-        diff: [],
-        source_query: form as unknown as Record<string, never>,
-      };
-
-      // 3️⃣ Persist immutable snapshot
-      const saved = await saveRecommendationSnapshot(snapshot);
-
-      // 4️⃣ Move to deploy step
-      router.push(`/portal/onboarding/deploy?rec=${saved.id}`);
+      const r = await recommendStack(req);
+      setRec(r);
     } catch (e: any) {
-      setError(e?.message ?? "Failed to generate recommendation");
+      setError(e?.message ?? "AI recommend is not live yet.");
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <Card className="space-y-4">
-      <h2 className="text-xl font-semibold">AI Recommendation</h2>
+    <div className="space-y-4">
+      <Card className="space-y-3">
+        <div className="text-lg font-semibold">AI Recommendation</div>
 
-      {error && (
-        <div className="text-sm text-red-500">
-          {error}
+        {error && (
+          <div className="rounded border border-red-700 bg-red-950/40 p-3 text-sm text-red-200">
+            {error}
+          </div>
+        )}
+
+        <div className="text-sm text-slate-300">
+          Mode: <span className="font-mono">{mode}</span> • Industry:{" "}
+          <span className="font-mono">{industry}</span> • Scale:{" "}
+          <span className="font-mono">{scale}</span> • Cloud:{" "}
+          <span className="font-mono">{cloud}</span>
         </div>
+
+        <Button onClick={handleGenerate} disabled={loading}>
+          {loading ? "Working..." : "Generate Recommendation"}
+        </Button>
+      </Card>
+
+      {rec && (
+        <Card>
+          <pre className="overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-200">
+            {JSON.stringify(rec, null, 2)}
+          </pre>
+        </Card>
       )}
-
-      <div className="space-y-2">
-        <input
-          className="w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm"
-          placeholder="Industry (e.g. FinTech)"
-          value={form.industry}
-          onChange={(e) =>
-            setForm({ ...form, industry: e.target.value })
-          }
-        />
-      </div>
-
-      <Button onClick={handleRecommend} disabled={loading}>
-        {loading ? "Thinking..." : "Generate Recommendation"}
-      </Button>
-    </Card>
+    </div>
   );
 }

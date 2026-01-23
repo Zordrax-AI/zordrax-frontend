@@ -1,85 +1,75 @@
-// src/components/runs/RunTimeline.tsx
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { getRunEvents, RunEvent } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { getRunEvents, type RunEvent } from "@/lib/api";
 
-export function RunTimeline({ runId }: { runId: string }) {
+type Props = {
+  runId: string;
+};
+
+export function RunTimeline({ runId }: Props) {
   const [events, setEvents] = useState<RunEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const lastIdRef = useRef<number>(0);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
+    let afterId = 0;
 
-    async function firstLoad() {
+    async function tick() {
       try {
-        const es = await getRunEvents(runId, 0);
+        const next = await getRunEvents(runId, afterId);
         if (!alive) return;
-        setEvents(es);
-        lastIdRef.current = es.length ? es[es.length - 1].id : 0;
+
+        if (next.length) {
+          afterId = next[next.length - 1].id;
+          setEvents((prev) => [...prev, ...next]);
+        }
       } catch (e: any) {
         if (!alive) return;
-        setError(e?.message ?? "Failed to load events");
+        setErr(e?.message ?? "Failed to load events");
       }
     }
 
-    firstLoad();
+    tick();
+    const t = setInterval(tick, 2000);
     return () => {
       alive = false;
+      clearInterval(t);
     };
-  }, [runId]);
-
-  useEffect(() => {
-    const t = setInterval(async () => {
-      try {
-        const es = await getRunEvents(runId, lastIdRef.current);
-        if (es?.length) {
-          setEvents((prev) => [...prev, ...es]);
-          lastIdRef.current = es[es.length - 1].id;
-        }
-      } catch {
-        // ignore polling failures
-      }
-    }, 1500);
-
-    return () => clearInterval(t);
   }, [runId]);
 
   return (
     <div className="space-y-3">
-      <div className="text-sm opacity-80">Event timeline</div>
-
-      {error && (
-        <div className="rounded border border-red-400/30 bg-red-500/10 p-2 text-sm text-red-100">
-          {error}
+      {err && (
+        <div className="rounded border border-red-700 bg-red-950/40 p-2 text-xs text-red-200">
+          {err}
         </div>
       )}
 
-      {events.length === 0 ? (
-        <div className="text-sm opacity-70">No events yet.</div>
-      ) : (
-        <div className="space-y-2">
-          {events.slice(-200).map((e) => (
+      <div className="space-y-2">
+        {events.length === 0 ? (
+          <div className="text-sm text-slate-400">No events yet.</div>
+        ) : (
+          events.map((e) => (
             <div
               key={e.id}
-              className="rounded border border-white/10 bg-black/20 px-3 py-2 text-sm"
+              className="rounded border border-slate-800 bg-slate-950/40 p-2 text-xs text-slate-200"
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="opacity-70">
-                  {new Date(e.created_at).toLocaleString()}
-                </div>
-                <div className="opacity-80">
-                  {e.stage} • {e.status} • {e.level}
-                </div>
+              <div className="flex flex-wrap gap-2 text-slate-400">
+                <span className="font-mono">#{e.id}</span>
+                <span>{e.level}</span>
+                <span>{e.stage}</span>
+                <span>{e.status}</span>
+                <span className="ml-auto">{new Date(e.created_at).toLocaleString()}</span>
               </div>
-              <div className="mt-1">{e.message}</div>
+              <div className="mt-1 whitespace-pre-wrap">{e.message}</div>
             </div>
-          ))}
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 }
 
+// Support both import styles:
 export default RunTimeline;
