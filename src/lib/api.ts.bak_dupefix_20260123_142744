@@ -352,3 +352,6 @@ export async function deployRefresh(runId: string): Promise<DeployRefreshRespons
   return fetchJson<DeployRefreshResponse>(`/api/deploy/${runId}/refresh`, { method: "GET" });
 }
 
+export async function getInfraOutputs(runId: string): Promise<any> {
+  return fetchJson<any>(`/api/infra/outputs/${runId}`, { method: "GET" });
+}

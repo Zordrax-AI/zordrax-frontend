@@ -175,7 +175,7 @@ async function fetchJson<T>(
     ...(opts?.headers as Record<string, string> | undefined),
   };
 
-  if (opts?.idempotencyKey) headers["X-Idempotency-Key"] = opts.idempotencyKey;
+  if (opts?.idempotencyKey) headers["Idempotency-Key"] = opts.idempotencyKey;
 
   const res = await fetch(url, { ...opts, headers });
 
@@ -239,26 +239,46 @@ export async function deployPlan(
  *   POST /api/deploy/approve   body: { run_id }
  */
 export async function deployApprove(runId: string, idempotencyKey?: string): Promise<{ ok: boolean }> {
-  // Backend contract (confirmed in openapi.json):
-  // POST /api/deploy/{run_id}/approve
-  return fetchJson<{ ok: boolean }>(`/api/deploy/${runId}/approve`, {
-    method: "POST",
-    body: JSON.stringify({}),
-    idempotencyKey,
-  });
+  return tryOr404(
+    () =>
+      fetchJson<{ ok: boolean }>(`/api/deploy/approve/${runId}`, {
+        method: "POST",
+        body: JSON.stringify({}),
+        idempotencyKey,
+      }),
+    () =>
+      fetchJson<{ ok: boolean }>(`/api/deploy/approve`, {
+        method: "POST",
+        body: JSON.stringify({ run_id: runId }),
+        idempotencyKey,
+      })
+  );
 }
 
+/**
+ * Some backend builds expose:
+ *   POST /api/deploy/apply/{runId}
+ * Others expose:
+ *   POST /api/deploy/apply   body: { run_id }
+ */
 export async function deployApply(
   runId: string,
   idempotencyKey?: string
 ): Promise<DeployApplyResponse> {
-  // Backend contract (confirmed in openapi.json):
-  // POST /api/deploy/{run_id}/apply
-  return fetchJson<DeployApplyResponse>(`/api/deploy/${runId}/apply`, {
-    method: "POST",
-    body: JSON.stringify({}),
-    idempotencyKey,
-  });
+  return tryOr404(
+    () =>
+      fetchJson<DeployApplyResponse>(`/api/deploy/apply/${runId}`, {
+        method: "POST",
+        body: JSON.stringify({}),
+        idempotencyKey,
+      }),
+    () =>
+      fetchJson<DeployApplyResponse>(`/api/deploy/apply`, {
+        method: "POST",
+        body: JSON.stringify({ run_id: runId }),
+        idempotencyKey,
+      })
+  );
 }
 
 /* ---------- Runs + status ---------- */
@@ -289,7 +309,7 @@ export async function cancelRun(runId: string): Promise<{ ok: boolean }> {
 export async function listRuns(): Promise<RunRow[]> {
   // Some builds might not expose list; keep UI stable.
   try {
-    const data = await fetchJson<RunsListResponse>("/api/runs/", { method: "GET" });
+    const data = await fetchJson<RunsListResponse>("/api/runs", { method: "GET" });
 
     if (Array.isArray(data)) return data;
     if ("items" in data && Array.isArray(data.items)) return data.items;
@@ -333,22 +353,3 @@ export async function saveRecommendationSnapshot(
     throw e;
   }
 }
-
-export type DeployRefreshResponse = {
-  run_id: string;
-  previous_status: string;
-  current_status: string;
-  changed: boolean;
-  pipeline: {
-    pipeline_id: number;
-    pipeline_run_id: number;
-    state: string;
-    result?: string | null;
-    url?: string | null;
-  };
-};
-
-export async function deployRefresh(runId: string): Promise<DeployRefreshResponse> {
-  return fetchJson<DeployRefreshResponse>(`/api/deploy/${runId}/refresh`, { method: "GET" });
-}
-
