@@ -5,10 +5,11 @@ import { usePathname } from "next/navigation";
 import clsx from "clsx";
 
 const nav = [
-  { label: "Dashboard", href: "/" },
-  { label: "Onboarding", href: "/onboarding" },
-  { label: "Sessions", href: "/sessions" },
-  { label: "Runs", href: "/runs" }
+  { label: "Dashboard", href: "/portal" },
+  { label: "Onboarding", href: "/portal/onboarding" },
+  { label: "Sessions", href: "/portal/sessions" },
+  { label: "Runs", href: "/portal/runs" },
+  { label: "Diagnostics", href: "/portal/diagnostics" }
 ];
 
 export function Sidebar() {
@@ -16,13 +17,11 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col">
-      {/* Branding */}
       <div className="p-5 border-b border-slate-800">
         <h1 className="text-lg font-semibold text-slate-100">Zordrax-Analytica</h1>
         <div className="text-xs text-slate-400 mt-1">Orchestration Console</div>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 py-4 space-y-1">
         {nav.map((item) => (
           <Link

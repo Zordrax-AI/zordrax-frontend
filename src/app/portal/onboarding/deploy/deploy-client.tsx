@@ -23,11 +23,7 @@ export default function DeployClient({ recommendationId }: Props) {
   const params = useSearchParams();
 
   const recId = useMemo(() => {
-    return (
-      params.get("rec") ||
-      recommendationId ||
-      "test-001"
-    );
+    return params.get("rec") || recommendationId || "test-001";
   }, [params, recommendationId]);
 
   const [runId, setRunId] = useState<string | null>(null);
@@ -52,6 +48,12 @@ export default function DeployClient({ recommendationId }: Props) {
       const res = await deployPlan(payload);
       setPlan(res);
       setRunId(res.run_id);
+
+      try {
+        localStorage.setItem("zordrax:last_run_id", res.run_id);
+      } catch {
+        // ignore (privacy mode / blocked storage)
+      }
     } catch (e: any) {
       setError(e?.message ?? "Failed to generate terraform plan");
     } finally {
@@ -69,20 +71,21 @@ export default function DeployClient({ recommendationId }: Props) {
     setError(null);
 
     try {
-      // 1) approve (supports both route styles via api.ts fallback)
       await deployApprove(runId);
-
-      // 2) apply (supports both route styles via api.ts fallback)
       const res = await deployApply(runId);
 
-      // Update UI status without breaking if types vary
       setPlan((p) =>
         p
           ? { ...p, status: res.status ?? p.status }
           : ({ run_id: runId, status: res.status ?? "running", plan_summary: {} } as any)
       );
 
-      // Go to status
+      try {
+        localStorage.setItem("zordrax:last_run_id", runId);
+      } catch {
+        // ignore
+      }
+
       router.push(`/portal/status?run=${runId}`);
     } catch (e: any) {
       setError(e?.message ?? "Failed to approve/apply infrastructure");

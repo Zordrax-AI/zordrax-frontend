@@ -9,12 +9,16 @@ export default function AiOnboardingPage() {
   const [cloud, setCloud] = useState("");
 
   function goGenerate() {
+    // For now, keep the end-to-end MVP stable by routing directly into the
+    // deploy flow (Plan -> Approve -> Apply -> Status). AI recommendation wiring
+    // is not the critical path until the backend endpoint is live.
     const qs = new URLSearchParams({
+      rec: "test-001",
       mode: "ai",
       industry,
-      cloud,
+      cloud: cloud.toLowerCase(),
     });
-    router.push(`/portal/generate?${qs.toString()}`);
+    router.push(`/portal/onboarding/deploy?${qs.toString()}`);
   }
 
   return (

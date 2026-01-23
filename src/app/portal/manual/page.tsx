@@ -16,14 +16,17 @@ export default function ManualWizardPage() {
   const [bi, setBi] = useState("Power BI");
 
   function goGenerate() {
+    // Keep MVP stable: route directly into the deploy flow.
+    // (The manual stack selections can be wired into snapshots later.)
     const qs = new URLSearchParams({
+      rec: "test-001",
       mode: "manual",
-      cloud,
+      cloud: cloud.toLowerCase(),
       etl,
       governance,
       bi,
     });
-    router.push(`/portal/generate?${qs.toString()}`);
+    router.push(`/portal/onboarding/deploy?${qs.toString()}`);
   }
 
   return (

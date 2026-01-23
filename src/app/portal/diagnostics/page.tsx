@@ -2,34 +2,20 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/Card";
-
-const base =
-  (process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
-    process.env.NEXT_PUBLIC_API_BASE_URL ||
-    "").replace(/\/$/, "");
+import { API_BASE, health as healthCheck } from "@/lib/api";
 
 export default function DiagnosticsPage() {
   const [health, setHealth] = useState<any>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
 
-  const healthUrl = useMemo(() => {
-    if (!base) return "";
-    return `${base}/health`;
-  }, []);
+  const healthUrl = useMemo(() => `${API_BASE}/health`, []);
 
   useEffect(() => {
-    if (!healthUrl) {
-      setHealthError("Missing NEXT_PUBLIC_AGENT_BASE_URL (or NEXT_PUBLIC_API_BASE_URL).");
-      return;
-    }
-
     (async () => {
       try {
         setHealthError(null);
-        const res = await fetch(healthUrl, { method: "GET" });
-        const text = await res.text();
-        if (!res.ok) throw new Error(`HTTP ${res.status} → ${text}`);
-        setHealth(text ? JSON.parse(text) : { ok: true });
+        const r = await healthCheck();
+        setHealth(r);
       } catch (e: any) {
         setHealthError(e?.message || "Health check failed");
       }
@@ -60,7 +46,7 @@ export default function DiagnosticsPage() {
 
           <div>
             <div className="text-xs text-slate-500">Resolved base URL used</div>
-            <div className="break-all">{base || "(empty)"}</div>
+            <div className="break-all">{API_BASE || "(empty)"}</div>
           </div>
         </div>
       </Card>
@@ -89,9 +75,17 @@ export default function DiagnosticsPage() {
       <Card>
         <h2 className="text-sm font-semibold">What to check if broken</h2>
         <ul className="mt-3 list-disc pl-5 text-sm text-slate-300 space-y-2">
-          <li>Vercel env: set <code className="text-slate-100">NEXT_PUBLIC_AGENT_BASE_URL</code> (or <code className="text-slate-100">NEXT_PUBLIC_API_BASE_URL</code>) for Preview + Production.</li>
-          <li>Backend env: set <code className="text-slate-100">CORS_ALLOW_ORIGINS</code> to your Vercel domain(s).</li>
-          <li>Backend should respond <code className="text-slate-100">200</code> at <code className="text-slate-100">/health</code>.</li>
+          <li>
+            Vercel env: set <code className="text-slate-100">NEXT_PUBLIC_AGENT_BASE_URL</code> (or{" "}
+            <code className="text-slate-100">NEXT_PUBLIC_API_BASE_URL</code>) for Preview + Production.
+          </li>
+          <li>
+            Backend env: set <code className="text-slate-100">CORS_ALLOW_ORIGINS</code> to your Vercel domain(s).
+          </li>
+          <li>
+            Backend should respond <code className="text-slate-100">200</code> at{" "}
+            <code className="text-slate-100">/health</code>.
+          </li>
         </ul>
       </Card>
     </div>
