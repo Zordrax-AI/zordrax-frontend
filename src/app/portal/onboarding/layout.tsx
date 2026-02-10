@@ -1,3 +1,4 @@
+// src/app/portal/onboarding/layout.tsx
 import { ReactNode } from "react";
 import Link from "next/link";
 
@@ -15,7 +16,6 @@ export default function OnboardingLayout({ children }: { children: ReactNode }) 
     <div className="flex min-h-screen">
       <aside className="w-64 bg-slate-900 border-r border-slate-800 p-4">
         <h2 className="text-lg font-semibold mb-4 text-white">Onboarding</h2>
-
         <nav className="space-y-2">
           {navItems.map((item) => (
             <Link

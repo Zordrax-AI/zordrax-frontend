@@ -1,33 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
+import { brd, deploy } from "@/lib/agent-proxy";
 
-import {
-  brdApprove,
-  brdCreateRequirementSet,
-  brdCreateSession,
-  brdReadRequirementSet,
-  brdSubmit,
-  brdUpsertBusinessContext,
-  brdUpsertConstraints,
-  brdUpsertGuardrails,
-  deployPlanFromRequirementSet,
-  type BusinessContextIn,
-  type ConstraintsIn,
-  type GuardrailsIn,
-} from "@/lib/brd";
-
-import { deployApply, deployApprove, deployRefresh, type DeployRefreshResponse } from "@/lib/api";
-
-type StepKey =
+type Step =
   | "intake"
-  | "context"
+  | "business_context"
   | "constraints"
   | "guardrails"
   | "review"
@@ -37,929 +20,445 @@ type StepKey =
   | "infra"
   | "package";
 
-type Step = {
-  key: StepKey;
-  label: string;
-  description: string;
-};
+type TimelineItem = { at: string; title: string; detail?: string };
 
-const STEPS: Step[] = [
-  { key: "intake", label: "Intake", description: "Create session + requirement set" },
-  { key: "context", label: "Business Context", description: "Why, who, what" },
-  { key: "constraints", label: "Constraints", description: "Where, env, cloud" },
-  { key: "guardrails", label: "Guardrails", description: "Security / compliance" },
-  { key: "review", label: "Review", description: "Check completeness" },
-  { key: "submit", label: "Submit", description: "Lock draft + submit" },
-  { key: "approve", label: "Approve", description: "Approve requirement set" },
-  { key: "plan", label: "Plan", description: "Create deploy plan (RUN_ID)" },
-  { key: "infra", label: "Infra", description: "Approve + trigger pipeline" },
-  { key: "package", label: "Package", description: "Summary" },
+function now() {
+  return new Date().toLocaleTimeString();
+}
+
+const steps: { id: Step; label: string; sub: string }[] = [
+  { id: "intake", label: "Intake", sub: "Create session + requirement set" },
+  { id: "business_context", label: "Business Context", sub: "Why, who, what" },
+  { id: "constraints", label: "Constraints", sub: "Where, env, cloud" },
+  { id: "guardrails", label: "Guardrails", sub: "Security / compliance" },
+  { id: "review", label: "Review", sub: "Check completeness" },
+  { id: "submit", label: "Submit", sub: "Lock draft + submit" },
+  { id: "approve", label: "Approve", sub: "Approve requirement set" },
+  { id: "plan", label: "Plan", sub: "Create deploy plan (RUN_ID)" },
+  { id: "infra", label: "Infra", sub: "Approve + run infra pipeline" },
+  { id: "package", label: "Package", sub: "Summary" },
 ];
 
-type TimelineEvent = {
-  at: string;
-  title: string;
-  detail?: string;
-  level?: "info" | "warning" | "error";
-};
-
-function nowIso() {
-  return new Date().toISOString();
-}
-
-function safeJsonParse<T>(txt: string | null, fallback: T): T {
-  if (!txt) return fallback;
-  try {
-    return JSON.parse(txt) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function chipClass(status?: string) {
-  const s = (status || "").toLowerCase();
-  if (!s) return "bg-slate-800 text-slate-200 border-slate-700";
-  if (s.includes("fail") || s.includes("reject"))
-    return "bg-red-950/40 text-red-200 border-red-900/40";
-  if (s.includes("succeed") || s.includes("approved") || s.includes("completed"))
-    return "bg-emerald-950/40 text-emerald-200 border-emerald-900/40";
-  if (s.includes("running") || s.includes("started") || s.includes("await"))
-    return "bg-blue-950/40 text-blue-200 border-blue-900/40";
-  return "bg-slate-800 text-slate-200 border-slate-700";
-}
-
-function Chip({ label }: { label: string }) {
-  return (
-    <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs ${chipClass(label)}`}>
-      {label || "—"}
-    </span>
-  );
-}
-
-function Panel({
-  title,
-  children,
-  right,
-}: {
-  title: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-}) {
-  return (
-    <Card className="p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-slate-100">{title}</div>
-        </div>
-        {right}
-      </div>
-      <div className="mt-3">{children}</div>
-    </Card>
-  );
-}
-
 export default function MozartClient() {
-  const router = useRouter();
-  const params = useSearchParams();
+  const sp = useSearchParams();
+  const initialStep = (sp.get("step") as Step) || "intake";
 
-  const qsReqSetId = params.get("requirement_set_id") || "";
-  const qsRunId = params.get("run_id") || "";
-  const qsStep = (params.get("step") as StepKey | null) || null;
+  const [step, setStep] = useState<Step>(initialStep);
 
-  const storageKey = useMemo(() => {
-    const rid = qsReqSetId || "draft";
-    return `zordrax:mozart:${rid}`;
-  }, [qsReqSetId]);
+  // IDs (persist in URL later if you want; for now keep in state)
+  const [sessionId, setSessionId] = useState("");
+  const [requirementSetId, setRequirementSetId] = useState("");
+  const [runId, setRunId] = useState("");
 
-  const [sessionId, setSessionId] = useState<string>("");
-  const [requirementSetId, setRequirementSetId] = useState<string>(qsReqSetId);
-  const [runId, setRunId] = useState<string>(qsRunId);
+  // Intake
+  const [title, setTitle] = useState("Mozart Run");
+  const [createdBy, setCreatedBy] = useState("portal");
 
-  const [reqSetStatus, setReqSetStatus] = useState<string>("");
-  const [reqSetVersion, setReqSetVersion] = useState<number | null>(null);
+  // Business context
+  const [businessGoal, setBusinessGoal] = useState("Build a governed analytics platform");
+  const [stakeholders, setStakeholders] = useState("Finance, Sales Ops, Data Team");
+  const [successMetrics, setSuccessMetrics] = useState("Power BI KPIs, daily refresh, secure access");
 
-  const [deployStatus, setDeployStatus] = useState<string>("");
-  const [refresh, setRefresh] = useState<DeployRefreshResponse | null>(null);
+  // Constraints
+  const [cloud, setCloud] = useState("azure");
+  const [region, setRegion] = useState("westeurope");
+  const [environment, setEnvironment] = useState("dev");
 
-  const [step, setStep] = useState<StepKey>(qsStep ?? "intake");
+  // Guardrails
+  const [piiPresent, setPiiPresent] = useState(true);
+  const [gdprRequired, setGdprRequired] = useState(true);
+  const [privateNetworking, setPrivateNetworking] = useState(true);
+  const [budgetEurMonth, setBudgetEurMonth] = useState(3000);
 
-  const [title, setTitle] = useState<string>("Mozart Run");
-  const [createdBy, setCreatedBy] = useState<string>("portal");
+  const [status, setStatus] = useState<"idle" | "working" | "ok" | "error">("idle");
+  const [error, setError] = useState<string>("");
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
 
-  const [businessContext, setBusinessContext] = useState<BusinessContextIn>({
-    industry: "",
-    business_owner: "",
-    description: "",
-    stakeholders: [],
-  });
+  const canSubmitDraft = useMemo(() => {
+    return !!requirementSetId && businessGoal.trim().length > 3 && region.trim().length > 2;
+  }, [requirementSetId, businessGoal, region]);
 
-  const [constraints, setConstraints] = useState<ConstraintsIn>({
-    cloud: "azure",
-    region: "westeurope",
-    environment: "dev",
-  });
-
-  const [guardrails, setGuardrails] = useState<GuardrailsIn>({
-    pii_present: true,
-    gdpr_required: true,
-    private_networking_required: true,
-    budget_eur_month: 3000,
-  });
-
-  const [namePrefix, setNamePrefix] = useState<string>("zordrax");
-  const [enableApim, setEnableApim] = useState<boolean>(false);
-  const [backendAppHostname, setBackendAppHostname] = useState<string>("example.azurewebsites.net");
-
-  const [busy, setBusy] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
-
-  const pollTimer = useRef<number | null>(null);
-
-  function pushEvent(ev: Omit<TimelineEvent, "at">) {
-    setTimeline((prev) => [{ at: nowIso(), ...ev }, ...prev]);
+  function pushTimeline(title: string, detail?: string) {
+    setTimeline((t) => [{ at: now(), title, detail }, ...t]);
   }
 
-  // Persist local draft
-  useEffect(() => {
-    const payload = {
-      sessionId,
-      requirementSetId,
-      runId,
-      title,
-      createdBy,
-      businessContext,
-      constraints,
-      guardrails,
-      namePrefix,
-      enableApim,
-      backendAppHostname,
-      step,
-    };
+  async function runSafe<T>(label: string, fn: () => Promise<T>) {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(payload));
-    } catch {
-      // ignore
-    }
-  }, [
-    sessionId,
-    requirementSetId,
-    runId,
-    title,
-    createdBy,
-    businessContext,
-    constraints,
-    guardrails,
-    namePrefix,
-    enableApim,
-    backendAppHostname,
-    step,
-    storageKey,
-  ]);
-
-  // Restore local draft
-  useEffect(() => {
-    try {
-      const saved = safeJsonParse<any>(localStorage.getItem(storageKey), null);
-      if (!saved) return;
-
-      if (!qsReqSetId && saved.requirementSetId) setRequirementSetId(saved.requirementSetId);
-      if (!qsRunId && saved.runId) setRunId(saved.runId);
-      if (saved.sessionId) setSessionId(saved.sessionId);
-      if (saved.title) setTitle(saved.title);
-      if (saved.createdBy) setCreatedBy(saved.createdBy);
-      if (saved.businessContext) setBusinessContext(saved.businessContext);
-      if (saved.constraints) setConstraints(saved.constraints);
-      if (saved.guardrails) setGuardrails(saved.guardrails);
-      if (saved.namePrefix) setNamePrefix(saved.namePrefix);
-      if (typeof saved.enableApim === "boolean") setEnableApim(saved.enableApim);
-      if (saved.backendAppHostname) setBackendAppHostname(saved.backendAppHostname);
-      if (!qsStep && saved.step) setStep(saved.step);
-    } catch {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
-
-  // Keep URL in sync
-  useEffect(() => {
-    const q = new URLSearchParams();
-    if (requirementSetId) q.set("requirement_set_id", requirementSetId);
-    if (runId) q.set("run_id", runId);
-    if (step) q.set("step", step);
-    router.replace(`/portal/onboarding/mozart?${q.toString()}`);
-  }, [requirementSetId, runId, step, router]);
-
-  // Load requirement set status
-  useEffect(() => {
-    if (!requirementSetId) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const rs = await brdReadRequirementSet(requirementSetId);
-        if (cancelled) return;
-        setReqSetStatus(rs.status);
-        setReqSetVersion(rs.version);
-
-        if (rs.business_context) setBusinessContext((p) => ({ ...p, ...(rs.business_context || {}) }));
-        if (rs.constraints) setConstraints((p) => ({ ...p, ...(rs.constraints || {}) }));
-        if (rs.guardrails) setGuardrails((p) => ({ ...p, ...(rs.guardrails || {}) }));
-      } catch (e: any) {
-        if (cancelled) return;
-        setError(e?.message || String(e));
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [requirementSetId]);
-
-  // Poll refresh when we have a run
-  useEffect(() => {
-    if (!runId) return;
-
-    async function tick() {
-      try {
-        const r = await deployRefresh(runId);
-        setRefresh(r);
-        setDeployStatus(r.current_status);
-
-        if (r.changed) {
-          pushEvent({
-            title: `Run status: ${r.previous_status} → ${r.current_status}`,
-            detail: r.pipeline?.url ? `Pipeline: ${r.pipeline.url}` : undefined,
-          });
-        }
-      } catch (e: any) {
-        setError(e?.message || String(e));
-      }
-    }
-
-    tick();
-    pollTimer.current = window.setInterval(tick, 4000);
-
-    return () => {
-      if (pollTimer.current) window.clearInterval(pollTimer.current);
-      pollTimer.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runId]);
-
-  // Gates
-  const contextComplete = Boolean((businessContext.industry || "").trim() && (businessContext.description || "").trim());
-
-  const constraintsComplete = Boolean(
-    (constraints.cloud || "").trim() && (constraints.region || "").trim() && (constraints.environment || "").trim()
-  );
-
-  const guardrailsComplete =
-    guardrails.pii_present !== null &&
-    guardrails.gdpr_required !== null &&
-    guardrails.private_networking_required !== null &&
-    typeof guardrails.budget_eur_month === "number";
-
-  const canSubmit = contextComplete && constraintsComplete && guardrailsComplete && reqSetStatus === "draft";
-  const canApproveReqSet = reqSetStatus === "submitted";
-  const canPlan = reqSetStatus === "approved";
-
-  const canApproveDeploy =
-    Boolean(runId) && (deployStatus === "awaiting_approval" || deployStatus === "planned");
-
-  const canTriggerInfra =
-    Boolean(runId) &&
-    (deployStatus === "approved" || deployStatus === "planned" || deployStatus === "awaiting_approval");
-
-  const infraDone = (deployStatus || "").includes("infra_succeeded") || (deployStatus || "").includes("infra_failed");
-
-  function stepIndex(k: StepKey) {
-    return STEPS.findIndex((s) => s.key === k);
-  }
-
-  const maxUnlockedIndex = useMemo(() => {
-    let idx = 0;
-    if (requirementSetId) idx = Math.max(idx, stepIndex("context"));
-    if (contextComplete) idx = Math.max(idx, stepIndex("constraints"));
-    if (constraintsComplete) idx = Math.max(idx, stepIndex("guardrails"));
-    if (guardrailsComplete) idx = Math.max(idx, stepIndex("review"));
-    if (reqSetStatus === "submitted") idx = Math.max(idx, stepIndex("approve"));
-    if (reqSetStatus === "approved") idx = Math.max(idx, stepIndex("plan"));
-    if (runId) idx = Math.max(idx, stepIndex("infra"));
-    if (infraDone) idx = Math.max(idx, stepIndex("package"));
-    return idx;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requirementSetId, contextComplete, constraintsComplete, guardrailsComplete, reqSetStatus, runId, infraDone]);
-
-  // Actions
-  async function handleCreateIntake() {
-    setError(null);
-    setBusy(true);
-    try {
-      const s = await brdCreateSession({ created_by: createdBy || "portal" });
-      setSessionId(s.session_id);
-      pushEvent({ title: "BRD session created", detail: s.session_id });
-
-      const rs = await brdCreateRequirementSet({
-        session_id: s.session_id,
-        title,
-        created_by: createdBy || "portal",
-      });
-      setRequirementSetId(rs.id);
-      setReqSetStatus(rs.status);
-      setReqSetVersion(rs.version);
-      pushEvent({ title: "Requirement set created", detail: rs.id });
-      setStep("context");
+      setStatus("working");
+      setError("");
+      pushTimeline(label);
+      const out = await fn();
+      setStatus("ok");
+      return out;
     } catch (e: any) {
+      setStatus("error");
       const msg = e?.message || String(e);
       setError(msg);
-      pushEvent({ title: "Intake failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
+      pushTimeline(`${label} failed`, msg);
+      throw e;
     }
+  }
+
+  async function doIntake() {
+    const s = await runSafe("Create BRD session", () =>
+      brd.createSession({ created_by: createdBy, title })
+    );
+    setSessionId(s.session_id);
+
+    const r = await runSafe("Create requirement set", () =>
+      brd.createRequirementSet({ session_id: s.session_id, name: title })
+    );
+    setRequirementSetId(r.requirement_set_id);
+
+    setStep("business_context");
   }
 
   async function saveBusinessContext() {
-    if (!requirementSetId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await brdUpsertBusinessContext(requirementSetId, businessContext);
-      pushEvent({ title: "Business context saved" });
-      setStep("constraints");
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      pushEvent({ title: "Save business context failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
-    }
+    if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
+    await runSafe("Save business context", () =>
+      brd.upsertBusinessContext(requirementSetId, {
+        business_goal: businessGoal,
+        stakeholders,
+        success_metrics: successMetrics,
+      })
+    );
+    setStep("constraints");
   }
 
   async function saveConstraints() {
-    if (!requirementSetId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await brdUpsertConstraints(requirementSetId, constraints);
-      pushEvent({ title: "Constraints saved" });
-      setStep("guardrails");
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      pushEvent({ title: "Save constraints failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
-    }
+    if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
+    await runSafe("Save constraints", () =>
+      brd.upsertConstraints(requirementSetId, {
+        cloud,
+        region,
+        environment,
+      })
+    );
+    setStep("guardrails");
   }
 
   async function saveGuardrails() {
-    if (!requirementSetId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await brdUpsertGuardrails(requirementSetId, guardrails);
-      pushEvent({ title: "Guardrails saved" });
-      setStep("review");
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      pushEvent({ title: "Save guardrails failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
-    }
+    if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
+    await runSafe("Save guardrails", () =>
+      brd.upsertGuardrails(requirementSetId, {
+        pii_present: piiPresent,
+        gdpr_required: gdprRequired,
+        private_networking_required: privateNetworking,
+        budget_eur_month: budgetEurMonth,
+      })
+    );
+    setStep("review");
   }
 
-  async function handleSubmit() {
-    if (!requirementSetId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await brdSubmit(requirementSetId, createdBy || "portal");
-      pushEvent({ title: "Requirement set submitted" });
-      const rs = await brdReadRequirementSet(requirementSetId);
-      setReqSetStatus(rs.status);
-      setReqSetVersion(rs.version);
-      setStep("approve");
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      pushEvent({ title: "Submit failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
-    }
+  async function doSubmit() {
+    if (!requirementSetId) throw new Error("Missing requirement_set_id");
+    await runSafe("Submit requirement set", () => brd.submit(requirementSetId));
+    setStep("approve");
   }
 
-  async function handleApproveReqSet() {
-    if (!requirementSetId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await brdApprove(requirementSetId, createdBy || "portal");
-      pushEvent({ title: "Requirement set approved" });
-      const rs = await brdReadRequirementSet(requirementSetId);
-      setReqSetStatus(rs.status);
-      setReqSetVersion(rs.version);
-      setStep("plan");
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      pushEvent({ title: "Approve failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
-    }
+  async function doApprove() {
+    if (!requirementSetId) throw new Error("Missing requirement_set_id");
+    await runSafe("Approve requirement set", () => brd.approve(requirementSetId));
+    setStep("plan");
   }
 
-  async function handleCreatePlan() {
-    if (!requirementSetId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      const region = constraints.region || "westeurope";
-      const environment = constraints.environment || "dev";
-
-      const resp = await deployPlanFromRequirementSet({
+  async function doPlan() {
+    if (!requirementSetId) throw new Error("Missing requirement_set_id");
+    const p = await runSafe("Create deploy plan", () =>
+      deploy.createPlan({
         requirement_set_id: requirementSetId,
-        name_prefix: namePrefix || "zordrax",
+        // Safe defaults; align to your backend expectations
+        name_prefix: "zordrax",
         region,
         environment,
-        enable_apim: enableApim,
-        backend_app_hostname: backendAppHostname,
-      });
-
-      setRunId(resp.run_id);
-      setDeployStatus(resp.status);
-      pushEvent({ title: "Deploy plan created", detail: `run_id=${resp.run_id}` });
-      setStep("infra");
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      pushEvent({ title: "Create plan failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
-    }
+        enable_apim: false,
+        backend_app_hostname: "example.azurewebsites.net",
+        // any other fields your /api/deploy/plan expects can be added here
+      })
+    );
+    setRunId(p.run_id);
+    setStep("infra");
   }
 
-  async function handleApproveDeploy() {
-    if (!runId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await deployApprove(runId);
-      pushEvent({ title: "Deploy approved" });
-      const r = await deployRefresh(runId);
-      setRefresh(r);
-      setDeployStatus(r.current_status);
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      pushEvent({ title: "Deploy approve failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
-    }
+  async function doInfra() {
+    if (!runId) throw new Error("Missing run_id");
+    await runSafe("Approve run (triggers infra pipeline)", () => deploy.approveRun(runId));
+    // Optional: refresh loop button exists below
   }
 
-  async function handleTriggerInfra() {
-    if (!runId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await deployApply(runId);
-      pushEvent({ title: "Infra pipeline triggered" });
-      const r = await deployRefresh(runId);
-      setRefresh(r);
-      setDeployStatus(r.current_status);
-    } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      pushEvent({ title: "Infra trigger failed", detail: msg, level: "error" });
-    } finally {
-      setBusy(false);
+  async function doRefresh() {
+    if (!runId) throw new Error("Missing run_id");
+    const r = await runSafe("Refresh run status", () => deploy.refresh(runId));
+    pushTimeline("Run status", JSON.stringify(r));
+    if ((r as any)?.status === "infra_succeeded") {
+      setStep("package");
     }
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Mozart Onboarding</h1>
-          <p className="text-slate-400">BRD → Submit → Approve → Plan → Infra → Package</p>
-        </div>
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold text-white">Mozart Onboarding</h1>
+        <p className="text-slate-300 text-sm">
+          BRD → Submit → Approve → Plan → Infra → Package
+        </p>
 
-        <div className="flex items-center gap-2">
-          {busy ? <span className="text-sm text-slate-300">Working…</span> : null}
+        <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
+          <span className="px-2 py-1 rounded bg-slate-800/60">session: {sessionId || "—"}</span>
+          <span className="px-2 py-1 rounded bg-slate-800/60">reqset: {requirementSetId || "—"}</span>
+          <span className="px-2 py-1 rounded bg-slate-800/60">run: {runId || "—"}</span>
+          <span className="px-2 py-1 rounded bg-slate-800/60">status: {status}</span>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Chip label={requirementSetId ? `reqset:${requirementSetId.slice(0, 8)}…` : "reqset:—"} />
-        <Chip label={runId ? `run:${runId.slice(0, 8)}…` : "run:—"} />
-        <Chip label={`BRD:${reqSetStatus || "—"}`} />
-        <Chip label={`Deploy:${deployStatus || "—"}`} />
-        {typeof reqSetVersion === "number" ? <Chip label={`v${reqSetVersion}`} /> : null}
       </div>
 
       {error ? (
-        <div className="rounded-md border border-red-900/40 bg-red-950/30 p-3 text-sm text-red-200">{error}</div>
+        <div className="border border-red-900/60 bg-red-950/40 text-red-200 rounded-xl p-3 text-sm">
+          {error}
+        </div>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        {/* Stepper */}
-        <div className="lg:col-span-3">
-          <Panel title="Steps">
-            <div className="space-y-1">
-              {STEPS.map((s, idx) => {
-                const active = s.key === step;
-                const locked = idx > maxUnlockedIndex;
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Steps */}
+        <Card className="lg:col-span-3 p-4">
+          <div className="text-white font-semibold mb-2">Steps</div>
+          <div className="space-y-2">
+            {steps.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setStep(s.id)}
+                className={[
+                  "w-full text-left rounded-xl border px-3 py-2",
+                  step === s.id
+                    ? "border-sky-500 bg-slate-900/60"
+                    : "border-slate-800 bg-slate-950/40 hover:bg-slate-900/40",
+                ].join(" ")}
+              >
+                <div className="text-slate-100 text-sm font-medium">{s.label}</div>
+                <div className="text-slate-400 text-xs">{s.sub}</div>
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 text-xs text-slate-400">
+            IDs are kept in state for now (easy to persist in URL next).
+          </div>
+        </Card>
 
-                return (
-                  <button
-                    key={s.key}
-                    className={[
-                      "w-full rounded-md px-3 py-2 text-left text-sm transition border",
-                      active ? "bg-slate-900 text-white border-slate-700" : "text-slate-300 hover:bg-slate-900 border-slate-800",
-                      locked ? "opacity-40 cursor-not-allowed" : "",
-                    ].join(" ")}
-                    disabled={locked}
-                    onClick={() => setStep(s.key)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-medium">{s.label}</div>
-                      <div className="text-xs">{locked ? "🔒" : "→"}</div>
-                    </div>
-                    <div className="mt-0.5 text-xs text-slate-400">{s.description}</div>
-                  </button>
-                );
-              })}
+        {/* Main panel */}
+        <Card className="lg:col-span-6 p-4">
+          <div className="text-white font-semibold mb-3">
+            {steps.find((x) => x.id === step)?.label}
+          </div>
+
+          {step === "intake" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">Run title</div>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">Created by</div>
+                  <Input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} />
+                </div>
+              </div>
+
+              <Button onClick={doIntake} disabled={status === "working"}>
+                Create session + requirement set
+              </Button>
             </div>
+          )}
 
-            <div className="mt-4 rounded-md border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
-              IDs are kept in the URL so refresh/resume works.
+          {step === "business_context" && (
+            <div className="space-y-3">
+              <div>
+                <div className="text-xs text-slate-400 mb-1">Business goal</div>
+                <Textarea value={businessGoal} onChange={(e) => setBusinessGoal(e.target.value)} />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 mb-1">Stakeholders</div>
+                <Input value={stakeholders} onChange={(e) => setStakeholders(e.target.value)} />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 mb-1">Success metrics</div>
+                <Textarea value={successMetrics} onChange={(e) => setSuccessMetrics(e.target.value)} />
+              </div>
+
+              <Button onClick={saveBusinessContext} disabled={status === "working" || !requirementSetId}>
+                Save & Next
+              </Button>
             </div>
-          </Panel>
-        </div>
+          )}
 
-        {/* Working panel */}
-        <div className="lg:col-span-6">
-          <Panel title={STEPS.find((s) => s.key === step)?.label || "Wizard"}>
-            {/* Intake */}
-            {step === "intake" ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="text-xs text-slate-400">Run title</label>
-                    <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="ACME – Dev" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400">Created by</label>
-                    <Input value={createdBy} onChange={(e) => setCreatedBy(e.target.value)} placeholder="portal" />
-                  </div>
-                </div>
-
-                <Button onClick={handleCreateIntake} disabled={busy}>
-                  Create session + requirement set
-                </Button>
-              </div>
-            ) : null}
-
-            {/* Context */}
-            {step === "context" ? (
-              <div className="space-y-4">
+          {step === "constraints" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs text-slate-400">Industry</label>
+                  <div className="text-xs text-slate-400 mb-1">Cloud</div>
+                  <Input value={cloud} onChange={(e) => setCloud(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">Region</div>
+                  <Input value={region} onChange={(e) => setRegion(e.target.value)} />
+                </div>
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">Environment</div>
+                  <Input value={environment} onChange={(e) => setEnvironment(e.target.value)} />
+                </div>
+              </div>
+
+              <Button onClick={saveConstraints} disabled={status === "working" || !requirementSetId}>
+                Save & Next
+              </Button>
+            </div>
+          )}
+
+          {step === "guardrails" && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <label className="flex items-center gap-2 text-slate-200 text-sm">
+                  <input type="checkbox" checked={piiPresent} onChange={(e) => setPiiPresent(e.target.checked)} />
+                  PII present
+                </label>
+                <label className="flex items-center gap-2 text-slate-200 text-sm">
+                  <input type="checkbox" checked={gdprRequired} onChange={(e) => setGdprRequired(e.target.checked)} />
+                  GDPR required
+                </label>
+                <label className="flex items-center gap-2 text-slate-200 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={privateNetworking}
+                    onChange={(e) => setPrivateNetworking(e.target.checked)}
+                  />
+                  Private networking required
+                </label>
+                <div>
+                  <div className="text-xs text-slate-400 mb-1">Budget EUR/month</div>
                   <Input
-                    value={businessContext.industry ?? ""}
-                    onChange={(e) => setBusinessContext((p) => ({ ...p, industry: e.target.value }))}
-                    placeholder="Healthcare, Retail, Public Sector…"
+                    type="number"
+                    value={budgetEurMonth}
+                    onChange={(e) => setBudgetEurMonth(Number(e.target.value))}
                   />
                 </div>
-                <div>
-                  <label className="text-xs text-slate-400">Business owner</label>
-                  <Input
-                    value={businessContext.business_owner ?? ""}
-                    onChange={(e) => setBusinessContext((p) => ({ ...p, business_owner: e.target.value }))}
-                    placeholder="Name / Role"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400">Description</label>
-                  <Textarea
-                    value={businessContext.description ?? ""}
-                    onChange={(e) => setBusinessContext((p) => ({ ...p, description: e.target.value }))}
-                    placeholder="e.g. Daily ingestion from Azure SQL → curated star schema → Power BI dashboards"
-                    rows={5}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-slate-400">Stakeholders (comma separated)</label>
-                  <Input
-                    value={(businessContext.stakeholders || []).join(", ")}
-                    onChange={(e) =>
-                      setBusinessContext((p) => ({
-                        ...p,
-                        stakeholders: e.target.value
-                          .split(",")
-                          .map((x) => x.trim())
-                          .filter(Boolean),
-                      }))
-                    }
-                    placeholder="CIO, Data Team Lead, Security…"
-                  />
-                </div>
+              </div>
 
-                <div className="flex items-center gap-2">
-                  <Button onClick={saveBusinessContext} disabled={busy || !requirementSetId}>
-                    Save & Next
-                  </Button>
-                  <span className="text-xs text-slate-400">
-                    {contextComplete ? "✓ Complete" : "Industry + Description required"}
-                  </span>
+              <Button onClick={saveGuardrails} disabled={status === "working" || !requirementSetId}>
+                Save & Next
+              </Button>
+            </div>
+          )}
+
+          {step === "review" && (
+            <div className="space-y-3 text-slate-200 text-sm">
+              <div className="rounded-xl border border-slate-800 p-3 bg-slate-950/40">
+                <div className="font-medium text-slate-100 mb-2">Review</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-slate-300">
+                  <div>session_id: {sessionId || "—"}</div>
+                  <div>requirement_set_id: {requirementSetId || "—"}</div>
+                  <div>cloud: {cloud}</div>
+                  <div>region: {region}</div>
+                  <div>env: {environment}</div>
+                  <div>pii: {String(piiPresent)}</div>
+                  <div>gdpr: {String(gdprRequired)}</div>
+                  <div>private net: {String(privateNetworking)}</div>
+                  <div>budget: €{budgetEurMonth}/mo</div>
                 </div>
               </div>
-            ) : null}
 
-            {/* Constraints */}
-            {step === "constraints" ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div>
-                    <label className="text-xs text-slate-400">Cloud</label>
-                    <Input
-                      value={constraints.cloud ?? ""}
-                      onChange={(e) => setConstraints((p) => ({ ...p, cloud: e.target.value }))}
-                      placeholder="azure"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400">Region</label>
-                    <Input
-                      value={constraints.region ?? ""}
-                      onChange={(e) => setConstraints((p) => ({ ...p, region: e.target.value }))}
-                      placeholder="westeurope"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400">Environment</label>
-                    <Input
-                      value={constraints.environment ?? ""}
-                      onChange={(e) => setConstraints((p) => ({ ...p, environment: e.target.value }))}
-                      placeholder="dev"
-                    />
-                  </div>
-                </div>
+              <Button onClick={() => setStep("submit")} disabled={!canSubmitDraft}>
+                Continue to Submit
+              </Button>
+            </div>
+          )}
 
-                <div className="flex items-center gap-2">
-                  <Button onClick={saveConstraints} disabled={busy || !requirementSetId}>
-                    Save & Next
-                  </Button>
-                  <span className="text-xs text-slate-400">
-                    {constraintsComplete ? "✓ Complete" : "Cloud + Region + Environment required"}
-                  </span>
-                </div>
+          {step === "submit" && (
+            <div className="space-y-3">
+              <div className="text-slate-200 text-sm">
+                This locks your draft requirement set and submits it.
               </div>
-            ) : null}
+              <Button onClick={doSubmit} disabled={status === "working" || !canSubmitDraft}>
+                Submit requirement set
+              </Button>
+            </div>
+          )}
 
-            {/* Guardrails */}
-            {step === "guardrails" ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="text-xs text-slate-400">PII present (true/false)</label>
-                    <Input
-                      value={String(guardrails.pii_present ?? "")}
-                      onChange={(e) => setGuardrails((p) => ({ ...p, pii_present: e.target.value === "true" }))}
-                      placeholder="true"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-slate-400">GDPR required (true/false)</label>
-                    <Input
-                      value={String(guardrails.gdpr_required ?? "")}
-                      onChange={(e) => setGuardrails((p) => ({ ...p, gdpr_required: e.target.value === "true" }))}
-                      placeholder="true"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-slate-400">Private networking required (true/false)</label>
-                    <Input
-                      value={String(guardrails.private_networking_required ?? "")}
-                      onChange={(e) =>
-                        setGuardrails((p) => ({ ...p, private_networking_required: e.target.value === "true" }))
-                      }
-                      placeholder="true"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs text-slate-400">Budget EUR/month</label>
-                    <Input
-                      value={String(guardrails.budget_eur_month ?? "")}
-                      onChange={(e) => setGuardrails((p) => ({ ...p, budget_eur_month: Number(e.target.value || 0) }))}
-                      placeholder="3000"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Button onClick={saveGuardrails} disabled={busy || !requirementSetId}>
-                    Save & Next
-                  </Button>
-                  <span className="text-xs text-slate-400">
-                    {guardrailsComplete ? "✓ Complete" : "All fields required"}
-                  </span>
-                </div>
+          {step === "approve" && (
+            <div className="space-y-3">
+              <div className="text-slate-200 text-sm">
+                Approval gate: you must approve before planning.
               </div>
-            ) : null}
+              <Button onClick={doApprove} disabled={status === "working" || !requirementSetId}>
+                Approve requirement set
+              </Button>
+            </div>
+          )}
 
-            {/* Review */}
-            {step === "review" ? (
-              <div className="space-y-3">
-                <div className="rounded-md border border-slate-800 bg-slate-950/40 p-3 text-sm">
-                  <div className="font-semibold">Business Context</div>
-                  <div className="mt-1 text-slate-300">{businessContext.description || "—"}</div>
-                  <div className="mt-2 text-xs text-slate-400">
-                    Industry: {businessContext.industry || "—"} · Owner: {businessContext.business_owner || "—"}
-                  </div>
-                </div>
+          {step === "plan" && (
+            <div className="space-y-3">
+              <div className="text-slate-200 text-sm">
+                Creates a deploy plan and returns a RUN_ID.
+              </div>
+              <Button onClick={doPlan} disabled={status === "working" || !requirementSetId}>
+                Create deploy plan
+              </Button>
+            </div>
+          )}
 
-                <div className="rounded-md border border-slate-800 bg-slate-950/40 p-3 text-sm">
-                  <div className="font-semibold">Constraints</div>
-                  <div className="mt-1 text-slate-300">
-                    {constraints.cloud || "—"} / {constraints.region || "—"} / {constraints.environment || "—"}
-                  </div>
-                </div>
-
-                <div className="rounded-md border border-slate-800 bg-slate-950/40 p-3 text-sm">
-                  <div className="font-semibold">Guardrails</div>
-                  <div className="mt-1 text-slate-300">
-                    PII: {String(guardrails.pii_present)} · GDPR: {String(guardrails.gdpr_required)} · Private:{" "}
-                    {String(guardrails.private_networking_required)} · Budget: €{guardrails.budget_eur_month}
-                  </div>
-                </div>
-
-                <Button onClick={() => setStep("submit")} disabled={busy || !requirementSetId}>
-                  Continue
+          {step === "infra" && (
+            <div className="space-y-3">
+              <div className="text-slate-200 text-sm">
+                Approves the run (which triggers infra), then use Refresh to watch status.
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={doInfra} disabled={status === "working" || !runId}>
+                  Approve run (trigger infra)
+                </Button>
+                <Button variant="outline" onClick={doRefresh} disabled={status === "working" || !runId}>
+                  Refresh status
                 </Button>
               </div>
-            ) : null}
+            </div>
+          )}
 
-            {/* Submit */}
-            {step === "submit" ? (
-              <div className="space-y-3">
-                <p className="text-slate-300">Submitting locks the draft and moves the requirement set into governance.</p>
-                <Button onClick={handleSubmit} disabled={busy || !canSubmit}>
-                  Submit requirement set
-                </Button>
-                <div className="text-xs text-slate-400">
-                  Gate: needs complete Context/Constraints/Guardrails and BRD status=draft.
+          {step === "package" && (
+            <div className="space-y-3 text-slate-200 text-sm">
+              <div className="rounded-xl border border-slate-800 p-3 bg-slate-950/40">
+                <div className="text-slate-100 font-medium mb-2">Package summary</div>
+                <div className="text-xs text-slate-300 space-y-1">
+                  <div>session_id: {sessionId}</div>
+                  <div>requirement_set_id: {requirementSetId}</div>
+                  <div>run_id: {runId}</div>
                 </div>
               </div>
-            ) : null}
-
-            {/* Approve */}
-            {step === "approve" ? (
-              <div className="space-y-3">
-                <p className="text-slate-300">Approving freezes the BRD spec and allows deployment planning.</p>
-                <Button onClick={handleApproveReqSet} disabled={busy || !canApproveReqSet}>
-                  Approve requirement set
-                </Button>
-                <div className="text-xs text-slate-400">Gate: BRD status must be submitted.</div>
-              </div>
-            ) : null}
-
-            {/* Plan */}
-            {step === "plan" ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="text-xs text-slate-400">Name prefix</label>
-                    <Input value={namePrefix} onChange={(e) => setNamePrefix(e.target.value)} />
-                  </div>
-                  <div>
-                    <label className="text-xs text-slate-400">Backend hostname</label>
-                    <Input value={backendAppHostname} onChange={(e) => setBackendAppHostname(e.target.value)} />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  <div>
-                    <label className="text-xs text-slate-400">Enable APIM (true/false)</label>
-                    <Input value={String(enableApim)} onChange={(e) => setEnableApim(e.target.value === "true")} />
-                  </div>
-                  <div className="text-sm text-slate-300">
-                    <div className="text-xs text-slate-400">Region / Env (from constraints)</div>
-                    <div className="mt-2">
-                      {constraints.region} / {constraints.environment}
-                    </div>
-                  </div>
-                </div>
-
-                <Button onClick={handleCreatePlan} disabled={busy || !canPlan}>
-                  Create deploy plan (RUN_ID)
-                </Button>
-                <div className="text-xs text-slate-400">Gate: BRD status must be approved.</div>
-              </div>
-            ) : null}
-
-            {/* Infra */}
-            {step === "infra" ? (
-              <div className="space-y-4">
-                <p className="text-slate-300">
-                  Infra is safe-by-default. Approve the deploy run, then trigger the pipeline (apply).
-                </p>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button onClick={handleApproveDeploy} disabled={busy || !canApproveDeploy}>
-                    Approve deploy
-                  </Button>
-                  <Button onClick={handleTriggerInfra} disabled={busy || !canTriggerInfra}>
-                    Trigger infra pipeline
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={busy || !runId}
-                    onClick={async () => {
-                      if (!runId) return;
-                      const r = await deployRefresh(runId);
-                      setRefresh(r);
-                      setDeployStatus(r.current_status);
-                    }}
-                  >
-                    Refresh now
-                  </Button>
-                </div>
-
-                {refresh ? (
-                  <div className="rounded-md border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-300">
-                    <div>previous_status: {refresh.previous_status}</div>
-                    <div>current_status: {refresh.current_status}</div>
-                    <div>pipeline.state: {refresh.pipeline?.state}</div>
-                    {refresh.pipeline?.url ? <div className="break-all">pipeline.url: {refresh.pipeline.url}</div> : null}
-                  </div>
-                ) : null}
-
-                {infraDone ? (
-                  <Button onClick={() => setStep("package")} disabled={busy}>
-                    View package summary
-                  </Button>
-                ) : (
-                  <div className="text-xs text-slate-400">Polling /refresh every ~4 seconds while run_id exists.</div>
-                )}
-              </div>
-            ) : null}
-
-            {/* Package */}
-            {step === "package" ? (
-              <div className="space-y-4">
-                <div className="rounded-md border border-slate-800 bg-slate-950/40 p-4">
-                  <div className="text-sm text-slate-400">Package</div>
-                  <div className="mt-2 text-lg font-semibold">Provisioning summary</div>
-
-                  <div className="mt-3 space-y-1 text-sm text-slate-300">
-                    <div>
-                      Requirement Set: <span className="font-mono">{requirementSetId || "—"}</span>
-                    </div>
-                    <div>
-                      Run ID: <span className="font-mono">{runId || "—"}</span>
-                    </div>
-                    <div>BRD status: {reqSetStatus || "—"}</div>
-                    <div>Deploy status: {deployStatus || "—"}</div>
-                    <div>
-                      Target: {constraints.cloud} / {constraints.region} / {constraints.environment}
-                    </div>
-                  </div>
-                </div>
-
-                <Button variant="outline" onClick={() => router.push("/portal/runs")}>
-                  Go to Runs
-                </Button>
-              </div>
-            ) : null}
-          </Panel>
-        </div>
+              <Button variant="outline" onClick={() => setStep("infra")}>
+                Back to Infra
+              </Button>
+            </div>
+          )}
+        </Card>
 
         {/* Timeline */}
-        <div className="lg:col-span-3">
-          <Panel title="Timeline" right={<Chip label={busy ? "busy" : "idle"} />}>
+        <Card className="lg:col-span-3 p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-white font-semibold">Timeline</div>
+            <span className="text-xs px-2 py-1 rounded bg-slate-800/60 text-slate-200">{status}</span>
+          </div>
+
+          <div className="space-y-2">
             {timeline.length === 0 ? (
-              <div className="text-sm text-slate-400">No events yet. Start with Intake.</div>
+              <div className="text-slate-400 text-sm">No events yet.</div>
             ) : (
-              <div className="space-y-3">
-                {timeline.slice(0, 30).map((e, i) => (
-                  <div key={i} className="rounded-md border border-slate-800 bg-slate-950/40 p-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm font-semibold text-slate-200">{e.title}</div>
-                      <div className="text-[11px] text-slate-500">{new Date(e.at).toLocaleTimeString()}</div>
-                    </div>
-                    {e.detail ? <div className="mt-1 text-xs text-slate-300 break-words">{e.detail}</div> : null}
-                  </div>
-                ))}
-              </div>
+              timeline.map((t, i) => (
+                <div key={i} className="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
+                  <div className="text-slate-100 text-sm font-medium">{t.title}</div>
+                  <div className="text-slate-500 text-xs">{t.at}</div>
+                  {t.detail ? (
+                    <div className="text-slate-300 text-xs mt-1 break-words">{t.detail}</div>
+                  ) : null}
+                </div>
+              ))
             )}
-          </Panel>
-        </div>
+          </div>
+        </Card>
       </div>
     </div>
   );
