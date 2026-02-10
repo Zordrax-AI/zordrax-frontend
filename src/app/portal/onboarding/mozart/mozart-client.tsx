@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import { brd, deploy } from "@/lib/agent-proxy";
+import { brd, deploy } from "@/lib/agent"; // ✅ FIXED
 
 type Step =
   | "intake"
@@ -45,26 +45,21 @@ export default function MozartClient() {
 
   const [step, setStep] = useState<Step>(initialStep);
 
-  // IDs (persist in URL later if you want; for now keep in state)
   const [sessionId, setSessionId] = useState("");
   const [requirementSetId, setRequirementSetId] = useState("");
   const [runId, setRunId] = useState("");
 
-  // Intake
   const [title, setTitle] = useState("Mozart Run");
   const [createdBy, setCreatedBy] = useState("portal");
 
-  // Business context
   const [businessGoal, setBusinessGoal] = useState("Build a governed analytics platform");
   const [stakeholders, setStakeholders] = useState("Finance, Sales Ops, Data Team");
   const [successMetrics, setSuccessMetrics] = useState("Power BI KPIs, daily refresh, secure access");
 
-  // Constraints
   const [cloud, setCloud] = useState("azure");
   const [region, setRegion] = useState("westeurope");
   const [environment, setEnvironment] = useState("dev");
 
-  // Guardrails
   const [piiPresent, setPiiPresent] = useState(true);
   const [gdprRequired, setGdprRequired] = useState(true);
   const [privateNetworking, setPrivateNetworking] = useState(true);
@@ -167,13 +162,11 @@ export default function MozartClient() {
     const p = await runSafe("Create deploy plan", () =>
       deploy.createPlan({
         requirement_set_id: requirementSetId,
-        // Safe defaults; align to your backend expectations
         name_prefix: "zordrax",
         region,
         environment,
         enable_apim: false,
         backend_app_hostname: "example.azurewebsites.net",
-        // any other fields your /api/deploy/plan expects can be added here
       })
     );
     setRunId(p.run_id);
@@ -183,7 +176,6 @@ export default function MozartClient() {
   async function doInfra() {
     if (!runId) throw new Error("Missing run_id");
     await runSafe("Approve run (triggers infra pipeline)", () => deploy.approveRun(runId));
-    // Optional: refresh loop button exists below
   }
 
   async function doRefresh() {
@@ -199,9 +191,7 @@ export default function MozartClient() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold text-white">Mozart Onboarding</h1>
-        <p className="text-slate-300 text-sm">
-          BRD → Submit → Approve → Plan → Infra → Package
-        </p>
+        <p className="text-slate-300 text-sm">BRD → Submit → Approve → Plan → Infra → Package</p>
 
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
           <span className="px-2 py-1 rounded bg-slate-800/60">session: {sessionId || "—"}</span>
@@ -218,7 +208,6 @@ export default function MozartClient() {
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Steps */}
         <Card className="lg:col-span-3 p-4">
           <div className="text-white font-semibold mb-2">Steps</div>
           <div className="space-y-2">
@@ -243,7 +232,6 @@ export default function MozartClient() {
           </div>
         </Card>
 
-        {/* Main panel */}
         <Card className="lg:col-span-6 p-4">
           <div className="text-white font-semibold mb-3">
             {steps.find((x) => x.id === step)?.label}
@@ -372,9 +360,7 @@ export default function MozartClient() {
 
           {step === "submit" && (
             <div className="space-y-3">
-              <div className="text-slate-200 text-sm">
-                This locks your draft requirement set and submits it.
-              </div>
+              <div className="text-slate-200 text-sm">This locks your draft requirement set and submits it.</div>
               <Button onClick={doSubmit} disabled={status === "working" || !canSubmitDraft}>
                 Submit requirement set
               </Button>
@@ -383,9 +369,7 @@ export default function MozartClient() {
 
           {step === "approve" && (
             <div className="space-y-3">
-              <div className="text-slate-200 text-sm">
-                Approval gate: you must approve before planning.
-              </div>
+              <div className="text-slate-200 text-sm">Approval gate: you must approve before planning.</div>
               <Button onClick={doApprove} disabled={status === "working" || !requirementSetId}>
                 Approve requirement set
               </Button>
@@ -394,9 +378,7 @@ export default function MozartClient() {
 
           {step === "plan" && (
             <div className="space-y-3">
-              <div className="text-slate-200 text-sm">
-                Creates a deploy plan and returns a RUN_ID.
-              </div>
+              <div className="text-slate-200 text-sm">Creates a deploy plan and returns a RUN_ID.</div>
               <Button onClick={doPlan} disabled={status === "working" || !requirementSetId}>
                 Create deploy plan
               </Button>
@@ -436,7 +418,6 @@ export default function MozartClient() {
           )}
         </Card>
 
-        {/* Timeline */}
         <Card className="lg:col-span-3 p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="text-white font-semibold">Timeline</div>
@@ -451,9 +432,7 @@ export default function MozartClient() {
                 <div key={i} className="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
                   <div className="text-slate-100 text-sm font-medium">{t.title}</div>
                   <div className="text-slate-500 text-xs">{t.at}</div>
-                  {t.detail ? (
-                    <div className="text-slate-300 text-xs mt-1 break-words">{t.detail}</div>
-                  ) : null}
+                  {t.detail ? <div className="text-slate-300 text-xs mt-1 break-words">{t.detail}</div> : null}
                 </div>
               ))
             )}
