@@ -1,121 +1,76 @@
 // src/lib/agent.ts
+export const AGENT_PROXY_BASE = "/api/agent"; // always same-origin
 
-const PROXY_PREFIX = "/api/agent";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-/**
- * Build a safe proxy URL.
- * Accepts:
- *   "/api/brd/sessions"
- *   "api/brd/sessions"
- *   "/api/agent/api/brd/sessions"  (accidental) -> normalized
- *
- * Returns:
- *   "/api/agent/api/brd/sessions"
- */
-export function agentUrl(path: string): string {
-  let p = (path || "").trim();
+async function request<T>(
+  method: HttpMethod,
+  path: string,
+  body?: unknown
+): Promise<T> {
+  // path must start with "/"
+  const p = path.startsWith("/") ? path : `/${path}`;
 
-  // If someone pastes a full URL, strip the origin.
-  p = p.replace(/^https?:\/\/[^/]+/i, "");
-
-  // Prevent double prefix: /api/agent/api/agent/...
-  if (p.startsWith(PROXY_PREFIX)) p = p.slice(PROXY_PREFIX.length);
-
-  // Ensure leading slash
-  if (!p.startsWith("/")) p = `/${p}`;
-
-  return `${PROXY_PREFIX}${p}`;
-}
-
-async function parseResponse(res: Response) {
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return res.json();
-  return res.text();
-}
-
-export async function agentFetch<T = any>(path: string, init?: RequestInit): Promise<T> {
-  const url = agentUrl(path);
-
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      ...(init?.headers || {}),
-      // Only set Content-Type automatically when we have a body (avoid weirdness on GET)
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-    },
+  const res = await fetch(`${AGENT_PROXY_BASE}${p}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    cache: "no-store",
   });
 
+  const text = await res.text();
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`agentFetch failed: ${res.status} ${res.statusText} :: ${url}\n${body.slice(0, 400)}`);
+    throw new Error(`Agent proxy ${res.status}: ${text}`);
   }
 
-  return parseResponse(res) as Promise<T>;
+  return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
-// ------------------------------------------------------------
-// Typed-ish API wrappers used by Mozart
-// ------------------------------------------------------------
-
-export const brd = {
-  createSession: (body: { created_by: string; title: string }) =>
-    agentFetch<{ session_id: string }>("/api/brd/sessions", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
-  createRequirementSet: (body: { session_id: string; name?: string }) =>
-    agentFetch<{ requirement_set_id: string }>("/api/brd/requirement-sets", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
-  upsertBusinessContext: (requirement_set_id: string, body: any) =>
-    agentFetch(`/api/brd/requirement-sets/${requirement_set_id}/business-context`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    }),
-
-  upsertConstraints: (requirement_set_id: string, body: any) =>
-    agentFetch(`/api/brd/requirement-sets/${requirement_set_id}/constraints`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    }),
-
-  upsertGuardrails: (requirement_set_id: string, body: any) =>
-    agentFetch(`/api/brd/requirement-sets/${requirement_set_id}/guardrails`, {
-      method: "PUT",
-      body: JSON.stringify(body),
-    }),
-
-  submit: (requirement_set_id: string) =>
-    agentFetch(`/api/brd/requirement-sets/${requirement_set_id}/submit`, {
-      method: "POST",
-    }),
-
-  approve: (requirement_set_id: string) =>
-    agentFetch(`/api/brd/requirement-sets/${requirement_set_id}/approve`, {
-      method: "POST",
-    }),
-};
-
-export const deploy = {
-  createPlan: (body: any) =>
-    agentFetch<{ run_id: string; status?: string; plan_summary?: any; policy_warnings?: any[] }>(
-      "/api/deploy/plan",
-      {
-        method: "POST",
-        body: JSON.stringify(body),
-      }
+export const brdApi = {
+  createSession: (payload: { created_by: string; title: string }) =>
+    request<{ session_id: string; created_by: string }>(
+      "POST",
+      "/api/brd/sessions",
+      payload
     ),
 
-  approveRun: (run_id: string) =>
-    agentFetch(`/api/deploy/${run_id}/approve`, {
-      method: "POST",
-    }),
+  createRequirementSet: (payload: { session_id: string; name: string }) =>
+    request<any>("POST", "/api/brd/requirement-sets", payload),
 
-  refresh: (run_id: string) =>
-    agentFetch(`/api/deploy/${run_id}/refresh`, {
-      method: "GET",
-    }),
+  upsertBusinessContext: (requirementSetId: string, payload: any) =>
+    request<any>(
+      "PUT",
+      `/api/brd/requirement-sets/${requirementSetId}/business-context`,
+      payload
+    ),
+
+  upsertConstraints: (requirementSetId: string, payload: any) =>
+    request<any>(
+      "PUT",
+      `/api/brd/requirement-sets/${requirementSetId}/constraints`,
+      payload
+    ),
+
+  upsertGuardrails: (requirementSetId: string, payload: any) =>
+    request<any>(
+      "PUT",
+      `/api/brd/requirement-sets/${requirementSetId}/guardrails`,
+      payload
+    ),
+
+  submit: (requirementSetId: string) =>
+    request<any>("POST", `/api/brd/requirement-sets/${requirementSetId}/submit`),
+
+  approve: (requirementSetId: string) =>
+    request<any>(
+      "POST",
+      `/api/brd/requirement-sets/${requirementSetId}/approve`
+    ),
+};
+
+export const deployApi = {
+  createPlan: (payload: any) => request<any>("POST", "/api/deploy/plan", payload),
+  approveRun: (runId: string) =>
+    request<any>("POST", `/api/deploy/${runId}/approve`),
+  refresh: (runId: string) => request<any>("GET", `/api/deploy/${runId}/refresh`),
 };

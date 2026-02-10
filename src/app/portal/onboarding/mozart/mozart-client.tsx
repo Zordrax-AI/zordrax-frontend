@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import { brd, deploy } from "@/lib/agent"; // ✅ FIXED
+import { brdApi as brd, deployApi as deploy } from "@/lib/agent";
 
 type Step =
   | "intake"
