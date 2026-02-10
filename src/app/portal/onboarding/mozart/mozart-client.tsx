@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
-import { brdApi as brd, deployApi as deploy } from "@/lib/agent";
+import { brd, deploy } from "@/lib/agent-proxy";
 
 type Step =
   | "intake"
@@ -45,21 +45,26 @@ export default function MozartClient() {
 
   const [step, setStep] = useState<Step>(initialStep);
 
+  // IDs
   const [sessionId, setSessionId] = useState("");
   const [requirementSetId, setRequirementSetId] = useState("");
   const [runId, setRunId] = useState("");
 
+  // Intake
   const [title, setTitle] = useState("Mozart Run");
   const [createdBy, setCreatedBy] = useState("portal");
 
+  // Business context
   const [businessGoal, setBusinessGoal] = useState("Build a governed analytics platform");
   const [stakeholders, setStakeholders] = useState("Finance, Sales Ops, Data Team");
   const [successMetrics, setSuccessMetrics] = useState("Power BI KPIs, daily refresh, secure access");
 
+  // Constraints
   const [cloud, setCloud] = useState("azure");
   const [region, setRegion] = useState("westeurope");
   const [environment, setEnvironment] = useState("dev");
 
+  // Guardrails
   const [piiPresent, setPiiPresent] = useState(true);
   const [gdprRequired, setGdprRequired] = useState(true);
   const [privateNetworking, setPrivateNetworking] = useState(true);
@@ -94,20 +99,28 @@ export default function MozartClient() {
     }
   }
 
+  // --- Intake ---
   async function doIntake() {
     const s = await runSafe("Create BRD session", () =>
       brd.createSession({ created_by: createdBy, title })
     );
+
     setSessionId(s.session_id);
 
-    const r = await runSafe("Create requirement set", () =>
+    const r: any = await runSafe("Create requirement set", () =>
       brd.createRequirementSet({ session_id: s.session_id, name: title })
     );
-    setRequirementSetId(r.requirement_set_id);
+
+    // agent-proxy normalizes to requirement_set_id, but guard anyway:
+    const reqId = r?.requirement_set_id ?? r?.id;
+    if (!reqId) throw new Error(`Requirement set response missing id: ${JSON.stringify(r)}`);
+
+    setRequirementSetId(reqId);
 
     setStep("business_context");
   }
 
+  // --- Business Context ---
   async function saveBusinessContext() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
     await runSafe("Save business context", () =>
@@ -120,6 +133,7 @@ export default function MozartClient() {
     setStep("constraints");
   }
 
+  // --- Constraints ---
   async function saveConstraints() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
     await runSafe("Save constraints", () =>
@@ -132,6 +146,7 @@ export default function MozartClient() {
     setStep("guardrails");
   }
 
+  // --- Guardrails ---
   async function saveGuardrails() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
     await runSafe("Save guardrails", () =>
@@ -145,21 +160,24 @@ export default function MozartClient() {
     setStep("review");
   }
 
+  // --- Submit ---
   async function doSubmit() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id");
     await runSafe("Submit requirement set", () => brd.submit(requirementSetId));
     setStep("approve");
   }
 
+  // --- Approve ---
   async function doApprove() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id");
     await runSafe("Approve requirement set", () => brd.approve(requirementSetId));
     setStep("plan");
   }
 
+  // --- Plan ---
   async function doPlan() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id");
-    const p = await runSafe("Create deploy plan", () =>
+    const p: any = await runSafe("Create deploy plan", () =>
       deploy.createPlan({
         requirement_set_id: requirementSetId,
         name_prefix: "zordrax",
@@ -169,10 +187,12 @@ export default function MozartClient() {
         backend_app_hostname: "example.azurewebsites.net",
       })
     );
+    if (!p?.run_id) throw new Error(`Deploy plan response missing run_id: ${JSON.stringify(p)}`);
     setRunId(p.run_id);
     setStep("infra");
   }
 
+  // --- Infra ---
   async function doInfra() {
     if (!runId) throw new Error("Missing run_id");
     await runSafe("Approve run (triggers infra pipeline)", () => deploy.approveRun(runId));
@@ -180,9 +200,9 @@ export default function MozartClient() {
 
   async function doRefresh() {
     if (!runId) throw new Error("Missing run_id");
-    const r = await runSafe("Refresh run status", () => deploy.refresh(runId));
+    const r: any = await runSafe("Refresh run status", () => deploy.refresh(runId));
     pushTimeline("Run status", JSON.stringify(r));
-    if ((r as any)?.status === "infra_succeeded") {
+    if (r?.status === "infra_succeeded") {
       setStep("package");
     }
   }
@@ -208,6 +228,7 @@ export default function MozartClient() {
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Steps */}
         <Card className="lg:col-span-3 p-4">
           <div className="text-white font-semibold mb-2">Steps</div>
           <div className="space-y-2">
@@ -228,14 +249,13 @@ export default function MozartClient() {
             ))}
           </div>
           <div className="mt-3 text-xs text-slate-400">
-            IDs are kept in state for now (easy to persist in URL next).
+            IDs are kept in state for now (you can persist in URL later).
           </div>
         </Card>
 
+        {/* Main panel */}
         <Card className="lg:col-span-6 p-4">
-          <div className="text-white font-semibold mb-3">
-            {steps.find((x) => x.id === step)?.label}
-          </div>
+          <div className="text-white font-semibold mb-3">{steps.find((x) => x.id === step)?.label}</div>
 
           {step === "intake" && (
             <div className="space-y-3">
@@ -271,7 +291,10 @@ export default function MozartClient() {
                 <Textarea value={successMetrics} onChange={(e) => setSuccessMetrics(e.target.value)} />
               </div>
 
-              <Button onClick={saveBusinessContext} disabled={status === "working" || !requirementSetId}>
+              <Button
+                onClick={saveBusinessContext}
+                disabled={status === "working" || !requirementSetId}
+              >
                 Save & Next
               </Button>
             </div>
@@ -321,11 +344,7 @@ export default function MozartClient() {
                 </label>
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Budget EUR/month</div>
-                  <Input
-                    type="number"
-                    value={budgetEurMonth}
-                    onChange={(e) => setBudgetEurMonth(Number(e.target.value))}
-                  />
+                  <Input type="number" value={budgetEurMonth} onChange={(e) => setBudgetEurMonth(Number(e.target.value))} />
                 </div>
               </div>
 
@@ -388,7 +407,7 @@ export default function MozartClient() {
           {step === "infra" && (
             <div className="space-y-3">
               <div className="text-slate-200 text-sm">
-                Approves the run (which triggers infra), then use Refresh to watch status.
+                Approves the run (which triggers infra), then Refresh to watch status.
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Button onClick={doInfra} disabled={status === "working" || !runId}>
@@ -418,6 +437,7 @@ export default function MozartClient() {
           )}
         </Card>
 
+        {/* Timeline */}
         <Card className="lg:col-span-3 p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="text-white font-semibold">Timeline</div>
