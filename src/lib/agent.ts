@@ -1,4 +1,9 @@
-// src/lib/agent.ts
-// DEPRECATED. Do not bypass src/lib/api.ts (HTTPS normalization).
-export { API_BASE } from "@/lib/api";
-export { listRuns, getRun, getRunEvents, cancelRun, deployPlan, deployApprove, deployApply } from "@/lib/api";
+export async function agentFetch(path: string, init?: RequestInit) {
+  const url = `/api/agent${path.startsWith("/") ? "" : "/"}${path}`;
+  const res = await fetch(url, init);
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`agentFetch ${res.status}: ${txt || res.statusText}`);
+  }
+  return res;
+}
