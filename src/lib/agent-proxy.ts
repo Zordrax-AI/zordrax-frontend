@@ -36,7 +36,6 @@ async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text().catch(() => "");
 
   if (!res.ok) {
-    // Try to show FastAPI-style {"detail": "..."} cleanly
     try {
       const j = JSON.parse(text);
       throw new Error(`${res.status} ${res.statusText} :: ${j?.detail ?? text}`);
@@ -54,15 +53,12 @@ async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /**
- * Normalizer:
  * Backend returns requirement sets as { id: "..." }
  * UI expects { requirement_set_id: "..." }
  */
 function normalizeRequirementSet(resp: any) {
   if (!resp || typeof resp !== "object") return resp;
-  if (!resp.requirement_set_id && resp.id) {
-    return { ...resp, requirement_set_id: resp.id };
-  }
+  if (!resp.requirement_set_id && resp.id) return { ...resp, requirement_set_id: resp.id };
   return resp;
 }
 
@@ -81,37 +77,41 @@ export const brd = {
       body: JSON.stringify(payload),
     }).then(normalizeRequirementSet),
 
-  // PUT /api/brd/requirement-sets/{requirement_set_id}/business-context
+  // PUT /api/brd/requirement-sets/{id}/business-context
   upsertBusinessContext: (requirement_set_id: string, payload: Json) =>
     request(`/api/brd/requirement-sets/${requirement_set_id}/business-context`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
 
-  // ✅ FIX: PUT /api/brd/constraints/{requirement_set_id}
+  // ✅ PUT /api/brd/constraints/{id}
   upsertConstraints: (requirement_set_id: string, payload: Json) =>
     request(`/api/brd/constraints/${requirement_set_id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
 
-  // ✅ FIX: PUT /api/brd/guardrails/{requirement_set_id}
+  // ✅ PUT /api/brd/guardrails/{id}
   upsertGuardrails: (requirement_set_id: string, payload: Json) =>
     request(`/api/brd/guardrails/${requirement_set_id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
 
-  // POST /api/brd/requirement-sets/{requirement_set_id}/submit
-  submit: (requirement_set_id: string) =>
+  /**
+   * ✅ FIX: submit/approve require a JSON body (FastAPI "body required").
+   * Send {} by default to satisfy schema.
+   */
+  submit: (requirement_set_id: string, payload: Json = {}) =>
     request(`/api/brd/requirement-sets/${requirement_set_id}/submit`, {
       method: "POST",
+      body: JSON.stringify(payload),
     }),
 
-  // POST /api/brd/requirement-sets/{requirement_set_id}/approve
-  approve: (requirement_set_id: string) =>
+  approve: (requirement_set_id: string, payload: Json = {}) =>
     request(`/api/brd/requirement-sets/${requirement_set_id}/approve`, {
       method: "POST",
+      body: JSON.stringify(payload),
     }),
 };
 
@@ -123,7 +123,7 @@ export const deploy = {
       body: JSON.stringify(payload),
     }),
 
-  // POST /api/deploy/{run_id}/approve
+  // POST /api/deploy/{run_id}/approve  (usually body-less is OK; keep as-is)
   approveRun: (run_id: string) =>
     request(`/api/deploy/${run_id}/approve`, { method: "POST" }),
 

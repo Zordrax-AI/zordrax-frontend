@@ -124,8 +124,8 @@ export default function MozartClient() {
     await runSafe("Save business context", () =>
       brd.upsertBusinessContext(requirementSetId, {
         business_goal: businessGoal,
-        stakeholders: splitCsvToList(stakeholders),         // ✅ backend expects list
-        success_metrics: splitCsvToList(successMetrics),    // ✅ safe
+        stakeholders: splitCsvToList(stakeholders),
+        success_metrics: splitCsvToList(successMetrics),
       })
     );
 
@@ -136,11 +136,7 @@ export default function MozartClient() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
 
     await runSafe("Save constraints", () =>
-      brd.upsertConstraints(requirementSetId, {
-        cloud,
-        region,
-        environment,
-      })
+      brd.upsertConstraints(requirementSetId, { cloud, region, environment })
     );
 
     setStep("guardrails");
@@ -163,13 +159,15 @@ export default function MozartClient() {
 
   async function doSubmit() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id");
-    await runSafe("Submit requirement set", () => brd.submit(requirementSetId));
+    // ✅ FIX: backend requires a JSON body, so send {}
+    await runSafe("Submit requirement set", () => brd.submit(requirementSetId, {}));
     setStep("approve");
   }
 
   async function doApprove() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id");
-    await runSafe("Approve requirement set", () => brd.approve(requirementSetId));
+    // ✅ FIX: safe to send {} here too
+    await runSafe("Approve requirement set", () => brd.approve(requirementSetId, {}));
     setStep("plan");
   }
 
