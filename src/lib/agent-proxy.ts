@@ -1,6 +1,4 @@
 // src/lib/agent-proxy.ts
-// Canonical proxy client for the portal -> Next route -> FastAPI agent
-// Always call same-origin /api/agent/... so browser never hits ACA domain directly.
 
 type Json = Record<string, any>;
 
@@ -12,28 +10,25 @@ function withTimeout(ms: number) {
 
 async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
   const p = path.startsWith("/") ? path : `/${path}`;
+  const { ctrl, clear } = withTimeout(15_000);
 
-  const { ctrl, clear } = withTimeout(30_000); // 30s: BRD writes can take time depending on DB
   let res: Response;
-
   try {
     res = await fetch(`/api/agent${p}`, {
       ...init,
       cache: "no-store",
       signal: ctrl.signal,
       headers: {
-        // Keep JSON default, but allow callers to override/add
         "Content-Type": "application/json",
         ...(init?.headers || {}),
       },
     });
   } catch (e: any) {
-    clear();
-    const msg =
+    throw new Error(
       e?.name === "AbortError"
-        ? `Proxy timeout after 30s: /api/agent${p}`
-        : `Proxy network error: /api/agent${p} :: ${e?.message || String(e)}`;
-    throw new Error(msg);
+        ? `Proxy timeout after 15s: /api/agent${p}`
+        : `Proxy network error: /api/agent${p} :: ${e?.message || String(e)}`
+    );
   } finally {
     clear();
   }
@@ -41,11 +36,10 @@ async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
   const text = await res.text().catch(() => "");
 
   if (!res.ok) {
-    // Prefer FastAPI-style {"detail": "..."} if present
+    // Try to show FastAPI-style {"detail": "..."} cleanly
     try {
       const j = JSON.parse(text);
-      const detail = j?.detail ?? text;
-      throw new Error(`${res.status} ${res.statusText} :: ${detail}`);
+      throw new Error(`${res.status} ${res.statusText} :: ${j?.detail ?? text}`);
     } catch {
       throw new Error(`${res.status} ${res.statusText} :: ${text}`);
     }
@@ -60,8 +54,9 @@ async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /**
- * Normalizers: your backend returns requirement sets as { id: "..." }
- * but UI should consistently use requirement_set_id.
+ * Normalizer:
+ * Backend returns requirement sets as { id: "..." }
+ * UI expects { requirement_set_id: "..." }
  */
 function normalizeRequirementSet(resp: any) {
   if (!resp || typeof resp !== "object") return resp;
@@ -72,60 +67,67 @@ function normalizeRequirementSet(resp: any) {
 }
 
 export const brd = {
+  // POST /api/brd/sessions
   createSession: (payload: { created_by: string; title: string }) =>
     request<{ session_id: string; created_by?: string }>("/api/brd/sessions", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  // name is required by your backend. Do not make optional.
+  // POST /api/brd/requirement-sets
   createRequirementSet: (payload: { session_id: string; name: string }) =>
     request<any>("/api/brd/requirement-sets", {
       method: "POST",
       body: JSON.stringify(payload),
-    }).then((r) => {
-      const n = normalizeRequirementSet(r);
-      if (!n?.requirement_set_id) {
-        throw new Error(`Requirement set response missing id: ${JSON.stringify(r)}`);
-      }
-      return n;
-    }),
+    }).then(normalizeRequirementSet),
 
+  // PUT /api/brd/requirement-sets/{requirement_set_id}/business-context
   upsertBusinessContext: (requirement_set_id: string, payload: Json) =>
     request(`/api/brd/requirement-sets/${requirement_set_id}/business-context`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
 
+  // ✅ FIX: PUT /api/brd/constraints/{requirement_set_id}
   upsertConstraints: (requirement_set_id: string, payload: Json) =>
-    request(`/api/brd/requirement-sets/${requirement_set_id}/constraints`, {
+    request(`/api/brd/constraints/${requirement_set_id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
 
+  // ✅ FIX: PUT /api/brd/guardrails/{requirement_set_id}
   upsertGuardrails: (requirement_set_id: string, payload: Json) =>
-    request(`/api/brd/requirement-sets/${requirement_set_id}/guardrails`, {
+    request(`/api/brd/guardrails/${requirement_set_id}`, {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
 
+  // POST /api/brd/requirement-sets/{requirement_set_id}/submit
   submit: (requirement_set_id: string) =>
-    request(`/api/brd/requirement-sets/${requirement_set_id}/submit`, { method: "POST" }),
+    request(`/api/brd/requirement-sets/${requirement_set_id}/submit`, {
+      method: "POST",
+    }),
 
+  // POST /api/brd/requirement-sets/{requirement_set_id}/approve
   approve: (requirement_set_id: string) =>
-    request(`/api/brd/requirement-sets/${requirement_set_id}/approve`, { method: "POST" }),
+    request(`/api/brd/requirement-sets/${requirement_set_id}/approve`, {
+      method: "POST",
+    }),
 };
 
 export const deploy = {
+  // POST /api/deploy/plan
   createPlan: (payload: Json) =>
     request<{ run_id: string }>("/api/deploy/plan", {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
+  // POST /api/deploy/{run_id}/approve
   approveRun: (run_id: string) =>
     request(`/api/deploy/${run_id}/approve`, { method: "POST" }),
 
+  // GET /api/deploy/{run_id}/refresh
   refresh: (run_id: string) =>
     request(`/api/deploy/${run_id}/refresh`, { method: "GET" }),
 };

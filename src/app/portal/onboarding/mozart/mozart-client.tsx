@@ -1,5 +1,3 @@
-// C:\Users\Zordr\Desktop\frontend-repo\src\app\portal\onboarding\mozart\mozart-client.tsx
-
 "use client";
 
 import { useMemo, useState } from "react";
@@ -54,47 +52,32 @@ export default function MozartClient() {
 
   const [step, setStep] = useState<Step>(initialStep);
 
-  // IDs (persist in URL later if you want; for now keep in state)
   const [sessionId, setSessionId] = useState("");
   const [requirementSetId, setRequirementSetId] = useState("");
   const [runId, setRunId] = useState("");
 
-  // Intake
   const [title, setTitle] = useState("Mozart Run");
   const [createdBy, setCreatedBy] = useState("portal");
 
-  // Business context
-  const [businessGoal, setBusinessGoal] = useState(
-    "Build a governed analytics platform"
-  );
-  const [stakeholders, setStakeholders] = useState(
-    "Finance, Sales Ops, Data Team"
-  );
-  const [successMetrics, setSuccessMetrics] = useState(
-    "Power BI KPIs, daily refresh, secure access"
-  );
+  const [businessGoal, setBusinessGoal] = useState("Build a governed analytics platform");
+  const [stakeholders, setStakeholders] = useState("Finance, Sales Ops, Data Team");
+  const [successMetrics, setSuccessMetrics] = useState("Power BI KPIs, daily refresh, secure access");
 
-  // Constraints
   const [cloud, setCloud] = useState("azure");
   const [region, setRegion] = useState("westeurope");
   const [environment, setEnvironment] = useState("dev");
 
-  // Guardrails
   const [piiPresent, setPiiPresent] = useState(true);
   const [gdprRequired, setGdprRequired] = useState(true);
   const [privateNetworking, setPrivateNetworking] = useState(true);
   const [budgetEurMonth, setBudgetEurMonth] = useState(3000);
 
-  const [status, setStatus] = useState<"idle" | "working" | "ok" | "error">(
-    "idle"
-  );
+  const [status, setStatus] = useState<"idle" | "working" | "ok" | "error">("idle");
   const [error, setError] = useState<string>("");
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
 
   const canSubmitDraft = useMemo(() => {
-    return (
-      !!requirementSetId && businessGoal.trim().length > 3 && region.trim().length > 2
-    );
+    return !!requirementSetId && businessGoal.trim().length > 3 && region.trim().length > 2;
   }, [requirementSetId, businessGoal, region]);
 
   function pushTimeline(title: string, detail?: string) {
@@ -128,7 +111,6 @@ export default function MozartClient() {
       brd.createRequirementSet({ session_id: s.session_id, name: title })
     );
 
-    // Backend returns { id: "..." } but proxy may normalize to requirement_set_id.
     const reqId = (r as any).requirement_set_id || (r as any).id;
     if (!reqId) throw new Error(`Requirement set response missing id: ${JSON.stringify(r)}`);
     setRequirementSetId(reqId);
@@ -139,14 +121,11 @@ export default function MozartClient() {
   async function saveBusinessContext() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
 
-    const stakeholdersList = splitCsvToList(stakeholders);
-    const successMetricsList = splitCsvToList(successMetrics);
-
     await runSafe("Save business context", () =>
       brd.upsertBusinessContext(requirementSetId, {
         business_goal: businessGoal,
-        stakeholders: stakeholdersList,       // ✅ list for backend
-        success_metrics: successMetricsList,  // ✅ list (safe + common)
+        stakeholders: splitCsvToList(stakeholders),         // ✅ backend expects list
+        success_metrics: splitCsvToList(successMetrics),    // ✅ safe
       })
     );
 
@@ -155,6 +134,7 @@ export default function MozartClient() {
 
   async function saveConstraints() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
+
     await runSafe("Save constraints", () =>
       brd.upsertConstraints(requirementSetId, {
         cloud,
@@ -162,11 +142,13 @@ export default function MozartClient() {
         environment,
       })
     );
+
     setStep("guardrails");
   }
 
   async function saveGuardrails() {
     if (!requirementSetId) throw new Error("Missing requirement_set_id (run Intake first)");
+
     await runSafe("Save guardrails", () =>
       brd.upsertGuardrails(requirementSetId, {
         pii_present: piiPresent,
@@ -175,6 +157,7 @@ export default function MozartClient() {
         budget_eur_month: budgetEurMonth,
       })
     );
+
     setStep("review");
   }
 
@@ -219,32 +202,20 @@ export default function MozartClient() {
     if (!runId) throw new Error("Missing run_id");
     const r = await runSafe("Refresh run status", () => deploy.refresh(runId));
     pushTimeline("Run status", JSON.stringify(r));
-    if ((r as any)?.status === "infra_succeeded") {
-      setStep("package");
-    }
+    if ((r as any)?.status === "infra_succeeded") setStep("package");
   }
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold text-white">Mozart Onboarding</h1>
-        <p className="text-slate-300 text-sm">
-          BRD → Submit → Approve → Plan → Infra → Package
-        </p>
+        <p className="text-slate-300 text-sm">BRD → Submit → Approve → Plan → Infra → Package</p>
 
         <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
-          <span className="px-2 py-1 rounded bg-slate-800/60">
-            session: {sessionId || "—"}
-          </span>
-          <span className="px-2 py-1 rounded bg-slate-800/60">
-            reqset: {requirementSetId || "—"}
-          </span>
-          <span className="px-2 py-1 rounded bg-slate-800/60">
-            run: {runId || "—"}
-          </span>
-          <span className="px-2 py-1 rounded bg-slate-800/60">
-            status: {status}
-          </span>
+          <span className="px-2 py-1 rounded bg-slate-800/60">session: {sessionId || "—"}</span>
+          <span className="px-2 py-1 rounded bg-slate-800/60">reqset: {requirementSetId || "—"}</span>
+          <span className="px-2 py-1 rounded bg-slate-800/60">run: {runId || "—"}</span>
+          <span className="px-2 py-1 rounded bg-slate-800/60">status: {status}</span>
         </div>
       </div>
 
@@ -255,7 +226,6 @@ export default function MozartClient() {
       ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Steps */}
         <Card className="lg:col-span-3 p-4">
           <div className="text-white font-semibold mb-2">Steps</div>
           <div className="space-y-2">
@@ -275,16 +245,10 @@ export default function MozartClient() {
               </button>
             ))}
           </div>
-          <div className="mt-3 text-xs text-slate-400">
-            IDs are kept in state for now (easy to persist in URL next).
-          </div>
         </Card>
 
-        {/* Main panel */}
         <Card className="lg:col-span-6 p-4">
-          <div className="text-white font-semibold mb-3">
-            {steps.find((x) => x.id === step)?.label}
-          </div>
+          <div className="text-white font-semibold mb-3">{steps.find((x) => x.id === step)?.label}</div>
 
           {step === "intake" && (
             <div className="space-y-3">
@@ -312,22 +276,15 @@ export default function MozartClient() {
                 <Textarea value={businessGoal} onChange={(e) => setBusinessGoal(e.target.value)} />
               </div>
               <div>
-                <div className="text-xs text-slate-400 mb-1">
-                  Stakeholders (comma-separated)
-                </div>
+                <div className="text-xs text-slate-400 mb-1">Stakeholders (comma-separated)</div>
                 <Input value={stakeholders} onChange={(e) => setStakeholders(e.target.value)} />
               </div>
               <div>
-                <div className="text-xs text-slate-400 mb-1">
-                  Success metrics (comma-separated)
-                </div>
+                <div className="text-xs text-slate-400 mb-1">Success metrics (comma-separated)</div>
                 <Textarea value={successMetrics} onChange={(e) => setSuccessMetrics(e.target.value)} />
               </div>
 
-              <Button
-                onClick={saveBusinessContext}
-                disabled={status === "working" || !requirementSetId}
-              >
+              <Button onClick={saveBusinessContext} disabled={status === "working" || !requirementSetId}>
                 Save & Next
               </Button>
             </div>
@@ -350,10 +307,7 @@ export default function MozartClient() {
                 </div>
               </div>
 
-              <Button
-                onClick={saveConstraints}
-                disabled={status === "working" || !requirementSetId}
-              >
+              <Button onClick={saveConstraints} disabled={status === "working" || !requirementSetId}>
                 Save & Next
               </Button>
             </div>
@@ -363,19 +317,11 @@ export default function MozartClient() {
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="flex items-center gap-2 text-slate-200 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={piiPresent}
-                    onChange={(e) => setPiiPresent(e.target.checked)}
-                  />
+                  <input type="checkbox" checked={piiPresent} onChange={(e) => setPiiPresent(e.target.checked)} />
                   PII present
                 </label>
                 <label className="flex items-center gap-2 text-slate-200 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={gdprRequired}
-                    onChange={(e) => setGdprRequired(e.target.checked)}
-                  />
+                  <input type="checkbox" checked={gdprRequired} onChange={(e) => setGdprRequired(e.target.checked)} />
                   GDPR required
                 </label>
                 <label className="flex items-center gap-2 text-slate-200 text-sm">
@@ -388,18 +334,11 @@ export default function MozartClient() {
                 </label>
                 <div>
                   <div className="text-xs text-slate-400 mb-1">Budget EUR/month</div>
-                  <Input
-                    type="number"
-                    value={budgetEurMonth}
-                    onChange={(e) => setBudgetEurMonth(Number(e.target.value))}
-                  />
+                  <Input type="number" value={budgetEurMonth} onChange={(e) => setBudgetEurMonth(Number(e.target.value))} />
                 </div>
               </div>
 
-              <Button
-                onClick={saveGuardrails}
-                disabled={status === "working" || !requirementSetId}
-              >
+              <Button onClick={saveGuardrails} disabled={status === "working" || !requirementSetId}>
                 Save & Next
               </Button>
             </div>
@@ -430,9 +369,7 @@ export default function MozartClient() {
 
           {step === "submit" && (
             <div className="space-y-3">
-              <div className="text-slate-200 text-sm">
-                This locks your draft requirement set and submits it.
-              </div>
+              <div className="text-slate-200 text-sm">This locks your draft requirement set and submits it.</div>
               <Button onClick={doSubmit} disabled={status === "working" || !canSubmitDraft}>
                 Submit requirement set
               </Button>
@@ -441,9 +378,7 @@ export default function MozartClient() {
 
           {step === "approve" && (
             <div className="space-y-3">
-              <div className="text-slate-200 text-sm">
-                Approval gate: you must approve before planning.
-              </div>
+              <div className="text-slate-200 text-sm">Approval gate: you must approve before planning.</div>
               <Button onClick={doApprove} disabled={status === "working" || !requirementSetId}>
                 Approve requirement set
               </Button>
@@ -452,9 +387,7 @@ export default function MozartClient() {
 
           {step === "plan" && (
             <div className="space-y-3">
-              <div className="text-slate-200 text-sm">
-                Creates a deploy plan and returns a RUN_ID.
-              </div>
+              <div className="text-slate-200 text-sm">Creates a deploy plan and returns a RUN_ID.</div>
               <Button onClick={doPlan} disabled={status === "working" || !requirementSetId}>
                 Create deploy plan
               </Button>
@@ -494,13 +427,10 @@ export default function MozartClient() {
           )}
         </Card>
 
-        {/* Timeline */}
         <Card className="lg:col-span-3 p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="text-white font-semibold">Timeline</div>
-            <span className="text-xs px-2 py-1 rounded bg-slate-800/60 text-slate-200">
-              {status}
-            </span>
+            <span className="text-xs px-2 py-1 rounded bg-slate-800/60 text-slate-200">{status}</span>
           </div>
 
           <div className="space-y-2">
@@ -511,9 +441,7 @@ export default function MozartClient() {
                 <div key={i} className="rounded-xl border border-slate-800 bg-slate-950/40 p-2">
                   <div className="text-slate-100 text-sm font-medium">{t.title}</div>
                   <div className="text-slate-500 text-xs">{t.at}</div>
-                  {t.detail ? (
-                    <div className="text-slate-300 text-xs mt-1 break-words">{t.detail}</div>
-                  ) : null}
+                  {t.detail ? <div className="text-slate-300 text-xs mt-1 break-words">{t.detail}</div> : null}
                 </div>
               ))
             )}
