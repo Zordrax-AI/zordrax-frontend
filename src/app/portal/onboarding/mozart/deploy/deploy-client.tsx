@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { deploy } from "@/lib/agent-proxy";
+import { brd, deploy } from "@/lib/agent-proxy";
 
 export default function DeployTimelineClient() {
   const sp = useSearchParams();
@@ -17,13 +17,23 @@ export default function DeployTimelineClient() {
   const [last, setLast] = useState<any>(null);
 
   const canPlan = useMemo(() => !!requirementSetId && !busy, [requirementSetId, busy]);
-  const canApprove = useMemo(() => !!runId && !busy, [runId, busy]);
+  const canRun = useMemo(() => !!runId && !busy, [runId, busy]);
 
   async function doPlan() {
     if (!requirementSetId) return;
+
     setBusy(true);
     setError("");
+
     try {
+      // 1) Validate it exists (better error than “not found” later)
+      await brd.getRequirementSet(requirementSetId);
+
+      // 2) Enforce the gate: submit + approve before plan
+      await brd.submitRequirementSet(requirementSetId, {});
+      await brd.approveRequirementSet(requirementSetId, {});
+
+      // 3) Create deploy plan
       const p = await deploy.createPlan({
         requirement_set_id: requirementSetId,
         name_prefix: "zordrax",
@@ -32,11 +42,14 @@ export default function DeployTimelineClient() {
         enable_apim: false,
         backend_app_hostname: "example.azurewebsites.net",
       });
-      setRunId((p as any).run_id || "");
+
+      const rid = (p as any).run_id || "";
+      setRunId(rid);
       setStatus((p as any).status || "awaiting_approval");
       setLast(p);
     } catch (e: any) {
       setError(e?.message || String(e));
+      setLast(null);
     } finally {
       setBusy(false);
     }
@@ -44,10 +57,13 @@ export default function DeployTimelineClient() {
 
   async function doApprove() {
     if (!runId) return;
+
     setBusy(true);
     setError("");
+
     try {
-      const r = await deploy.approveRun(runId);
+      // alias supported via agent-proxy fixes
+      const r = await deploy.approveRun(runId, {});
       setLast(r);
       setStatus((r as any).status || status || "running");
     } catch (e: any) {
@@ -59,8 +75,10 @@ export default function DeployTimelineClient() {
 
   async function doRefresh() {
     if (!runId) return;
+
     setBusy(true);
     setError("");
+
     try {
       const r = await deploy.refresh(runId);
       setLast(r);
@@ -96,10 +114,10 @@ export default function DeployTimelineClient() {
           <Button onClick={doPlan} disabled={!canPlan}>
             {busy ? "Working…" : "Create Plan"}
           </Button>
-          <Button variant="outline" onClick={doApprove} disabled={!canApprove}>
+          <Button variant="outline" onClick={doApprove} disabled={!canRun}>
             Approve (Trigger Infra)
           </Button>
-          <Button variant="outline" onClick={doRefresh} disabled={!canApprove}>
+          <Button variant="outline" onClick={doRefresh} disabled={!canRun}>
             Refresh
           </Button>
         </div>

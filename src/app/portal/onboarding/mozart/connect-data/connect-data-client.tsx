@@ -15,10 +15,11 @@ export default function ConnectDataClient() {
   const existingReq = sp.get("requirement_set_id") ?? "";
   const [requirementSetId, setRequirementSetId] = useState(existingReq);
 
-  // Minimal intake (we keep it simple for Level 1)
+  // Minimal intake (Level 1)
   const [title, setTitle] = useState("Level 1 Onboarding");
   const [createdBy, setCreatedBy] = useState("portal");
 
+  // Connection snapshot inputs (no secrets)
   const [sourceType, setSourceType] = useState("postgres");
   const [host, setHost] = useState("");
   const [database, setDatabase] = useState("sales");
@@ -27,9 +28,16 @@ export default function ConnectDataClient() {
   const [estimatedTables, setEstimatedTables] = useState(20);
   const [largestRows, setLargestRows] = useState(50000000);
 
+  // Constraints
   const [region, setRegion] = useState("westeurope");
   const [environment, setEnvironment] = useState("dev");
   const [cloud, setCloud] = useState("azure");
+
+  // Guardrails (THIS is what was missing)
+  const [piiPresent, setPiiPresent] = useState(false);
+  const [gdprRequired, setGdprRequired] = useState(false);
+  const [privateNetworking, setPrivateNetworking] = useState(false);
+  const [budgetEurMonth, setBudgetEurMonth] = useState(3000);
 
   const [notes, setNotes] = useState("Azure SQL (sales, customers, inventory) + daily refresh");
 
@@ -48,13 +56,16 @@ export default function ConnectDataClient() {
     setError("");
     try {
       const s = await brd.createSession({ created_by: createdBy, title });
-      const r = await brd.createRequirementSet({ session_id: s.session_id, name: title, created_by: createdBy });
-
+      const r = await brd.createRequirementSet({
+        session_id: s.session_id,
+        name: title,
+        created_by: createdBy,
+      });
 
       const reqId = (r as any).requirement_set_id || (r as any).id;
       if (!reqId) throw new Error(`Requirement set response missing id: ${JSON.stringify(r)}`);
+
       setRequirementSetId(reqId);
-      // Keep query param in sync
       router.replace(`/portal/onboarding/mozart/connect-data?requirement_set_id=${encodeURIComponent(reqId)}`);
       return reqId;
     } catch (e: any) {
@@ -67,9 +78,11 @@ export default function ConnectDataClient() {
   async function testAndSave() {
     setStatus("working");
     setError("");
+
     try {
       const reqId = await ensureReqSet();
 
+      // 1) Test connection snapshot
       const test = await connections.test({
         source_type: sourceType,
         host,
@@ -81,13 +94,24 @@ export default function ConnectDataClient() {
         compliance_flags: {},
       });
 
-      setSnapshot(test.connection_snapshot);
+      const snap = test?.connection_snapshot ?? null;
+      setSnapshot(snap);
 
+      // 2) Save constraints (allowed in draft)
       await brd.upsertConstraints(reqId, {
         cloud,
         region,
         environment,
-        connection_snapshot: test.connection_snapshot,
+        connection_snapshot: snap,
+        notes,
+      });
+
+      // 3) ✅ Save guardrails (allowed ONLY in draft; must be done BEFORE submit/approve)
+      await brd.upsertGuardrails(reqId, {
+        pii_present: piiPresent,
+        gdpr_required: gdprRequired,
+        private_networking_required: privateNetworking,
+        budget_eur_month: budgetEurMonth,
       });
 
       setStatus("ok");
@@ -112,7 +136,9 @@ export default function ConnectDataClient() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-200">{error}</div>
+        <div className="rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-200">
+          {error}
+        </div>
       ) : null}
 
       <Card className="p-4 space-y-4">
@@ -153,11 +179,19 @@ export default function ConnectDataClient() {
           </div>
           <div>
             <div className="text-xs text-slate-400 mb-1">Est. tables</div>
-            <Input type="number" value={estimatedTables} onChange={(e) => setEstimatedTables(Number(e.target.value || 0))} />
+            <Input
+              type="number"
+              value={estimatedTables}
+              onChange={(e) => setEstimatedTables(Number(e.target.value || 0))}
+            />
           </div>
           <div>
             <div className="text-xs text-slate-400 mb-1">Largest table rows</div>
-            <Input type="number" value={largestRows} onChange={(e) => setLargestRows(Number(e.target.value || 0))} />
+            <Input
+              type="number"
+              value={largestRows}
+              onChange={(e) => setLargestRows(Number(e.target.value || 0))}
+            />
           </div>
         </div>
 
@@ -176,6 +210,34 @@ export default function ConnectDataClient() {
           </div>
         </div>
 
+        {/* ✅ Guardrails (budget fix) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <label className="flex items-center gap-2 text-slate-200 text-sm">
+            <input type="checkbox" checked={piiPresent} onChange={(e) => setPiiPresent(e.target.checked)} />
+            PII present
+          </label>
+          <label className="flex items-center gap-2 text-slate-200 text-sm">
+            <input type="checkbox" checked={gdprRequired} onChange={(e) => setGdprRequired(e.target.checked)} />
+            GDPR required
+          </label>
+          <label className="flex items-center gap-2 text-slate-200 text-sm">
+            <input
+              type="checkbox"
+              checked={privateNetworking}
+              onChange={(e) => setPrivateNetworking(e.target.checked)}
+            />
+            Private networking required
+          </label>
+          <div>
+            <div className="text-xs text-slate-400 mb-1">Budget EUR/month</div>
+            <Input
+              type="number"
+              value={budgetEurMonth}
+              onChange={(e) => setBudgetEurMonth(Number(e.target.value || 0))}
+            />
+          </div>
+        </div>
+
         <div>
           <div className="text-xs text-slate-400 mb-1">Notes</div>
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
@@ -183,7 +245,7 @@ export default function ConnectDataClient() {
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={testAndSave} disabled={status === "working"}>
-            Test + Save Snapshot
+            {status === "working" ? "Working…" : "Test + Save Snapshot"}
           </Button>
           <Button variant="outline" onClick={goNext} disabled={!canContinue}>
             Continue
