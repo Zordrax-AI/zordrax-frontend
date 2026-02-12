@@ -1,4 +1,5 @@
 // src/lib/agent-proxy.ts
+// Full canonical proxy client (drift-tolerant).
 
 export type Json = any;
 
@@ -46,7 +47,7 @@ export const brd = {
       body: JSON.stringify(payload),
     }),
 
-  // Accept BOTH {name} and {title} to avoid TS drift
+  // Accept BOTH name/title to prevent TS drift
   createRequirementSet: (payload: {
     session_id: string;
     name?: string;
@@ -55,6 +56,7 @@ export const brd = {
   }) => {
     const name = (payload.name ?? payload.title ?? "").trim();
     if (!name) throw new Error("createRequirementSet requires name (or title)");
+
     return agentFetch(`/api/brd/requirement-sets`, {
       method: "POST",
       body: JSON.stringify({
@@ -88,6 +90,20 @@ export const brd = {
       body: JSON.stringify(payload),
     }),
 
+  // Aliases expected by UI code
+  submit: (requirementSetId: string, payload: any = {}) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/submit`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  approve: (requirementSetId: string, payload: any = {}) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  // canonical names (if you still call them elsewhere)
   submitRequirementSet: (requirementSetId: string, payload: any = {}) =>
     agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/submit`, {
       method: "POST",
@@ -99,33 +115,11 @@ export const brd = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-
-  rejectRequirementSet: (requirementSetId: string, payload: any = {}) =>
-    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/reject`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-
-  // ✅ aliases used by your UI code
-  submit: (requirementSetId: string, payload: any = {}) =>
-    brd.submitRequirementSet(requirementSetId, payload),
-
-  approve: (requirementSetId: string, payload: any = {}) =>
-    brd.approveRequirementSet(requirementSetId, payload),
 };
 
 /** Connection snapshot endpoints (backend path: /connections/...) */
 export const connections = {
-  test: (payload: {
-    source_type: string;
-    host?: string;
-    database?: string;
-    schema?: string;
-    freshness?: string;
-    estimated_tables?: number;
-    estimated_largest_table_rows?: number;
-    compliance_flags?: Record<string, any>;
-  }) =>
+  test: (payload: any) =>
     agentFetch(`/connections/test`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -135,57 +129,33 @@ export const connections = {
 /** Deploy lifecycle endpoints (backend path: /api/deploy/...) */
 export type DeployPlanRequest = {
   requirement_set_id: string;
-
   name_prefix?: string;
   region?: string;
   environment?: string;
   enable_apim?: boolean;
   backend_app_hostname?: string;
-
-  cloud?: string;
-  warehouse?: string;
-  etl?: string;
-  governance?: string;
-
-  enable_bi?: boolean;
-  bi_tool?: string;
-
-  allow_costly_resources?: boolean;
-
-  [key: string]: any;
+  [k: string]: any;
 };
 
 export const deploy = {
+  // canonical
   plan: (payload: DeployPlanRequest) =>
-    agentFetch(`/api/deploy/plan`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    agentFetch(`/api/deploy/plan`, { method: "POST", body: JSON.stringify(payload) }),
 
-  createPlan: (payload: DeployPlanRequest) => deploy.plan(payload),
+  // UI alias
+  createPlan: (payload: DeployPlanRequest) =>
+    agentFetch(`/api/deploy/plan`, { method: "POST", body: JSON.stringify(payload) }),
 
-  approve: (runId: string, payload: any = {}) =>
+  // UI alias (this is what your pages call)
+  approveRun: (runId: string, payload: any = {}) =>
     agentFetch(`/api/deploy/${encodeURIComponent(runId)}/approve`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  apply: (runId: string, payload: any = {}) =>
-    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/apply`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-
   refresh: (runId: string) =>
-    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/refresh`, {
-      method: "GET",
-    }),
+    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/refresh`, { method: "GET" }),
 
   package: (runId: string) =>
-    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/package`, {
-      method: "GET",
-    }),
-
-  // ✅ alias used by UI
-  approveRun: (runId: string, payload: any = {}) => deploy.approve(runId, payload),
+    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/package`, { method: "GET" }),
 };

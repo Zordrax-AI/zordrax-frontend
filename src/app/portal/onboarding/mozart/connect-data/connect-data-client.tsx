@@ -15,11 +15,9 @@ export default function ConnectDataClient() {
   const existingReq = sp.get("requirement_set_id") ?? "";
   const [requirementSetId, setRequirementSetId] = useState(existingReq);
 
-  // Minimal intake (Level 1)
   const [title, setTitle] = useState("Level 1 Onboarding");
   const [createdBy, setCreatedBy] = useState("portal");
 
-  // Connection snapshot inputs (no secrets)
   const [sourceType, setSourceType] = useState("postgres");
   const [host, setHost] = useState("");
   const [database, setDatabase] = useState("sales");
@@ -28,12 +26,11 @@ export default function ConnectDataClient() {
   const [estimatedTables, setEstimatedTables] = useState(20);
   const [largestRows, setLargestRows] = useState(50000000);
 
-  // Constraints
   const [region, setRegion] = useState("westeurope");
   const [environment, setEnvironment] = useState("dev");
   const [cloud, setCloud] = useState("azure");
 
-  // Guardrails (THIS is what was missing)
+  // Guardrails minimum so approval doesn’t fail
   const [piiPresent, setPiiPresent] = useState(false);
   const [gdprRequired, setGdprRequired] = useState(false);
   const [privateNetworking, setPrivateNetworking] = useState(false);
@@ -45,44 +42,32 @@ export default function ConnectDataClient() {
   const [error, setError] = useState("");
   const [snapshot, setSnapshot] = useState<any>(null);
 
-  const canContinue = useMemo(() => {
-    return !!requirementSetId && !!snapshot;
-  }, [requirementSetId, snapshot]);
+  const canContinue = useMemo(() => !!requirementSetId && !!snapshot, [requirementSetId, snapshot]);
 
   async function ensureReqSet() {
     if (requirementSetId) return requirementSetId;
 
-    setStatus("working");
-    setError("");
-    try {
-      const s = await brd.createSession({ created_by: createdBy, title });
-      const r = await brd.createRequirementSet({
-        session_id: s.session_id,
-        name: title,
-        created_by: createdBy,
-      });
+    const s = await brd.createSession({ created_by: createdBy, title });
+    const r = await brd.createRequirementSet({
+      session_id: s.session_id,
+      name: title,
+      created_by: createdBy,
+    });
 
-      const reqId = (r as any).requirement_set_id || (r as any).id;
-      if (!reqId) throw new Error(`Requirement set response missing id: ${JSON.stringify(r)}`);
+    const reqId = (r as any).requirement_set_id || (r as any).id;
+    if (!reqId) throw new Error(`Requirement set response missing id: ${JSON.stringify(r)}`);
 
-      setRequirementSetId(reqId);
-      router.replace(`/portal/onboarding/mozart/connect-data?requirement_set_id=${encodeURIComponent(reqId)}`);
-      return reqId;
-    } catch (e: any) {
-      setStatus("error");
-      setError(e?.message || String(e));
-      throw e;
-    }
+    setRequirementSetId(reqId);
+    router.replace(`/portal/onboarding/mozart/connect-data?requirement_set_id=${encodeURIComponent(reqId)}`);
+    return reqId;
   }
 
   async function testAndSave() {
     setStatus("working");
     setError("");
-
     try {
       const reqId = await ensureReqSet();
 
-      // 1) Test connection snapshot
       const test = await connections.test({
         source_type: sourceType,
         host,
@@ -94,19 +79,16 @@ export default function ConnectDataClient() {
         compliance_flags: {},
       });
 
-      const snap = test?.connection_snapshot ?? null;
-      setSnapshot(snap);
+      setSnapshot(test.connection_snapshot);
 
-      // 2) Save constraints (allowed in draft)
       await brd.upsertConstraints(reqId, {
         cloud,
         region,
         environment,
-        connection_snapshot: snap,
         notes,
+        connection_snapshot: test.connection_snapshot,
       });
 
-      // 3) ✅ Save guardrails (allowed ONLY in draft; must be done BEFORE submit/approve)
       await brd.upsertGuardrails(reqId, {
         pii_present: piiPresent,
         gdpr_required: gdprRequired,
@@ -130,15 +112,11 @@ export default function ConnectDataClient() {
     <div className="space-y-6 max-w-3xl">
       <div>
         <h1 className="text-2xl font-semibold text-white">Connect Data</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Capture a clean <span className="text-slate-200">connection snapshot</span> (no secrets) to feed the AI engine.
-        </p>
+        <p className="mt-1 text-sm text-slate-400">Capture a safe connection snapshot (no secrets stored).</p>
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-200">
-          {error}
-        </div>
+        <div className="rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-200">{error}</div>
       ) : null}
 
       <Card className="p-4 space-y-4">
@@ -210,8 +188,7 @@ export default function ConnectDataClient() {
           </div>
         </div>
 
-        {/* ✅ Guardrails (budget fix) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <label className="flex items-center gap-2 text-slate-200 text-sm">
             <input type="checkbox" checked={piiPresent} onChange={(e) => setPiiPresent(e.target.checked)} />
             PII present
@@ -221,15 +198,11 @@ export default function ConnectDataClient() {
             GDPR required
           </label>
           <label className="flex items-center gap-2 text-slate-200 text-sm">
-            <input
-              type="checkbox"
-              checked={privateNetworking}
-              onChange={(e) => setPrivateNetworking(e.target.checked)}
-            />
-            Private networking required
+            <input type="checkbox" checked={privateNetworking} onChange={(e) => setPrivateNetworking(e.target.checked)} />
+            Private networking
           </label>
           <div>
-            <div className="text-xs text-slate-400 mb-1">Budget EUR/month</div>
+            <div className="text-xs text-slate-400 mb-1">Budget (€/mo)</div>
             <Input
               type="number"
               value={budgetEurMonth}

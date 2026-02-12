@@ -6,7 +6,7 @@ export const revalidate = 0;
 
 export default function Page() {
   return (
-    <Suspense fallback={<div className="text-slate-200">Loading…</div>}>
+    <Suspense fallback={<div className="text-slate-200 p-6">Loading…</div>}>
       <DeployTimelineClient />
     </Suspense>
   );

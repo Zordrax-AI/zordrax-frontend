@@ -4,7 +4,25 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { brd, deploy } from "@/lib/agent-proxy";
+import { deploy } from "@/lib/agent-proxy";
+
+async function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function withRetries<T>(fn: () => Promise<T>, tries = 3) {
+  let lastErr: any;
+  const delays = [750, 1500, 3000];
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      await sleep(delays[i] ?? 3000);
+    }
+  }
+  throw lastErr;
+}
 
 export default function DeployTimelineClient() {
   const sp = useSearchParams();
@@ -17,23 +35,13 @@ export default function DeployTimelineClient() {
   const [last, setLast] = useState<any>(null);
 
   const canPlan = useMemo(() => !!requirementSetId && !busy, [requirementSetId, busy]);
-  const canRun = useMemo(() => !!runId && !busy, [runId, busy]);
+  const canApprove = useMemo(() => !!runId && !busy, [runId, busy]);
 
   async function doPlan() {
     if (!requirementSetId) return;
-
     setBusy(true);
     setError("");
-
     try {
-      // 1) Validate it exists (better error than “not found” later)
-      await brd.getRequirementSet(requirementSetId);
-
-      // 2) Enforce the gate: submit + approve before plan
-      await brd.submitRequirementSet(requirementSetId, {});
-      await brd.approveRequirementSet(requirementSetId, {});
-
-      // 3) Create deploy plan
       const p = await deploy.createPlan({
         requirement_set_id: requirementSetId,
         name_prefix: "zordrax",
@@ -43,13 +51,11 @@ export default function DeployTimelineClient() {
         backend_app_hostname: "example.azurewebsites.net",
       });
 
-      const rid = (p as any).run_id || "";
-      setRunId(rid);
+      setRunId((p as any).run_id || "");
       setStatus((p as any).status || "awaiting_approval");
       setLast(p);
     } catch (e: any) {
       setError(e?.message || String(e));
-      setLast(null);
     } finally {
       setBusy(false);
     }
@@ -57,15 +63,12 @@ export default function DeployTimelineClient() {
 
   async function doApprove() {
     if (!runId) return;
-
     setBusy(true);
     setError("");
-
     try {
-      // alias supported via agent-proxy fixes
       const r = await deploy.approveRun(runId, {});
       setLast(r);
-      setStatus((r as any).status || status || "running");
+      setStatus((r as any).status || status || "pipeline_started");
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
@@ -75,12 +78,10 @@ export default function DeployTimelineClient() {
 
   async function doRefresh() {
     if (!runId) return;
-
     setBusy(true);
     setError("");
-
     try {
-      const r = await deploy.refresh(runId);
+      const r = await withRetries(() => deploy.refresh(runId), 3);
       setLast(r);
       setStatus((r as any).current_status || (r as any).status || status);
     } catch (e: any) {
@@ -95,14 +96,12 @@ export default function DeployTimelineClient() {
       <div>
         <h1 className="text-2xl font-semibold text-white">Deploy + Timeline</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Plan-only by default. Approve triggers the infra pipeline. Refresh polls the callback state.
+          Plan-only by default. Approve triggers the infra pipeline. Refresh polls callback state.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-200">
-          {error}
-        </div>
+        <div className="rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-200">{error}</div>
       ) : null}
 
       <Card className="p-4 space-y-3">
@@ -114,10 +113,10 @@ export default function DeployTimelineClient() {
           <Button onClick={doPlan} disabled={!canPlan}>
             {busy ? "Working…" : "Create Plan"}
           </Button>
-          <Button variant="outline" onClick={doApprove} disabled={!canRun}>
+          <Button variant="outline" onClick={doApprove} disabled={!canApprove}>
             Approve (Trigger Infra)
           </Button>
-          <Button variant="outline" onClick={doRefresh} disabled={!canRun}>
+          <Button variant="outline" onClick={doRefresh} disabled={!canApprove}>
             Refresh
           </Button>
         </div>

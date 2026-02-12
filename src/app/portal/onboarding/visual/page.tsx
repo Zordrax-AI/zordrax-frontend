@@ -1,7 +1,5 @@
-// src/app/portal/onboarding/visual/page.tsx
+import { redirect } from "next/navigation";
 
-import OnboardingOverviewPage from "@/app/portal/onboarding/page";
-
-export default function VisualOnboardingPage() {
-  return <OnboardingOverviewPage />;
+export default function VisualRedirect() {
+  redirect("/portal/onboarding/mozart/connect-data");
 }

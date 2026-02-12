@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function MozartPage() {
+export default function OnboardingEntryPage() {
   redirect("/portal/onboarding/mozart/connect-data");
 }

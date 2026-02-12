@@ -1,121 +1,82 @@
-// src/app/api/agent/[...path]/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-type Ctx = { params: { path?: string[] } };
-
-function getAgentBaseUrl() {
-  // Prefer server-only env var, fall back to NEXT_PUBLIC for local convenience
-  const base =
-    process.env.AGENT_BASE_URL ||
-    process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
-    "";
-
-  if (!base) {
-    throw new Error("Missing AGENT_BASE_URL or NEXT_PUBLIC_AGENT_BASE_URL");
-  }
-  return base.replace(/\/+$/, "");
+function jsonErr(status: number, msg: string) {
+  return NextResponse.json({ error: msg }, { status });
 }
 
-function withCors(res: NextResponse) {
-  res.headers.set("Access-Control-Allow-Origin", "*");
-  res.headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-  res.headers.set(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization, X-API-Key, X-Idempotency-Key"
-  );
-  return res;
+export async function GET(req: Request, ctx: { params: { path: string[] } }) {
+  return forward(req, ctx);
+}
+export async function POST(req: Request, ctx: { params: { path: string[] } }) {
+  return forward(req, ctx);
+}
+export async function PUT(req: Request, ctx: { params: { path: string[] } }) {
+  return forward(req, ctx);
+}
+export async function PATCH(req: Request, ctx: { params: { path: string[] } }) {
+  return forward(req, ctx);
+}
+export async function DELETE(req: Request, ctx: { params: { path: string[] } }) {
+  return forward(req, ctx);
 }
 
-async function handler(req: NextRequest, ctx: Ctx) {
-  // Preflight
-  if (req.method === "OPTIONS") {
-    return withCors(new NextResponse(null, { status: 204 }));
-  }
+async function forward(req: Request, ctx: { params: { path: string[] } }) {
+  const base = process.env.AGENT_BASE_URL;
+  if (!base) return jsonErr(500, "Missing AGENT_BASE_URL");
 
-  const base = getAgentBaseUrl();
+  const url = new URL(req.url);
+  const upstreamUrl =
+    `${base.replace(/\/+$/, "")}/${ctx.params.path.join("/")}` + url.search;
 
-  // Everything after /api/agent/
-  // Example: /api/agent/api/brd/sessions -> ["api","brd","sessions"]
-  const joined = (ctx.params.path || []).join("/");
-  const targetUrl = new URL(`${base}/${joined}`);
+  const controller = new AbortController();
+  const timeoutMs = Number(process.env.AGENT_PROXY_TIMEOUT_MS || "30000");
+  const t = setTimeout(() => controller.abort(), timeoutMs);
 
-  // Copy querystring
-  req.nextUrl.searchParams.forEach((v, k) => targetUrl.searchParams.append(k, v));
-
-  // Forward headers (remove hop-by-hop)
-  const headers = new Headers(req.headers);
-  headers.delete("host");
-  headers.delete("connection");
-  headers.delete("content-length");
-
-  // Inject X-API-Key server-side if present (avoid exposing in browser)
-  const serverApiKey = process.env.AGENT_API_KEY;
-  if (serverApiKey && !headers.get("x-api-key")) {
-    headers.set("x-api-key", serverApiKey);
-  }
-
-  const init: RequestInit = {
-    method: req.method,
-    headers,
-    redirect: "manual",
-  };
-
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    init.body = await req.text();
-  }
-
-  // Fail fast so UI doesn't hang forever
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10_000);
-
-  let upstream: Response;
   try {
-    upstream = await fetch(targetUrl.toString(), { ...init, signal: ctrl.signal });
+    const method = req.method.toUpperCase();
+
+    // Only read body for non-GET/HEAD
+    const body =
+      method === "GET" || method === "HEAD" ? undefined : await req.text();
+
+    // Forward only a minimal safe set of headers
+    const headers = new Headers();
+    const ct = req.headers.get("content-type");
+    if (ct) headers.set("content-type", ct);
+
+    const apiKey = req.headers.get("x-api-key");
+    if (apiKey) headers.set("x-api-key", apiKey);
+
+    const auth = req.headers.get("authorization");
+    if (auth) headers.set("authorization", auth);
+
+    const upstream = await fetch(upstreamUrl, {
+      method,
+      headers,
+      body,
+      signal: controller.signal,
+      cache: "no-store",
+    });
+
+    const text = await upstream.text();
+    const contentType =
+      upstream.headers.get("content-type") || "application/json";
+
+    return new NextResponse(text, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": contentType,
+        "Cache-Control": "no-store",
+      },
+    });
   } catch (e: any) {
-    const msg =
-      e?.name === "AbortError"
-        ? `Upstream timeout after 10s: ${targetUrl}`
-        : `Upstream fetch error: ${targetUrl} :: ${e?.message || String(e)}`;
-
-    return withCors(NextResponse.json({ detail: msg }, { status: 502 }));
+    if (e?.name === "AbortError") return jsonErr(504, "Upstream timeout");
+    return jsonErr(502, e?.message || "Upstream error");
   } finally {
-    clearTimeout(timer);
+    clearTimeout(t);
   }
-
-  // Stream back
-  const resHeaders = new Headers(upstream.headers);
-
-  // Avoid gzip/content-encoding mismatches when proxying
-  resHeaders.delete("content-encoding");
-
-  const data = await upstream.arrayBuffer();
-
-  const res = new NextResponse(data, {
-    status: upstream.status,
-    headers: resHeaders,
-  });
-
-  return withCors(res);
-}
-
-export async function GET(req: NextRequest, ctx: Ctx) {
-  return handler(req, ctx);
-}
-export async function POST(req: NextRequest, ctx: Ctx) {
-  return handler(req, ctx);
-}
-export async function PUT(req: NextRequest, ctx: Ctx) {
-  return handler(req, ctx);
-}
-export async function PATCH(req: NextRequest, ctx: Ctx) {
-  return handler(req, ctx);
-}
-export async function DELETE(req: NextRequest, ctx: Ctx) {
-  return handler(req, ctx);
-}
-export async function OPTIONS(req: NextRequest, ctx: Ctx) {
-  return handler(req, ctx);
 }
