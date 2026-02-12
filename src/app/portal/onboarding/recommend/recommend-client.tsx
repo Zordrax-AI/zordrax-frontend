@@ -1,75 +1,69 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  recommendStack,
-  type RecommendRequest,
-  type ArchitectureRecommendation,
-} from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { recommendations } from "@/lib/agent-proxy";
 
-export default function RecommendClient() {
-  const params = useSearchParams();
+export default function RecommendationsClient() {
+  const sp = useSearchParams();
+  const requirementSetId = sp.get("requirement_set_id") ?? "";
 
-  const mode = (params.get("mode") || "ai") as "manual" | "ai";
-  const industry = params.get("industry") || "Health";
-  const scale = (params.get("scale") || "small") as "small" | "medium" | "large";
-  const cloud = (params.get("cloud") || "azure") as "azure" | "aws" | "gcp";
+  const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [error, setError] = useState("");
+  const [data, setData] = useState<any>(null);
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [rec, setRec] = useState<ArchitectureRecommendation | null>(null);
+  useEffect(() => {
+    if (!requirementSetId) return;
 
-  const req: RecommendRequest = useMemo(
-    () => ({ mode, industry, scale, cloud }),
-    [mode, industry, scale, cloud]
-  );
+    (async () => {
+      setStatus("loading");
+      setError("");
 
-  async function handleGenerate() {
-    setLoading(true);
-    setError(null);
-    try {
-      const r = await recommendStack(req);
-      setRec(r);
-    } catch (e: any) {
-      setError(e?.message ?? "AI recommend is not live yet.");
-    } finally {
-      setLoading(false);
-    }
-  }
+      try {
+        // Use top3 by default
+        const res = await recommendations.top3(requirementSetId);
+        setData(res);
+        setStatus("ok");
+      } catch (e: any) {
+        setStatus("error");
+        setError(e?.message || String(e));
+      }
+    })();
+  }, [requirementSetId]);
 
   return (
-    <div className="space-y-4">
-      <Card className="space-y-3">
-        <div className="text-lg font-semibold">AI Recommendation</div>
+    <div className="space-y-4 max-w-4xl">
+      <Card className="p-4">
+        <div className="text-white text-xl font-semibold">AI Top 3 Recommendations</div>
+        <div className="text-slate-400 text-sm mt-1">
+          Requirement Set: <span className="font-mono text-slate-200">{requirementSetId || "—"}</span>
+        </div>
 
-        {error && (
-          <div className="rounded border border-red-700 bg-red-950/40 p-3 text-sm text-red-200">
+        {status === "loading" && <div className="text-slate-300 text-sm mt-3">Loading…</div>}
+
+        {status === "error" && (
+          <div className="mt-3 rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-200">
             {error}
+            <div className="text-xs text-slate-400 mt-2">
+              If this says 404, your backend endpoint name differs — run the OpenAPI PS command I gave you and we’ll set the exact path.
+            </div>
           </div>
         )}
 
-        <div className="text-sm text-slate-300">
-          Mode: <span className="font-mono">{mode}</span> • Industry:{" "}
-          <span className="font-mono">{industry}</span> • Scale:{" "}
-          <span className="font-mono">{scale}</span> • Cloud:{" "}
-          <span className="font-mono">{cloud}</span>
-        </div>
-
-        <Button onClick={handleGenerate} disabled={loading}>
-          {loading ? "Working..." : "Generate Recommendation"}
-        </Button>
-      </Card>
-
-      {rec && (
-        <Card>
-          <pre className="overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-200">
-            {JSON.stringify(rec, null, 2)}
+        {status === "ok" && (
+          <pre className="mt-3 text-xs text-slate-300 overflow-auto">
+            {JSON.stringify(data, null, 2)}
           </pre>
-        </Card>
-      )}
+        )}
+
+        <div className="mt-4 flex gap-2">
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Refresh
+          </Button>
+        </div>
+      </Card>
     </div>
   );
 }

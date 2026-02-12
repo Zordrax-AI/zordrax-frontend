@@ -1,20 +1,10 @@
 import { Suspense } from "react";
-import { Spinner } from "@/components/ui/Spinner";
-import RecommendClient from "./recommend-client";
+import RecommendationsClient from "./recommendations-client";
 
-export const dynamic = "force-dynamic";
-
-export default function RecommendPage() {
+export default function RecommendationsPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="p-6 flex items-center gap-2 text-sm text-slate-400">
-          <Spinner />
-          Generating recommendation…
-        </div>
-      }
-    >
-      <RecommendClient />
+    <Suspense fallback={<div className="text-slate-200">Loading…</div>}>
+      <RecommendationsClient />
     </Suspense>
   );
 }

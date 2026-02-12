@@ -1,5 +1,4 @@
 // src/lib/agent-proxy.ts
-
 type Json = any;
 
 async function agentFetch(path: string, init?: RequestInit) {
@@ -30,6 +29,7 @@ async function agentFetch(path: string, init?: RequestInit) {
   return data;
 }
 
+/** BRD endpoints (backend path: /api/brd/...) */
 export const brd = {
   createSession: (payload: { created_by: string; title?: string }) =>
     agentFetch(`/api/brd/sessions`, {
@@ -48,10 +48,28 @@ export const brd = {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+
+  upsertGuardrails: (requirementSetId: string, payload: any) =>
+    agentFetch(`/api/brd/guardrails/${encodeURIComponent(requirementSetId)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  submitRequirementSet: (requirementSetId: string, payload: any = {}) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/submit`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  approveRequirementSet: (requirementSetId: string, payload: any = {}) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
 
+/** Connection snapshot endpoints (backend path: /connections/...) */
 export const connections = {
-  // MUST MATCH your backend route (you already saw POST /api/agent/connections/test 200)
   test: (payload: {
     source_type: string;
     host?: string;
@@ -65,5 +83,23 @@ export const connections = {
     agentFetch(`/connections/test`, {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+};
+
+/**
+ * Recommendations (you MUST update the path once we see the OpenAPI results)
+ * For now, we include both common patterns so you can quickly switch.
+ */
+export const recommendations = {
+  // Option A (common)
+  top3: (requirementSetId: string) =>
+    agentFetch(`/api/recommendations/top3?requirement_set_id=${encodeURIComponent(requirementSetId)}`, {
+      method: "GET",
+    }),
+
+  // Option B (also common)
+  byRequirementSet: (requirementSetId: string) =>
+    agentFetch(`/api/recommendations?requirement_set_id=${encodeURIComponent(requirementSetId)}`, {
+      method: "GET",
     }),
 };
