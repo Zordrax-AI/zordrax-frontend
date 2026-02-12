@@ -48,7 +48,8 @@ export default function ConnectDataClient() {
     setError("");
     try {
       const s = await brd.createSession({ created_by: createdBy, title });
-      const r = await brd.createRequirementSet({ session_id: s.session_id, title, created_by: createdBy });
+      const r = await brd.createRequirementSet({ session_id: s.session_id, name: title, created_by: createdBy });
+
 
       const reqId = (r as any).requirement_set_id || (r as any).id;
       if (!reqId) throw new Error(`Requirement set response missing id: ${JSON.stringify(r)}`);

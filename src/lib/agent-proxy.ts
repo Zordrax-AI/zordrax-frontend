@@ -1,9 +1,12 @@
 // src/lib/agent-proxy.ts
 
-type Json = any;
+export type Json = any;
 
 async function agentFetch(path: string, init?: RequestInit): Promise<Json> {
-  const res = await fetch(`/api/agent${path}`, {
+  // Ensure path starts with "/"
+  const p = path.startsWith("/") ? path : `/${path}`;
+
+  const res = await fetch(`/api/agent${p}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -13,17 +16,24 @@ async function agentFetch(path: string, init?: RequestInit): Promise<Json> {
   });
 
   const text = await res.text();
+
+  // Best-effort parse
   let data: any = null;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
-    data = text;
+    data = text; // could be HTML or plain text
   }
 
   if (!res.ok) {
     const msg =
-      (data && (data.detail || data.error || data.message)) ||
-      `Agent error ${res.status} for ${path}`;
+      (data &&
+        (data.detail ||
+          data.error ||
+          data.message ||
+          (Array.isArray(data.errors) ? data.errors.join(", ") : null))) ||
+      `Agent error ${res.status} for ${p}`;
+
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
   }
 
@@ -38,11 +48,29 @@ export const brd = {
       body: JSON.stringify(payload),
     }),
 
-  createRequirementSet: (payload: { session_id: string; name: string; created_by?: string }) =>
-    agentFetch(`/api/brd/requirement-sets`, {
+  /**
+   * Backend expects: { session_id, name, created_by? }
+   * UI sometimes sends: { session_id, title, created_by? }
+   * This shim accepts BOTH to prevent TS drift.
+   */
+  createRequirementSet: (payload: {
+    session_id: string;
+    name?: string;
+    title?: string;
+    created_by?: string;
+  }) => {
+    const name = (payload.name ?? payload.title ?? "").trim();
+    if (!name) throw new Error("createRequirementSet requires name (or title)");
+
+    return agentFetch(`/api/brd/requirement-sets`, {
       method: "POST",
-      body: JSON.stringify(payload),
-    }),
+      body: JSON.stringify({
+        session_id: payload.session_id,
+        name,
+        created_by: payload.created_by,
+      }),
+    });
+  },
 
   getRequirementSet: (requirementSetId: string) =>
     agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}`, {
@@ -67,6 +95,7 @@ export const brd = {
       body: JSON.stringify(payload),
     }),
 
+  // canonical names
   submitRequirementSet: (requirementSetId: string, payload: any = {}) =>
     agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/submit`, {
       method: "POST",
@@ -80,6 +109,25 @@ export const brd = {
     }),
 
   rejectRequirementSet: (requirementSetId: string, payload: any = {}) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/reject`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  // ✅ aliases to match your UI code (mozart-client.tsx calls brd.submit/brd.approve)
+  submit: (requirementSetId: string, payload: any = {}) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/submit`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  approve: (requirementSetId: string, payload: any = {}) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  reject: (requirementSetId: string, payload: any = {}) =>
     agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/reject`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -105,22 +153,55 @@ export const connections = {
 };
 
 /** Deploy lifecycle endpoints (backend path: /api/deploy/...) */
+export type DeployPlanRequest = {
+  requirement_set_id: string;
+
+  // optional plan params your UI passes
+  name_prefix?: string;
+  region?: string;
+  environment?: string;
+  enable_apim?: boolean;
+  backend_app_hostname?: string;
+
+  // optional platform selectors
+  cloud?: string;
+  warehouse?: string;
+  etl?: string;
+  governance?: string;
+
+  // optional BI flags
+  enable_bi?: boolean;
+  bi_tool?: string;
+
+  // safe gate
+  allow_costly_resources?: boolean;
+
+  // allow future expansion without breaking builds
+  [key: string]: any;
+};
+
 export const deploy = {
-  // Canonical name used by backend
-  plan: (payload: { requirement_set_id: string }) =>
+  plan: (payload: DeployPlanRequest) =>
     agentFetch(`/api/deploy/plan`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  // ✅ Alias so UI can call deploy.createPlan(...) without breaking builds
-  createPlan: (payload: { requirement_set_id: string }) =>
+  // ✅ alias used by deploy UI
+  createPlan: (payload: DeployPlanRequest) =>
     agentFetch(`/api/deploy/plan`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
   approve: (runId: string, payload: any = {}) =>
+    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  // ✅ alias used by deploy UI and mozart-client
+  approveRun: (runId: string, payload: any = {}) =>
     agentFetch(`/api/deploy/${encodeURIComponent(runId)}/approve`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -142,3 +223,9 @@ export const deploy = {
       method: "GET",
     }),
 };
+
+/**
+ * Recommendations are NOT present in your backend OpenAPI list right now.
+ * Leaving this empty avoids UI runtime errors if someone imports it.
+ */
+export const recommendations = {};

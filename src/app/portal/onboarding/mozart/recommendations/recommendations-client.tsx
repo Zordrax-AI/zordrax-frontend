@@ -12,7 +12,7 @@ export default function RecommendationsClient() {
       <div>
         <h1 className="text-2xl font-semibold text-white">AI Top 3 Recommendations</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Placeholder page (your backend OpenAPI currently shows no /recommend endpoints).
+          Next (Phase C): rank 3 architecture options with cost + risk + explanation.
         </p>
       </div>
 
@@ -20,7 +20,7 @@ export default function RecommendationsClient() {
         <div className="text-sm text-slate-200">
           Requirement Set: <span className="text-slate-400">{requirementSetId || "—"}</span>
         </div>
-        <div className="mt-3 text-sm text-slate-300">Placeholder page wired into the stepper.</div>
+        <div className="mt-3 text-sm text-slate-300">Placeholder page wired into the canonical stepper.</div>
       </Card>
     </div>
   );
