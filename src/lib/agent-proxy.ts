@@ -1,8 +1,8 @@
-// C:\Users\Zordr\Desktop\frontend-repo\src\lib\agent-proxy.ts
+// src/lib/agent-proxy.ts
 
 type Json = any;
 
-async function agentFetch(path: string, init?: RequestInit) {
+async function agentFetch(path: string, init?: RequestInit): Promise<Json> {
   const res = await fetch(`/api/agent${path}`, {
     ...init,
     headers: {
@@ -27,7 +27,7 @@ async function agentFetch(path: string, init?: RequestInit) {
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
   }
 
-  return data as Json;
+  return data;
 }
 
 /** BRD endpoints (backend path: /api/brd/...) */
@@ -38,7 +38,7 @@ export const brd = {
       body: JSON.stringify(payload),
     }),
 
-  createRequirementSet: (payload: { session_id: string; title: string; created_by?: string }) =>
+  createRequirementSet: (payload: { session_id: string; name: string; created_by?: string }) =>
     agentFetch(`/api/brd/requirement-sets`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -104,9 +104,17 @@ export const connections = {
     }),
 };
 
-/** Deploy endpoints (backend path: /api/deploy/...) */
+/** Deploy lifecycle endpoints (backend path: /api/deploy/...) */
 export const deploy = {
+  // Canonical name used by backend
   plan: (payload: { requirement_set_id: string }) =>
+    agentFetch(`/api/deploy/plan`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  // ✅ Alias so UI can call deploy.createPlan(...) without breaking builds
+  createPlan: (payload: { requirement_set_id: string }) =>
     agentFetch(`/api/deploy/plan`, {
       method: "POST",
       body: JSON.stringify(payload),
@@ -134,12 +142,3 @@ export const deploy = {
       method: "GET",
     }),
 };
-
-/**
- * IMPORTANT:
- * Your backend OpenAPI currently shows NO recommendation endpoints.
- * So do NOT export `recommendations` here yet (it causes undefined.* bugs in UI).
- *
- * When you add recommendation endpoints to the agent later, reintroduce:
- * export const recommendations = { ... }
- */
