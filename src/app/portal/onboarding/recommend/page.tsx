@@ -1,5 +1,7 @@
 import { Suspense } from "react";
-import RecommendationsClient from "./recommendations-client";
+import RecommendationsClient from "./recommend-client";
+
+export const dynamic = "force-dynamic";
 
 export default function RecommendationsPage() {
   return (

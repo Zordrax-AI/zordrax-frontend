@@ -1,4 +1,5 @@
-// src/lib/agent-proxy.ts
+// C:\Users\Zordr\Desktop\frontend-repo\src\lib\agent-proxy.ts
+
 type Json = any;
 
 async function agentFetch(path: string, init?: RequestInit) {
@@ -26,7 +27,7 @@ async function agentFetch(path: string, init?: RequestInit) {
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
   }
 
-  return data;
+  return data as Json;
 }
 
 /** BRD endpoints (backend path: /api/brd/...) */
@@ -40,6 +41,17 @@ export const brd = {
   createRequirementSet: (payload: { session_id: string; title: string; created_by?: string }) =>
     agentFetch(`/api/brd/requirement-sets`, {
       method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getRequirementSet: (requirementSetId: string) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}`, {
+      method: "GET",
+    }),
+
+  upsertBusinessContext: (requirementSetId: string, payload: any) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/business-context`, {
+      method: "PUT",
       body: JSON.stringify(payload),
     }),
 
@@ -66,6 +78,12 @@ export const brd = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  rejectRequirementSet: (requirementSetId: string, payload: any = {}) =>
+    agentFetch(`/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/reject`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };
 
 /** Connection snapshot endpoints (backend path: /connections/...) */
@@ -86,20 +104,42 @@ export const connections = {
     }),
 };
 
-/**
- * Recommendations (you MUST update the path once we see the OpenAPI results)
- * For now, we include both common patterns so you can quickly switch.
- */
-export const recommendations = {
-  // Option A (common)
-  top3: (requirementSetId: string) =>
-    agentFetch(`/api/recommendations/top3?requirement_set_id=${encodeURIComponent(requirementSetId)}`, {
+/** Deploy endpoints (backend path: /api/deploy/...) */
+export const deploy = {
+  plan: (payload: { requirement_set_id: string }) =>
+    agentFetch(`/api/deploy/plan`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  approve: (runId: string, payload: any = {}) =>
+    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/approve`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  apply: (runId: string, payload: any = {}) =>
+    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/apply`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  refresh: (runId: string) =>
+    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/refresh`, {
       method: "GET",
     }),
 
-  // Option B (also common)
-  byRequirementSet: (requirementSetId: string) =>
-    agentFetch(`/api/recommendations?requirement_set_id=${encodeURIComponent(requirementSetId)}`, {
+  package: (runId: string) =>
+    agentFetch(`/api/deploy/${encodeURIComponent(runId)}/package`, {
       method: "GET",
     }),
 };
+
+/**
+ * IMPORTANT:
+ * Your backend OpenAPI currently shows NO recommendation endpoints.
+ * So do NOT export `recommendations` here yet (it causes undefined.* bugs in UI).
+ *
+ * When you add recommendation endpoints to the agent later, reintroduce:
+ * export const recommendations = { ... }
+ */
