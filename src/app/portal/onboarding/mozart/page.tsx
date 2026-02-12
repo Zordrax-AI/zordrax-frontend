@@ -1,11 +1,5 @@
-// src/app/portal/onboarding/mozart/page.tsx
-import { Suspense } from "react";
-import MozartClient from "./mozart-client";
+import { redirect } from "next/navigation";
 
 export default function MozartPage() {
-  return (
-    <Suspense fallback={<div className="text-slate-200">Loading Mozart…</div>}>
-      <MozartClient />
-    </Suspense>
-  );
+  redirect("/portal/onboarding/mozart/connect-data");
 }

@@ -1,133 +1,69 @@
 // src/lib/agent-proxy.ts
 
-type Json = Record<string, any>;
+type Json = any;
 
-function withTimeout(ms: number) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  return { ctrl, clear: () => clearTimeout(t) };
-}
+async function agentFetch(path: string, init?: RequestInit) {
+  const res = await fetch(`/api/agent${path}`, {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+    cache: "no-store",
+  });
 
-async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
-  const p = path.startsWith("/") ? path : `/${path}`;
-  const { ctrl, clear } = withTimeout(15_000);
-
-  let res: Response;
+  const text = await res.text();
+  let data: any = null;
   try {
-    res = await fetch(`/api/agent${p}`, {
-      ...init,
-      cache: "no-store",
-      signal: ctrl.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers || {}),
-      },
-    });
-  } catch (e: any) {
-    throw new Error(
-      e?.name === "AbortError"
-        ? `Proxy timeout after 15s: /api/agent${p}`
-        : `Proxy network error: /api/agent${p} :: ${e?.message || String(e)}`
-    );
-  } finally {
-    clear();
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
   }
-
-  const text = await res.text().catch(() => "");
 
   if (!res.ok) {
-    try {
-      const j = JSON.parse(text);
-      throw new Error(`${res.status} ${res.statusText} :: ${j?.detail ?? text}`);
-    } catch {
-      throw new Error(`${res.status} ${res.statusText} :: ${text}`);
-    }
+    const msg =
+      (data && (data.detail || data.error || data.message)) ||
+      `Agent error ${res.status} for ${path}`;
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
   }
 
-  if (!text) return {} as T;
-
-  const ct = res.headers.get("content-type") || "";
-  if (ct.includes("application/json")) return JSON.parse(text) as T;
-
-  return text as unknown as T;
-}
-
-/**
- * Backend returns requirement sets as { id: "..." }
- * UI expects { requirement_set_id: "..." }
- */
-function normalizeRequirementSet(resp: any) {
-  if (!resp || typeof resp !== "object") return resp;
-  if (!resp.requirement_set_id && resp.id) return { ...resp, requirement_set_id: resp.id };
-  return resp;
+  return data;
 }
 
 export const brd = {
-  // POST /api/brd/sessions
-  createSession: (payload: { created_by: string; title: string }) =>
-    request<{ session_id: string; created_by?: string }>("/api/brd/sessions", {
+  createSession: (payload: { created_by: string; title?: string }) =>
+    agentFetch(`/api/brd/sessions`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
 
-  // POST /api/brd/requirement-sets
-  createRequirementSet: (payload: { session_id: string; name: string }) =>
-    request<any>("/api/brd/requirement-sets", {
+  createRequirementSet: (payload: { session_id: string; title: string; created_by?: string }) =>
+    agentFetch(`/api/brd/requirement-sets`, {
       method: "POST",
       body: JSON.stringify(payload),
-    }).then(normalizeRequirementSet),
+    }),
 
-  // PUT /api/brd/requirement-sets/{id}/business-context
-  upsertBusinessContext: (requirement_set_id: string, payload: Json) =>
-    request(`/api/brd/requirement-sets/${requirement_set_id}/business-context`, {
+  upsertConstraints: (requirementSetId: string, payload: any) =>
+    agentFetch(`/api/brd/constraints/${encodeURIComponent(requirementSetId)}`, {
       method: "PUT",
-      body: JSON.stringify(payload),
-    }),
-
-  // ✅ PUT /api/brd/constraints/{id}
-  upsertConstraints: (requirement_set_id: string, payload: Json) =>
-    request(`/api/brd/constraints/${requirement_set_id}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }),
-
-  // ✅ PUT /api/brd/guardrails/{id}
-  upsertGuardrails: (requirement_set_id: string, payload: Json) =>
-    request(`/api/brd/guardrails/${requirement_set_id}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }),
-
-  /**
-   * ✅ FIX: submit/approve require a JSON body (FastAPI "body required").
-   * Send {} by default to satisfy schema.
-   */
-  submit: (requirement_set_id: string, payload: Json = {}) =>
-    request(`/api/brd/requirement-sets/${requirement_set_id}/submit`, {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-
-  approve: (requirement_set_id: string, payload: Json = {}) =>
-    request(`/api/brd/requirement-sets/${requirement_set_id}/approve`, {
-      method: "POST",
       body: JSON.stringify(payload),
     }),
 };
 
-export const deploy = {
-  // POST /api/deploy/plan
-  createPlan: (payload: Json) =>
-    request<{ run_id: string }>("/api/deploy/plan", {
+export const connections = {
+  // MUST MATCH your backend route (you already saw POST /api/agent/connections/test 200)
+  test: (payload: {
+    source_type: string;
+    host?: string;
+    database?: string;
+    schema?: string;
+    freshness?: string;
+    estimated_tables?: number;
+    estimated_largest_table_rows?: number;
+    compliance_flags?: Record<string, any>;
+  }) =>
+    agentFetch(`/connections/test`, {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-
-  // POST /api/deploy/{run_id}/approve  (usually body-less is OK; keep as-is)
-  approveRun: (run_id: string) =>
-    request(`/api/deploy/${run_id}/approve`, { method: "POST" }),
-
-  // GET /api/deploy/{run_id}/refresh
-  refresh: (run_id: string) =>
-    request(`/api/deploy/${run_id}/refresh`, { method: "GET" }),
 };
