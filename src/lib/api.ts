@@ -89,6 +89,7 @@ export type Connector = {
   status?: string;
   config?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  discovered_schema_json?: Record<string, string[]>;
 };
 
 export type InfraOutputsResponse = {
@@ -100,6 +101,15 @@ export type InfraOutputsResponse = {
 };
 
 export type RunsListResponse = RunRow[] | { items: RunRow[] } | { runs: RunRow[] };
+
+export type RequirementSet = {
+  id: string;
+  session_id?: string;
+  status?: string;
+  connector_id?: string | null;
+  created_by?: string;
+  title?: string;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -260,6 +270,19 @@ export async function brdSetConnector(requirement_set_id: string, connector_id: 
   );
 }
 
+export async function brdReadRequirementSet(requirement_set_id: string): Promise<RequirementSet> {
+  return fetchJson<RequirementSet>(`/api/agent/api/brd/requirement-sets/${requirement_set_id}`, {
+    method: "GET",
+  });
+}
+
+export async function updateConstraints(requirement_set_id: string, payload: Record<string, unknown>) {
+  return fetchJson<Record<string, unknown>>(`/api/agent/api/brd/constraints/${requirement_set_id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 /* ---------- Connections ---------- */
 
 export async function connectionsTest(payload: any): Promise<any> {
@@ -356,6 +379,17 @@ export async function discoverConnector(id: string, config?: Record<string, unkn
       body: JSON.stringify(config ?? {}),
     }
   );
+}
+
+export async function profileConnector(id: string, config?: Record<string, unknown>) {
+  return fetchJson<Record<string, any>>(`/api/agent/api/connectors/${encodeURIComponent(id)}/profile`, {
+    method: "POST",
+    body: JSON.stringify(config ?? {}),
+  });
+}
+
+export async function getConstraints(requirement_set_id: string) {
+  return fetchJson<Record<string, unknown>>(`/api/agent/api/brd/constraints/${requirement_set_id}`, { method: "GET" });
 }
 
 /* ---------- Runs + status ---------- */
@@ -465,6 +499,22 @@ export async function selectRecommendation(requirement_set_id: string, option_id
       fetchJson(`/api/agent/recommendations/select`, {
         method: "POST",
         body,
+      })
+  );
+}
+
+/* ---------- Metrics intent (placeholder) ---------- */
+
+export async function getMetricsSuggestions(requirement_set_id: string) {
+  const qs = `?requirement_set_id=${encodeURIComponent(requirement_set_id)}`;
+  return tryOr404(
+    () =>
+      fetchJson<any>(`/api/agent/api/recommendations/metrics${qs}`, {
+        method: "GET",
+      }),
+    () =>
+      fetchJson<any>(`/api/agent/recommendations/metrics${qs}`, {
+        method: "GET",
       })
   );
 }

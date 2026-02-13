@@ -10,6 +10,9 @@ type Step = {
 
 const STEPS: Step[] = [
   { label: "Connect Data", href: "/portal/onboarding/mozart/connect-data" },
+  { label: "Select Tables", href: "/portal/onboarding/mozart/tables" },
+  { label: "Data Checks", href: "/portal/onboarding/mozart/data-checks" },
+  { label: "Metrics Intent", href: "/portal/onboarding/mozart/metrics-intent" },
   { label: "Recommendations", href: "/portal/onboarding/mozart/recommendations" },
   { label: "Deploy", href: "/portal/onboarding/mozart/deploy" },
   { label: "Run", href: "/portal/runs" },
@@ -28,8 +31,11 @@ export default function OnboardingStepper() {
   const industry = params.get("industry") ?? "";
   const scale = params.get("scale") ?? "small";
   const cloud = params.get("cloud") ?? "azure";
+  const requirementSetId = params.get("requirement_set_id") ?? "";
 
-  const carry = new URLSearchParams({ mode, industry, scale, cloud }).toString();
+  const search = new URLSearchParams({ mode, industry, scale, cloud });
+  if (requirementSetId) search.set("requirement_set_id", requirementSetId);
+  const carry = search.toString();
 
   return (
     <div className="space-y-4">

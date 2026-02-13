@@ -5,6 +5,9 @@ import Link from "next/link";
 const navItems = [
   { label: "Mozart Wizard", href: "/portal/onboarding/mozart" },
   { label: "Connect Data", href: "/portal/onboarding/mozart/connect-data" },
+  { label: "Select Tables", href: "/portal/onboarding/mozart/tables" },
+  { label: "Data Checks", href: "/portal/onboarding/mozart/data-checks" },
+  { label: "Metrics Intent", href: "/portal/onboarding/mozart/metrics-intent" },
   { label: "Recommendations", href: "/portal/onboarding/mozart/recommendations" },
   { label: "Deploy", href: "/portal/onboarding/mozart/deploy" },
   { label: "Runs", href: "/portal/runs" },
