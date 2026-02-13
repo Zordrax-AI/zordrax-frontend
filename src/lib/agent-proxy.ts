@@ -4,9 +4,12 @@
 export type Json = any;
 
 async function agentFetch(path: string, init?: RequestInit): Promise<Json> {
-  const p = path.startsWith("/") ? path : `/${path}`;
+  // Allow callers to pass either /api/brd/... or /api/agent/api/brd/... without double-prefixing
+  const normalized = path.startsWith("/api/agent")
+    ? path.replace(/^\/api\/agent/, "")
+    : path.startsWith("/") ? path : `/${path}`;
 
-  const res = await fetch(`/api/agent${p}`, {
+  const res = await fetch(`/api/agent${normalized}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -31,7 +34,7 @@ async function agentFetch(path: string, init?: RequestInit): Promise<Json> {
           data.error ||
           data.message ||
           (Array.isArray(data.errors) ? data.errors.join(", ") : null))) ||
-      `Agent error ${res.status} for ${p}`;
+      `Agent error ${res.status} for ${normalized}`;
 
     throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
   }

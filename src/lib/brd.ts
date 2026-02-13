@@ -83,7 +83,8 @@ async function readErrorBody(res: Response): Promise<string> {
 }
 
 async function fetchJson<T>(path: string, opts?: FetchJsonOpts): Promise<T> {
-  const url = `${API_BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+  const normalizedPath = path.startsWith("/api/agent") ? path.replace(/^\/api\/agent/, "") : path;
+  const url = `${API_BASE}${normalizedPath.startsWith("/") ? "" : "/"}${normalizedPath}`;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -120,7 +121,7 @@ async function fetchJson<T>(path: string, opts?: FetchJsonOpts): Promise<T> {
 export async function brdCreateSession(input: {
   created_by?: string;
 }): Promise<BrdSessionOut> {
-  return fetchJson<BrdSessionOut>("/api/brd/sessions", {
+  return fetchJson<BrdSessionOut>("/api/agent/api/brd/sessions", {
     method: "POST",
     body: JSON.stringify({ created_by: input.created_by ?? "unknown" }),
   });
@@ -132,7 +133,7 @@ export async function brdCreateRequirementSet(input: {
   created_by?: string;
   change_request_ref?: string | null;
 }): Promise<RequirementSetOut> {
-  return fetchJson<RequirementSetOut>("/api/brd/requirement-sets", {
+  return fetchJson<RequirementSetOut>("/api/agent/api/brd/requirement-sets", {
     method: "POST",
     body: JSON.stringify({
       session_id: input.session_id,
@@ -147,7 +148,7 @@ export async function brdReadRequirementSet(
   requirement_set_id: string
 ): Promise<RequirementSetOut> {
   return fetchJson<RequirementSetOut>(
-    `/api/brd/requirement-sets/${requirement_set_id}`,
+    `/api/agent/api/brd/requirement-sets/${requirement_set_id}`,
     { method: "GET" }
   );
 }
@@ -157,7 +158,7 @@ export async function brdUpsertBusinessContext(
   body: BusinessContextIn
 ) {
   return fetchJson<Record<string, unknown>>(
-    `/api/brd/requirement-sets/${requirement_set_id}/business-context`,
+    `/api/agent/api/brd/requirement-sets/${requirement_set_id}/business-context`,
     {
       method: "PUT",
       body: JSON.stringify(body),
@@ -170,7 +171,7 @@ export async function brdUpsertConstraints(
   body: ConstraintsIn
 ) {
   return fetchJson<Record<string, unknown>>(
-    `/api/brd/constraints/${requirement_set_id}`,
+    `/api/agent/api/brd/constraints/${requirement_set_id}`,
     {
       method: "PUT",
       body: JSON.stringify(body),
@@ -183,7 +184,7 @@ export async function brdUpsertGuardrails(
   body: GuardrailsIn
 ) {
   return fetchJson<Record<string, unknown>>(
-    `/api/brd/guardrails/${requirement_set_id}`,
+    `/api/agent/api/brd/guardrails/${requirement_set_id}`,
     {
       method: "PUT",
       body: JSON.stringify(body),
@@ -193,7 +194,7 @@ export async function brdUpsertGuardrails(
 
 export async function brdSubmit(requirement_set_id: string, actor = "portal") {
   return fetchJson<Record<string, unknown>>(
-    `/api/brd/requirement-sets/${requirement_set_id}/submit`,
+    `/api/agent/api/brd/requirement-sets/${requirement_set_id}/submit`,
     {
       method: "POST",
       body: JSON.stringify({ actor }),
@@ -203,7 +204,7 @@ export async function brdSubmit(requirement_set_id: string, actor = "portal") {
 
 export async function brdApprove(requirement_set_id: string, actor = "portal") {
   return fetchJson<Record<string, unknown>>(
-    `/api/brd/requirement-sets/${requirement_set_id}/approve`,
+    `/api/agent/api/brd/requirement-sets/${requirement_set_id}/approve`,
     {
       method: "POST",
       body: JSON.stringify({ actor }),
@@ -234,7 +235,7 @@ export type DeployPlanFromReqSetResponse = {
 export async function deployPlanFromRequirementSet(
   req: DeployPlanFromReqSetRequest
 ): Promise<DeployPlanFromReqSetResponse> {
-  return fetchJson<DeployPlanFromReqSetResponse>("/api/deploy/plan", {
+  return fetchJson<DeployPlanFromReqSetResponse>("/api/agent/api/deploy/plan", {
     method: "POST",
     body: JSON.stringify(req),
   });

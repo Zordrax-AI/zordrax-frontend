@@ -4,7 +4,10 @@ export const AGENT_PROXY_BASE = "/api/agent"; // ALWAYS same-origin via Next rou
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
-  const p = path.startsWith("/") ? path : `/${path}`;
+  // Accept either /api/brd/... or /api/agent/api/brd/... without double-prefixing
+  const p = path.startsWith("/api/agent")
+    ? path.replace(/^\/api\/agent/, "")
+    : path.startsWith("/") ? path : `/${path}`;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15_000);
@@ -44,11 +47,11 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
 
 export const brdApi = {
   createSession: (payload: { created_by: string; title: string }) =>
-    request<{ session_id: string; created_by?: string }>("POST", "/api/brd/sessions", payload),
+    request<{ session_id: string; created_by?: string }>("POST", "/api/agent/api/brd/sessions", payload),
 
   // Backend expects title/created_by; UI often has name -> map to title
   createRequirementSet: (payload: { session_id: string; name: string; created_by?: string }) =>
-    request<any>("POST", "/api/brd/requirement-sets", {
+    request<any>("POST", "/api/agent/api/brd/requirement-sets", {
       session_id: payload.session_id,
       title: payload.name,
       created_by: payload.created_by || "portal",
@@ -66,7 +69,7 @@ export const brdApi = {
   ) =>
     request<any>(
       "PUT",
-      `/api/brd/requirement-sets/${requirementSetId}/business-context`,
+      `/api/agent/api/brd/requirement-sets/${requirementSetId}/business-context`,
       payload
     ),
 
@@ -74,7 +77,7 @@ export const brdApi = {
   upsertConstraints: (
     requirementSetId: string,
     payload: { cloud?: string; region?: string; environment?: string }
-  ) => request<any>("PUT", `/api/brd/constraints/${requirementSetId}`, payload),
+  ) => request<any>("PUT", `/api/agent/api/brd/constraints/${requirementSetId}`, payload),
 
   // ✅ FIXED PATH: backend is /api/brd/guardrails/{id}
   upsertGuardrails: (
@@ -85,14 +88,14 @@ export const brdApi = {
       private_networking_required?: boolean;
       budget_eur_month?: number;
     }
-  ) => request<any>("PUT", `/api/brd/guardrails/${requirementSetId}`, payload),
+  ) => request<any>("PUT", `/api/agent/api/brd/guardrails/${requirementSetId}`, payload),
 
   // These endpoints require a JSON body — send {} unless you use actor/reason
   submit: (requirementSetId: string, payload: { actor?: string; reason?: string } = {}) =>
-    request<any>("POST", `/api/brd/requirement-sets/${requirementSetId}/submit`, payload),
+    request<any>("POST", `/api/agent/api/brd/requirement-sets/${requirementSetId}/submit`, payload),
 
   approve: (requirementSetId: string, payload: { actor?: string; reason?: string } = {}) =>
-    request<any>("POST", `/api/brd/requirement-sets/${requirementSetId}/approve`, payload),
+    request<any>("POST", `/api/agent/api/brd/requirement-sets/${requirementSetId}/approve`, payload),
 };
 
 export const deployApi = {
@@ -103,10 +106,10 @@ export const deployApi = {
     environment: string;
     enable_apim: boolean;
     backend_app_hostname: string;
-  }) => request<any>("POST", "/api/deploy/plan", payload),
+  }) => request<any>("POST", "/api/agent/api/deploy/plan", payload),
 
   // ✅ now triggers pipeline in backend
-  approveRun: (runId: string) => request<any>("POST", `/api/deploy/${runId}/approve`),
+  approveRun: (runId: string) => request<any>("POST", `/api/agent/api/deploy/${runId}/approve`),
 
-  refresh: (runId: string) => request<any>("GET", `/api/deploy/${runId}/refresh`),
+  refresh: (runId: string) => request<any>("GET", `/api/agent/api/deploy/${runId}/refresh`),
 };

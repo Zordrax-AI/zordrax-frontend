@@ -29,8 +29,22 @@ async function forward(req: Request, ctx: { params: { path: string[] } }) {
   if (!base) return jsonErr(500, "Missing AGENT_BASE_URL");
 
   const url = new URL(req.url);
-  const upstreamUrl =
-    `${base.replace(/\/+$/, "")}/${ctx.params.path.join("/")}` + url.search;
+
+  const path = ctx.params.path.join("/");
+
+  // Ensure BRD calls have exactly one /api/brd prefix; leave other paths untouched.
+  // Accept inputs like:
+  //   api/brd/sessions
+  //   brd/sessions
+  //   health
+  //   api/deploy/plan
+  const normalizedPath = path.startsWith("api/brd/")
+    ? path
+    : path.startsWith("brd/")
+      ? `api/${path}`
+      : path;
+
+  const upstreamUrl = `${base.replace(/\/+$/, "")}/${normalizedPath}` + url.search;
 
   const controller = new AbortController();
   const timeoutMs = Number(process.env.AGENT_PROXY_TIMEOUT_MS || "30000");
@@ -38,12 +52,8 @@ async function forward(req: Request, ctx: { params: { path: string[] } }) {
 
   try {
     const method = req.method.toUpperCase();
+    const body = method === "GET" || method === "HEAD" ? undefined : await req.text();
 
-    // Only read body for non-GET/HEAD
-    const body =
-      method === "GET" || method === "HEAD" ? undefined : await req.text();
-
-    // Forward only a minimal safe set of headers
     const headers = new Headers();
     const ct = req.headers.get("content-type");
     if (ct) headers.set("content-type", ct);
@@ -63,15 +73,11 @@ async function forward(req: Request, ctx: { params: { path: string[] } }) {
     });
 
     const text = await upstream.text();
-    const contentType =
-      upstream.headers.get("content-type") || "application/json";
+    const contentType = upstream.headers.get("content-type") || "application/json";
 
     return new NextResponse(text, {
       status: upstream.status,
-      headers: {
-        "Content-Type": contentType,
-        "Cache-Control": "no-store",
-      },
+      headers: { "Content-Type": contentType, "Cache-Control": "no-store" },
     });
   } catch (e: any) {
     if (e?.name === "AbortError") return jsonErr(504, "Upstream timeout");
