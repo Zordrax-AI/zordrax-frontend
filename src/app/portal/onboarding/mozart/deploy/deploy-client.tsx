@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { deploy } from "@/lib/agent-proxy";
+import { brd, deploy } from "@/lib/agent-proxy";
 
 async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -33,6 +33,8 @@ export default function DeployTimelineClient() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>("");
   const [last, setLast] = useState<any>(null);
+  const [needsApproval, setNeedsApproval] = useState(false);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
 
   const canPlan = useMemo(() => !!requirementSetId && !busy, [requirementSetId, busy]);
   const canApprove = useMemo(() => !!runId && !busy, [runId, busy]);
@@ -41,6 +43,7 @@ export default function DeployTimelineClient() {
     if (!requirementSetId) return;
     setBusy(true);
     setError("");
+    setNeedsApproval(false);
     try {
       const p = await deploy.createPlan({
         requirement_set_id: requirementSetId,
@@ -55,8 +58,50 @@ export default function DeployTimelineClient() {
       setStatus((p as any).status || "awaiting_approval");
       setLast(p);
     } catch (e: any) {
-      setError(e?.message || String(e));
+      const msg = e?.message || String(e);
+      setError(msg);
+      const lower = msg.toLowerCase();
+      if (msg.includes("409") || lower.includes("requirement_set_not_approved")) {
+        try {
+          await brd.submit(requirementSetId, {});
+          await brd.approve(requirementSetId, {});
+          setNeedsApproval(false);
+
+          const p = await deploy.createPlan({
+            requirement_set_id: requirementSetId,
+            name_prefix: "zordrax",
+            region: "westeurope",
+            environment: "dev",
+            enable_apim: false,
+            backend_app_hostname: "example.azurewebsites.net",
+          });
+
+          setRunId((p as any).run_id || "");
+          setStatus((p as any).status || "awaiting_approval");
+          setLast(p);
+          setError("");
+        } catch (inner: any) {
+          setNeedsApproval(true);
+          setError(inner?.message || msg);
+        }
+      }
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function doSubmitApprove() {
+    if (!requirementSetId) return;
+    setBusy(true);
+    setError("");
+    try {
+      await brd.submit(requirementSetId, {});
+      await brd.approve(requirementSetId, {});
+      setNeedsApproval(false);
+      setBusy(false);
+      await doPlan();
+    } catch (e: any) {
+      setError(e?.message || String(e));
       setBusy(false);
     }
   }
@@ -69,6 +114,7 @@ export default function DeployTimelineClient() {
       const r = await deploy.approveRun(runId, {});
       setLast(r);
       setStatus((r as any).status || status || "pipeline_started");
+      startPolling();
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {
@@ -90,6 +136,32 @@ export default function DeployTimelineClient() {
       setBusy(false);
     }
   }
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function startPolling() {
+    if (!runId) return;
+    stopPolling();
+    pollRef.current = setInterval(() => {
+      deploy
+        .refresh(runId)
+        .then((r) => {
+          setLast(r);
+          setStatus((r as any).current_status || (r as any).status || status);
+        })
+        .catch(() => {
+          // keep silent; manual refresh button still available
+          stopPolling();
+        });
+    }, 5000);
+  }
+
+  useEffect(() => stopPolling, []);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -113,6 +185,11 @@ export default function DeployTimelineClient() {
           <Button onClick={doPlan} disabled={!canPlan}>
             {busy ? "Working…" : "Create Plan"}
           </Button>
+          {needsApproval ? (
+            <Button variant="outline" onClick={doSubmitApprove} disabled={busy}>
+              Submit + Approve requirement set
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={doApprove} disabled={!canApprove}>
             Approve (Trigger Infra)
           </Button>

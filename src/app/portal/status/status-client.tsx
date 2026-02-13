@@ -3,15 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import {
-  getRun,
-  getRunEvents,
-  getInfraOutputs,
-  cancelRun,
-  type RunEvent,
-  type RunRow,
-  type InfraOutputsResponse,
-} from "@/lib/api";
+import { deployRefresh, getInfraOutputs, type InfraOutputsResponse } from "@/lib/api";
 
 type TerraformOutputs = Record<string, { value: unknown; sensitive?: boolean; type?: string }>;
 
@@ -25,11 +17,8 @@ export default function StatusClient() {
 
   const runId = useMemo(() => runIdParam || "", [runIdParam]);
 
-  const [run, setRun] = useState<RunRow | null>(null);
-  const [events, setEvents] = useState<RunEvent[]>([]);
+  const [run, setRun] = useState<any | null>(null);
   const [infra, setInfra] = useState<InfraOutputsResponse | null>(null);
-
-  const [lastId, setLastId] = useState(0);
   const [error, setError] = useState<string>("");
 
   useEffect(() => {
@@ -37,36 +26,23 @@ export default function StatusClient() {
 
     let alive = true;
 
-    async function bootstrap() {
+    async function tick() {
       try {
-        const r = await getRun(runId);
-        if (!alive) return;
-        setRun(r);
+        setError("");
 
-        const i = await getInfraOutputs(runId);
-        if (!alive) return;
-        setInfra(i);
-      } catch (e: any) {
-        if (!alive) return;
-        setError(e?.message ?? "Failed to load run");
-      }
-    }
-
-    bootstrap();
-
-    const timer = setInterval(async () => {
-      try {
-        const ev = await getRunEvents(runId, lastId);
+        const r = await deployRefresh(runId);
         if (!alive) return;
 
-        if (ev.length) {
-          setEvents((prev) => [...prev, ...ev]);
-          setLastId(ev[ev.length - 1].id);
-        }
-
-        const r = await getRun(runId);
-        if (!alive) return;
-        setRun(r);
+        // store what we need from refresh
+        setRun({
+          run_id: runId,
+          status: r.current_status,
+          stage: "deploy",
+          mode: "deploy",
+          cancel_requested: false,
+          created_at: "",
+          updated_at: "",
+        } as any);
 
         const i = await getInfraOutputs(runId);
         if (!alive) return;
@@ -75,23 +51,16 @@ export default function StatusClient() {
         if (!alive) return;
         setError(e?.message ?? "Polling failed");
       }
-    }, 2500);
+    }
+
+    tick();
+    const timer = setInterval(tick, 2500);
 
     return () => {
       alive = false;
       clearInterval(timer);
     };
-  }, [runId, lastId]);
-
-  async function handleCancel() {
-    if (!runId) return;
-    try {
-      await cancelRun(runId);
-      alert("Cancel requested");
-    } catch (e: any) {
-      alert(e?.message ?? "Cancel failed");
-    }
-  }
+  }, [runId]);
 
   if (!runId) {
     return (
@@ -119,13 +88,6 @@ export default function StatusClient() {
             </div>
           )}
         </div>
-
-        <button
-          onClick={handleCancel}
-          className="rounded-md border border-red-800 px-3 py-2 text-xs text-red-300 hover:bg-red-900/30"
-        >
-          Cancel Run
-        </button>
       </div>
 
       {error && (
@@ -144,21 +106,7 @@ export default function StatusClient() {
 
       <div className="rounded-lg border border-slate-800 p-4">
         <h2 className="mb-3 text-sm font-semibold">Event Timeline</h2>
-        {events.length === 0 ? (
-          <div className="text-sm opacity-70">No events yet.</div>
-        ) : (
-          <ul className="space-y-2">
-            {events.map((e) => (
-              <li key={e.id} className="rounded-md border border-white/10 bg-white/5 p-2">
-                <div className="text-xs opacity-70">
-                  [{e.level}] {e.stage} • {e.status} •{" "}
-                  {new Date(e.created_at).toLocaleString()}
-                </div>
-                <div className="text-sm">{e.message}</div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="text-sm opacity-70">Not enabled for deploy runs.</div>
       </div>
     </div>
   );

@@ -58,7 +58,8 @@ async function forward(req: Request, ctx: { params: { path: string[] } }) {
     const ct = req.headers.get("content-type");
     if (ct) headers.set("content-type", ct);
 
-    const apiKey = req.headers.get("x-api-key");
+    // Prefer caller-supplied headers; fall back to server-side secret
+    const apiKey = req.headers.get("x-api-key") || process.env.AGENT_API_KEY;
     if (apiKey) headers.set("x-api-key", apiKey);
 
     const auth = req.headers.get("authorization");

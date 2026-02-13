@@ -321,16 +321,8 @@ export async function cancelRun(runId: string): Promise<{ ok: boolean }> {
 }
 
 export async function listRuns(): Promise<RunRow[]> {
-  try {
-    const data = await fetchJson<RunsListResponse>("/api/agent/api/runs/", { method: "GET" });
-    if (Array.isArray(data)) return data;
-    if ("items" in data && Array.isArray((data as any).items)) return (data as any).items;
-    if ("runs" in data && Array.isArray((data as any).runs)) return (data as any).runs;
-    return [];
-  } catch (e: any) {
-    if (e instanceof ApiError && e.status === 404) return [];
-    throw e;
-  }
+  // Backend does not expose a runs listing endpoint; avoid noisy 404s.
+  return [];
 }
 
 /* ---------- AI Recommend (legacy) ---------- */
