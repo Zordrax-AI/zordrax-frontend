@@ -1,20 +1,14 @@
-import { Suspense } from "react";
-import { Spinner } from "@/components/ui/Spinner";
-import QuestionsClient from "./questions-client";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-export default function QuestionsPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="p-6 flex items-center gap-2 text-sm text-slate-400">
-          <Spinner />
-          Loading onboarding questions…
-        </div>
-      }
-    >
-      <QuestionsClient />
-    </Suspense>
-  );
+export default function Page({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+  const rs =
+    Array.isArray(searchParams.requirement_set_id) && searchParams.requirement_set_id.length
+      ? searchParams.requirement_set_id[0]
+      : (searchParams.requirement_set_id as string | undefined);
+  const target = rs
+    ? `/portal/onboarding/mozart/connect-data?requirement_set_id=${encodeURIComponent(rs)}`
+    : "/portal/onboarding/mozart/connect-data";
+  redirect(target);
 }

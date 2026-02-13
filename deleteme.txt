@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { brd, deploy } from "@/lib/agent-proxy";
-import { getRequirementSetId } from "@/lib/wizard";
 
 async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -28,7 +27,7 @@ async function withRetries<T>(fn: () => Promise<T>, tries = 3) {
 export default function DeployTimelineClient() {
   const sp = useSearchParams();
   const router = useRouter();
-  const requirementSetId = getRequirementSetId(sp) ?? "";
+  const requirementSetId = sp.get("requirement_set_id") ?? "";
 
   const [runId, setRunId] = useState<string>("");
   const [status, setStatus] = useState<string>("");
@@ -161,6 +160,7 @@ export default function DeployTimelineClient() {
           setStatus((r as any).current_status || (r as any).status || status);
         })
         .catch(() => {
+          // keep silent; manual refresh button still available
           stopPolling();
         });
     }, 5000);
@@ -171,24 +171,24 @@ export default function DeployTimelineClient() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Deploy + Timeline</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <h1 className="text-2xl font-semibold text-white">Deploy + Timeline</h1>
+        <p className="mt-1 text-sm text-slate-400">
           Plan-only by default. Approve triggers the infra pipeline. Refresh polls callback state.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-xl border border-red-900/60 bg-red-950/40 p-3 text-sm text-red-200">{error}</div>
       ) : null}
 
-      <Card className="p-4 space-y-3 bg-white border border-slate-200">
-        <div className="text-sm text-slate-800">
-          Requirement Set: <span className="text-slate-600">{requirementSetId || "—"}</span>
+      <Card className="p-4 space-y-3">
+        <div className="text-sm text-slate-200">
+          Requirement Set: <span className="text-slate-400">{requirementSetId || "—"}</span>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={doPlan} disabled={!canPlan}>
-            {busy ? "Working..." : "Create Plan"}
+            {busy ? "Working…" : "Create Plan"}
           </Button>
           {needsApproval ? (
             <Button variant="outline" onClick={doSubmitApprove} disabled={busy}>
@@ -203,15 +203,16 @@ export default function DeployTimelineClient() {
           </Button>
         </div>
 
-        <div className="text-xs text-slate-600">
-          run_id: <span className="text-slate-800">{runId || "—"}</span> · status:{" "}
-          <span className="text-slate-800">{status || "—"}</span>
+        <div className="text-xs text-slate-400">
+          run_id: <span className="text-slate-200">{runId || "—"}</span> · status:{" "}
+          <span className="text-slate-200">{status || "—"}</span>
         </div>
 
-        <pre className="text-xs text-slate-800 overflow-auto rounded bg-slate-100 border border-slate-200 p-3">
+        <pre className="text-xs text-slate-300 overflow-auto rounded bg-slate-950 p-3">
           {JSON.stringify(last, null, 2)}
         </pre>
       </Card>
     </div>
   );
 }
+

@@ -1,12 +1,14 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import GuidedWizard from "./wizard";
+export const dynamic = "force-dynamic";
 
-export default function GuidedPage() {
-  return (
-    <div className="max-w-3xl mx-auto py-10">
-      <h1 className="text-2xl font-semibold mb-6">Guided Onboarding Wizard</h1>
-      <GuidedWizard />
-    </div>
-  );
+export default function Page({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+  const rs =
+    Array.isArray(searchParams.requirement_set_id) && searchParams.requirement_set_id.length
+      ? searchParams.requirement_set_id[0]
+      : (searchParams.requirement_set_id as string | undefined);
+  const target = rs
+    ? `/portal/onboarding/mozart/connect-data?requirement_set_id=${encodeURIComponent(rs)}`
+    : "/portal/onboarding/mozart/connect-data";
+  redirect(target);
 }

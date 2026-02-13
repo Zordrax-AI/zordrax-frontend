@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { SelectedTablesPanel } from "@/components/connectors/SelectedTablesPanel";
 import { SetupGuidePanel } from "../connect-data/SetupGuidePanel";
+import { getRequirementSetId, wizardHref } from "@/lib/wizard";
 
 const volumePresets = [
   { key: "small", label: "Small (<1M rows)" },
@@ -62,12 +63,13 @@ function mockProfiling(tables: { schema: string; table: string }[]) {
 export default function DataChecksClient() {
   const router = useRouter();
   const sp = useSearchParams();
-  const requirementSetId = sp.get("requirement_set_id") ?? "";
+  const requirementSetId = getRequirementSetId(sp) ?? "";
 
   const [connector, setConnector] = useState<Connector | null>(null);
   const [selectedTables, setSelectedTables] = useState<{ schema: string; table: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [constraintsCache, setConstraintsCache] = useState<Record<string, any>>({});
 
   // Form state
   const [refreshFrequency, setRefreshFrequency] = useState("daily");
@@ -87,7 +89,6 @@ export default function DataChecksClient() {
   const [archStreaming, setArchStreaming] = useState("unsure");
   const [profiling, setProfiling] = useState<any>(null);
   const [profilingSummary, setProfilingSummary] = useState<any>(null);
-  const [constraintsCache, setConstraintsCache] = useState<Record<string, any>>({});
 
   useEffect(() => {
     if (!requirementSetId) return;
@@ -100,6 +101,7 @@ export default function DataChecksClient() {
         }
         const c = await getConstraintsSafe(requirementSetId);
         const cj = (c as any)?.constraints_json || {};
+        setConstraintsCache(cj);
         const dc = cj.data_checks || {};
         setRefreshFrequency(dc.refresh_frequency || "daily");
         setLatency(dc.latency_target || "24h");
@@ -126,7 +128,6 @@ export default function DataChecksClient() {
         }
         if (dc.profiling_results) setProfiling(dc.profiling_results);
         if (dc.profiling_summary) setProfilingSummary(dc.profiling_summary);
-        setConstraintsCache(cj);
       } catch (e: any) {
         setError(e?.message || "Failed to load data checks");
       }
@@ -147,17 +148,14 @@ export default function DataChecksClient() {
     setError("");
     try {
       if (connector?.id) {
-        // try real profiling endpoint
         const prof = await profileConnector(connector.id).catch(() => null);
         if (prof) {
           setProfilingSummary(prof);
-          // also derive table-level preview if tables exist
           const tables = prof.largest_tables?.map((t: any) => ({ schema: t.schema, table: t.table })) || [];
           if (tables.length) setProfiling(mockProfiling(tables));
           return;
         }
       }
-      // fallback discover then mock
       if (connector?.id) {
         await discoverConnector(connector.id).catch(() => {});
         const fresh = await getConnector(connector.id).catch(() => null);
@@ -220,9 +218,7 @@ export default function DataChecksClient() {
 
       const merged = mergeConstraints(constraintsCache, payload);
       await updateConstraints(requirementSetId, merged);
-      router.push(
-        `/portal/onboarding/mozart/metrics-intent?requirement_set_id=${encodeURIComponent(requirementSetId)}`
-      );
+      router.push(wizardHref("metrics-intent", requirementSetId));
     } catch (e: any) {
       setError(e?.message || "Failed to save data checks");
     } finally {
@@ -230,246 +226,228 @@ export default function DataChecksClient() {
     }
   }
 
-  const selectedKeys = useMemo(
-    () => selectedTables.map((t) => `${t.schema}.${t.table}`),
-    [selectedTables]
-  );
+  const selectedKeys = useMemo(() => selectedTables.map((t) => `${t.schema}.${t.table}`), [selectedTables]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm uppercase text-slate-500 font-semibold">Data Checks</div>
-            <div className="text-2xl font-semibold text-slate-900">Validate your dataset</div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={runChecks} disabled={loading}>
-              {loading ? "Running..." : "Run profiling"}
-            </Button>
-            <Button onClick={save} disabled={loading}>
-              Save & Continue
-            </Button>
-          </div>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm uppercase text-slate-500 font-semibold">Data Checks</div>
+          <div className="text-2xl font-semibold text-slate-900">Validate your dataset</div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={runChecks} disabled={loading}>
+            {loading ? "Running..." : "Run profiling"}
+          </Button>
+          <Button onClick={save} disabled={loading}>
+            Save & Continue
+          </Button>
+        </div>
+      </div>
+
+      {error && <div className="text-sm text-red-600">{error}</div>}
+
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
+        <div className="space-y-4">
+          <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
+            <div className="text-sm font-semibold">Dataset overview</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+              <SelectField label="Expected volume" value={volumeBucket} onChange={setVolumeBucket} options={volumePresets} />
+              <Field label="Largest table rows" type="number" value={largestRows} onChange={(v) => setLargestRows(Number(v) || 0)} />
+              <Field label="Tables count" type="number" value={tablesCount} onChange={(v) => setTablesCount(Number(v) || 0)} />
+              <SelectField
+                label="Refresh frequency"
+                value={refreshFrequency}
+                onChange={setRefreshFrequency}
+                options={[
+                  { key: "realtime", label: "Realtime" },
+                  { key: "hourly", label: "Hourly" },
+                  { key: "daily", label: "Daily" },
+                  { key: "weekly", label: "Weekly" },
+                  { key: "manual", label: "Manual" },
+                ]}
+              />
+              <SelectField
+                label="Latency target"
+                value={latency}
+                onChange={setLatency}
+                options={[
+                  { key: "1h", label: "1 hour" },
+                  { key: "4h", label: "4 hours" },
+                  { key: "12h", label: "12 hours" },
+                  { key: "24h", label: "24 hours" },
+                  { key: "48h", label: "48 hours" },
+                ]}
+              />
+              <Checkbox label="PII present" checked={pii} onChange={setPii} />
+              <Checkbox label="GDPR required" checked={gdpr} onChange={setGdpr} />
+              <Checkbox label="Private networking required" checked={privateNet} onChange={setPrivateNet} />
+            </div>
+          </Card>
+
+          <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
+            <div className="text-sm font-semibold">Transformations needed</div>
+            <CheckboxGrid items={transforms} state={transSelected} onToggle={toggleMap(transSelected, setTransSelected)} />
+            <Field label="Notes" value={transNotes} onChange={setTransNotes} />
+          </Card>
+
+          <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
+            <div className="text-sm font-semibold">Data quality checks</div>
+            <CheckboxGrid items={quality} state={qualitySelected} onToggle={toggleMap(qualitySelected, setQualitySelected)} />
+            <Field label="Notes" value={qualityNotes} onChange={setQualityNotes} />
+          </Card>
+
+          <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
+            <div className="text-sm font-semibold">Architecture preferences</div>
+            <RadioGroup
+              label="Medallion (bronze/silver/gold)"
+              value={archMedallion}
+              onChange={setArchMedallion}
+              options={[
+                { key: "yes", label: "Yes" },
+                { key: "no", label: "No" },
+                { key: "unsure", label: "Unsure" },
+              ]}
+            />
+            <RadioGroup
+              label="Star schema / marts required"
+              value={archStar}
+              onChange={setArchStar}
+              options={[
+                { key: "yes", label: "Yes" },
+                { key: "no", label: "No" },
+                { key: "unsure", label: "Unsure" },
+              ]}
+            />
+            <RadioGroup
+              label="Streaming required"
+              value={archStreaming}
+              onChange={setArchStreaming}
+              options={[
+                { key: "yes", label: "Yes" },
+                { key: "no", label: "No" },
+                { key: "unsure", label: "Unsure" },
+              ]}
+            />
+          </Card>
+
+          {profiling && (
+            <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-semibold">Quick estimate (preview)</div>
+                <div className="text-xs text-slate-500">{profiling.generated_at}</div>
+              </div>
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="text-left py-2 px-2">Table</th>
+                      <th className="text-left py-2 px-2">Est. rows</th>
+                      <th className="text-left py-2 px-2">Null risk</th>
+                      <th className="text-left py-2 px-2">Key candidate</th>
+                      <th className="text-left py-2 px-2">Freshness</th>
+                      <th className="text-left py-2 px-2">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {profiling.tables.map((t: any, idx: number) => (
+                      <tr key={idx} className="border-t border-slate-100">
+                        <td className="py-2 px-2 font-mono text-slate-800">
+                          {t.schema}.{t.table}
+                        </td>
+                        <td className="py-2 px-2 text-slate-700">{t.est_rows?.toLocaleString?.() ?? "—"}</td>
+                        <td className="py-2 px-2 text-slate-700">{t.null_risk ?? "unknown"}</td>
+                        <td className="py-2 px-2 text-slate-700">{t.key_candidate ?? "—"}</td>
+                        <td className="py-2 px-2 text-slate-700">{t.freshness ?? "unknown"}</td>
+                        <td className="py-2 px-2 text-slate-700">{t.notes ?? ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {profilingSummary && (
+            <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
+              <div className="text-sm font-semibold">Profiling summary</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-800">
+                <SummaryStat label="Tables" value={profilingSummary.table_count ?? "—"} />
+                <SummaryStat
+                  label="Total size (est)"
+                  value={
+                    profilingSummary.total_size_bytes_estimate
+                      ? formatBytes(profilingSummary.total_size_bytes_estimate)
+                      : "—"
+                  }
+                />
+                <SummaryStat label="Suggested refresh" value={profilingSummary.suggested_refresh ?? "—"} />
+                <SummaryStat label="Suggested ingestion" value={profilingSummary.suggested_ingestion_mode ?? "—"} />
+                <SummaryStat
+                  label="Suggested checks"
+                  value={(profilingSummary.suggested_checks || []).join(", ") || "—"}
+                />
+              </div>
+
+              {profilingSummary.largest_tables?.length ? (
+                <div>
+                  <div className="text-xs uppercase text-slate-500 mb-1">Top 10 largest tables</div>
+                  <div className="space-y-1 text-sm text-slate-800">
+                    {profilingSummary.largest_tables.slice(0, 10).map((t: any, idx: number) => (
+                      <div
+                        key={`${t.schema}.${t.table}.${idx}`}
+                        className="flex justify-between border border-slate-100 rounded-lg px-2 py-1 bg-slate-50"
+                      >
+                        <span className="font-mono text-xs text-slate-800">
+                          {t.schema}.{t.table}
+                        </span>
+                        <span className="text-xs text-slate-600">
+                          {t.size_bytes_estimate ? formatBytes(t.size_bytes_estimate) : "—"}
+                          {t.row_estimate ? ` • ${t.row_estimate.toLocaleString()} rows` : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {profilingSummary.pii_hints?.length ? (
+                <div>
+                  <div className="text-xs uppercase text-slate-500 mb-1">PII hints</div>
+                  <div className="space-y-1 text-sm text-slate-800">
+                    {profilingSummary.pii_hints.map((p: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="flex justify-between border border-amber-100 bg-amber-50 rounded-lg px-2 py-1"
+                      >
+                        <span className="font-mono text-xs text-amber-900">
+                          {p.schema}.{p.table}.{p.column}
+                        </span>
+                        <span className="text-xs text-amber-800">{p.reason || "PII-like"}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </Card>
+          )}
         </div>
 
-        {error && <div className="text-sm text-red-600">{error}</div>}
-
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
-          <div className="space-y-4">
-            <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
-              <div className="text-sm font-semibold">Dataset overview</div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <SelectField label="Expected volume" value={volumeBucket} onChange={setVolumeBucket} options={volumePresets} />
-                <Field label="Largest table rows" type="number" value={largestRows} onChange={(v) => setLargestRows(Number(v) || 0)} />
-                <Field label="Tables count" type="number" value={tablesCount} onChange={(v) => setTablesCount(Number(v) || 0)} />
-                <SelectField
-                  label="Refresh frequency"
-                  value={refreshFrequency}
-                  onChange={setRefreshFrequency}
-                  options={[
-                    { key: "realtime", label: "Realtime" },
-                    { key: "hourly", label: "Hourly" },
-                    { key: "daily", label: "Daily" },
-                    { key: "weekly", label: "Weekly" },
-                    { key: "manual", label: "Manual" },
-                  ]}
-                />
-                <SelectField
-                  label="Latency target"
-                  value={latency}
-                  onChange={setLatency}
-                  options={[
-                    { key: "1h", label: "1 hour" },
-                    { key: "4h", label: "4 hours" },
-                    { key: "12h", label: "12 hours" },
-                    { key: "24h", label: "24 hours" },
-                    { key: "48h", label: "48 hours" },
-                  ]}
-                />
-                <Checkbox label="PII present" checked={pii} onChange={setPii} />
-                <Checkbox label="GDPR required" checked={gdpr} onChange={setGdpr} />
-                <Checkbox label="Private networking required" checked={privateNet} onChange={setPrivateNet} />
-              </div>
-            </Card>
-
-            <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
-              <div className="text-sm font-semibold">Transformations needed</div>
-              <CheckboxGrid items={transforms} state={transSelected} onToggle={toggleMap(transSelected, setTransSelected)} />
-              <Field label="Notes" value={transNotes} onChange={setTransNotes} />
-            </Card>
-
-            <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
-              <div className="text-sm font-semibold">Data quality checks</div>
-              <CheckboxGrid items={quality} state={qualitySelected} onToggle={toggleMap(qualitySelected, setQualitySelected)} />
-              <Field label="Notes" value={qualityNotes} onChange={setQualityNotes} />
-            </Card>
-
-            <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
-              <div className="text-sm font-semibold">Architecture preferences</div>
-              <RadioGroup
-                label="Medallion (bronze/silver/gold)"
-                value={archMedallion}
-                onChange={setArchMedallion}
-                options={[
-                  { key: "yes", label: "Yes" },
-                  { key: "no", label: "No" },
-                  { key: "unsure", label: "Unsure" },
-                ]}
-              />
-              <RadioGroup
-                label="Star schema / marts required"
-                value={archStar}
-                onChange={setArchStar}
-                options={[
-                  { key: "yes", label: "Yes" },
-                  { key: "no", label: "No" },
-                  { key: "unsure", label: "Unsure" },
-                ]}
-              />
-              <RadioGroup
-                label="Streaming required"
-                value={archStreaming}
-                onChange={setArchStreaming}
-                options={[
-                  { key: "yes", label: "Yes" },
-                  { key: "no", label: "No" },
-                  { key: "unsure", label: "Unsure" },
-                ]}
-              />
-            </Card>
-
-            {profiling && (
-              <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-semibold">Quick estimate (preview)</div>
-                  <div className="text-xs text-slate-500">{profiling.generated_at}</div>
-                </div>
-                <div className="overflow-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 text-slate-600">
-                      <tr>
-                        <th className="text-left py-2 px-2">Table</th>
-                        <th className="text-left py-2 px-2">Est. rows</th>
-                        <th className="text-left py-2 px-2">Null risk</th>
-                        <th className="text-left py-2 px-2">Key candidate</th>
-                        <th className="text-left py-2 px-2">Freshness</th>
-                        <th className="text-left py-2 px-2">Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {profiling.tables.map((t: any, idx: number) => (
-                        <tr key={idx} className="border-t border-slate-100">
-                          <td className="py-2 px-2 font-mono text-slate-800">
-                            {t.schema}.{t.table}
-                          </td>
-                          <td className="py-2 px-2 text-slate-700">{t.est_rows?.toLocaleString?.() ?? "—"}</td>
-                          <td className="py-2 px-2 text-slate-700">{t.null_risk ?? "unknown"}</td>
-                          <td className="py-2 px-2 text-slate-700">{t.key_candidate ?? "—"}</td>
-                          <td className="py-2 px-2 text-slate-700">{t.freshness ?? "unknown"}</td>
-                          <td className="py-2 px-2 text-slate-700">{t.notes ?? ""}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            )}
-
-            {profilingSummary && (
-              <Card className="p-4 border border-slate-200 shadow-sm bg-white space-y-3">
-                <div className="text-sm font-semibold">Profiling summary</div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm text-slate-800">
-                  <div className="space-y-1">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Tables</div>
-                    <div className="text-sm text-slate-900">{profilingSummary.table_count ?? "—"}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Total size (est)</div>
-                    <div className="text-sm text-slate-900">
-                      {profilingSummary.total_size_bytes_estimate
-                        ? formatBytes(profilingSummary.total_size_bytes_estimate)
-                        : "—"}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Suggested refresh</div>
-                    <div className="text-sm text-slate-900">{profilingSummary.suggested_refresh ?? "—"}</div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Suggested ingestion</div>
-                    <div className="text-sm text-slate-900">
-                      {profilingSummary.suggested_ingestion_mode ?? "—"}
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Suggested checks</div>
-                    <div className="text-sm text-slate-900">
-                      {(profilingSummary.suggested_checks || []).join(", ") || "—"}
-                    </div>
-                  </div>
-                </div>
-
-                {profilingSummary.largest_tables?.length ? (
-                  <div>
-                    <div className="text-xs uppercase text-slate-500 mb-1">Top 10 largest tables</div>
-                    <div className="space-y-1 text-sm text-slate-800">
-                      {profilingSummary.largest_tables.slice(0, 10).map((t: any, idx: number) => (
-                        <div
-                          key={`${t.schema}.${t.table}.${idx}`}
-                          className="flex justify-between border border-slate-100 rounded-lg px-2 py-1 bg-slate-50"
-                        >
-                          <span className="font-mono text-xs text-slate-800">
-                            {t.schema}.{t.table}
-                          </span>
-                          <span className="text-xs text-slate-600">
-                            {t.size_bytes_estimate ? formatBytes(t.size_bytes_estimate) : "—"}
-                            {t.row_estimate ? ` • ${t.row_estimate.toLocaleString()} rows` : ""}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {profilingSummary.pii_hints?.length ? (
-                  <div>
-                    <div className="text-xs uppercase text-slate-500 mb-1">PII hints</div>
-                    <div className="space-y-1 text-sm text-slate-800">
-                      {profilingSummary.pii_hints.map((p: any, idx: number) => (
-                        <div
-                          key={idx}
-                          className="flex justify-between border border-amber-100 bg-amber-50 rounded-lg px-2 py-1"
-                        >
-                          <span className="font-mono text-xs text-amber-900">
-                            {p.schema}.{p.table}.{p.column}
-                          </span>
-                          <span className="text-xs text-amber-800">{p.reason || "PII-like"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-              </Card>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            <SetupGuidePanel />
-            <SelectedTablesPanel
-              selectedKeys={selectedKeys}
-              onClear={() => {
-                setSelectedTables([]);
-                setTablesCount(0);
-              }}
-            />
-            <Card className="p-4 border border-slate-200 shadow-sm bg-white">
-              <div className="text-sm font-semibold text-slate-900">Connector</div>
-              <div className="text-sm text-slate-700">
-                {connector ? `${connector.name} (${connector.type})` : "Unknown"}
-              </div>
-            </Card>
-          </div>
+        <div className="space-y-4">
+          <SetupGuidePanel />
+          <SelectedTablesPanel
+            selectedKeys={selectedKeys}
+            onClear={() => {
+              setSelectedTables([]);
+              setTablesCount(0);
+            }}
+          />
+          <Card className="p-4 border border-slate-200 shadow-sm bg-white">
+            <div className="text-sm font-semibold text-slate-900">Connector</div>
+            <div className="text-sm text-slate-700">
+              {connector ? `${connector.name} (${connector.type})` : "Unknown"}
+            </div>
+          </Card>
         </div>
       </div>
     </div>
@@ -481,11 +459,13 @@ function Field({
   value,
   onChange,
   type = "text",
+  placeholder,
 }: {
   label: string;
   value: any;
   onChange: (v: string) => void;
   type?: string;
+  placeholder?: string;
 }) {
   return (
     <label className="space-y-1 text-sm text-slate-700">
@@ -493,6 +473,7 @@ function Field({
       <Input
         type={type}
         value={value ?? ""}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="bg-white border-slate-300"
       />
@@ -575,12 +556,24 @@ function RadioGroup({
       <div className="text-xs text-slate-500">{label}</div>
       <div className="flex flex-wrap gap-2">
         {options.map((o) => (
-          <label key={o.key} className="flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-2 py-1">
+          <label
+            key={o.key}
+            className="flex items-center gap-2 text-sm text-slate-700 border border-slate-200 rounded-lg px-2 py-1"
+          >
             <input type="radio" checked={value === o.key} onChange={() => onChange(o.key)} />
             {o.label}
           </label>
         ))}
       </div>
+    </div>
+  );
+}
+
+function SummaryStat({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="text-sm text-slate-900">{value}</div>
     </div>
   );
 }
@@ -656,6 +649,7 @@ function buildMockSummary(tables: { schema: string; table: string }[]) {
     pii_hints: [],
     suggested_refresh: "daily",
     suggested_ingestion_mode: "batch",
+    suggested_checks: [],
   };
 }
 

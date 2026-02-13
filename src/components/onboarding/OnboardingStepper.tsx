@@ -22,45 +22,37 @@ function isActive(pathname: string, stepHref: string) {
   return pathname === stepHref || pathname.startsWith(stepHref + "/");
 }
 
-export default function OnboardingStepper() {
+export default function OnboardingStepper({ compact = false }: { compact?: boolean }) {
   const pathname = usePathname();
   const params = useSearchParams();
 
-  // carry forward key params so links don’t “lose context”
-  const mode = params.get("mode") ?? "manual";
-  const industry = params.get("industry") ?? "";
-  const scale = params.get("scale") ?? "small";
-  const cloud = params.get("cloud") ?? "azure";
   const requirementSetId = params.get("requirement_set_id") ?? "";
 
-  const search = new URLSearchParams({ mode, industry, scale, cloud });
-  if (requirementSetId) search.set("requirement_set_id", requirementSetId);
-  const carry = search.toString();
-
   return (
-    <div className="space-y-4">
-      <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-        Onboarding
-      </div>
+    <div className={compact ? "space-y-2" : "space-y-4"}>
+      {!compact && (
+        <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Onboarding
+        </div>
+      )}
 
-      <nav className="space-y-1">
+      <nav className={compact ? "flex gap-2" : "space-y-1"}>
         {STEPS.map((s) => {
           const active = isActive(pathname, s.href);
-
-          const href =
-            s.href.startsWith("/portal/onboarding") && carry
-              ? `${s.href}?${carry}`
-              : s.href;
+          const qs = requirementSetId ? `?requirement_set_id=${encodeURIComponent(requirementSetId)}` : "";
+          const href = s.href.startsWith("/portal/onboarding") ? `${s.href}${qs}` : s.href;
 
           return (
             <Link
               key={s.href}
               href={href}
               className={[
-                "block rounded-md px-3 py-2 text-sm transition",
+                compact
+                  ? "rounded-full border px-3 py-1 text-xs transition"
+                  : "block rounded-md px-3 py-2 text-sm transition",
                 active
-                  ? "bg-slate-800 text-white"
-                  : "text-slate-400 hover:bg-slate-900 hover:text-white",
+                  ? "bg-cyan-600 text-white border-cyan-600"
+                  : "text-slate-600 border-slate-200 hover:border-cyan-300 hover:text-cyan-700",
               ].join(" ")}
             >
               {s.label}
@@ -69,12 +61,12 @@ export default function OnboardingStepper() {
         })}
       </nav>
 
-      <div className="rounded-md border border-slate-800 bg-slate-950/40 p-3 text-xs text-slate-400">
-        <div className="font-semibold text-slate-300">Tip</div>
-        <div className="mt-1">
-          Use the steps to move around without losing your answers.
+      {!compact && (
+        <div className="rounded-md border border-slate-200 bg-white p-3 text-xs text-slate-600 shadow-sm">
+          <div className="font-semibold text-slate-800">Tip</div>
+          <div className="mt-1">Use the steps to move around without losing your answers.</div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

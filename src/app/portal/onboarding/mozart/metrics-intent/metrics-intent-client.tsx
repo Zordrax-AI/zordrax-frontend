@@ -13,6 +13,7 @@ import {
   getMetricsSuggestions,
   type Connector,
 } from "@/lib/api";
+import { getRequirementSetId, wizardHref } from "@/lib/wizard";
 
 type Metric = {
   name: string;
@@ -26,7 +27,7 @@ type Metric = {
 export default function MetricsIntentClient() {
   const router = useRouter();
   const sp = useSearchParams();
-  const requirementSetId = sp.get("requirement_set_id") ?? "";
+  const requirementSetId = getRequirementSetId(sp) ?? "";
 
   const [connector, setConnector] = useState<Connector | null>(null);
   const [metrics, setMetrics] = useState<Metric[]>([]);
@@ -50,13 +51,10 @@ export default function MetricsIntentClient() {
         const cj = (constraints as any)?.constraints_json || constraints || {};
         if (cj.metrics_intent) setMetrics(cj.metrics_intent as Metric[]);
 
-        // pull suggestions (placeholder endpoint)
         try {
           const sug = await getMetricsSuggestions(requirementSetId);
           if (sug?.metrics?.length) {
-            setMetrics((prev) =>
-              prev.length ? prev : sug.metrics.map(normalizeMetric)
-            );
+            setMetrics((prev) => (prev.length ? prev : sug.metrics.map(normalizeMetric)));
           }
         } catch {
           /* ignore suggestions failure */
@@ -94,9 +92,7 @@ export default function MetricsIntentClient() {
     setError("");
     try {
       await updateConstraints(requirementSetId, { metrics_intent: metrics });
-      router.push(
-        `/portal/onboarding/mozart/recommendations?requirement_set_id=${encodeURIComponent(requirementSetId)}`
-      );
+      router.push(wizardHref("recommendations", requirementSetId));
     } catch (e: any) {
       setError(e?.message || "Failed to save metrics intent");
     } finally {
@@ -107,93 +103,91 @@ export default function MetricsIntentClient() {
   const canContinue = useMemo(() => metrics.length > 0, [metrics]);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm uppercase text-slate-500 font-semibold">Metrics intent</div>
-            <div className="text-2xl font-semibold text-slate-900">Define the KPIs you care about</div>
-            {connector && (
-              <div className="text-sm text-slate-600 mt-1">
-                Using connector: {connector.name} ({connector.type})
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={addMetric}>
-              Add metric
-            </Button>
-            <Button onClick={save} disabled={saving || !canContinue}>
-              {saving ? "Saving..." : "Continue"}
-            </Button>
-          </div>
-        </div>
-
-        {error && <div className="text-sm text-red-600">{error}</div>}
-        {loading && <div className="text-sm text-slate-600">Loading suggestions...</div>}
-
-        <div className="grid gap-4">
-          {metrics.map((m, idx) => (
-            <Card key={idx} className="p-4 bg-white border border-slate-200 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <Input
-                  value={m.name}
-                  onChange={(e) => updateMetric(idx, { name: e.target.value })}
-                  className="font-semibold text-lg bg-white border-slate-300"
-                />
-                <Button variant="ghost" onClick={() => removeMetric(idx)}>
-                  Remove
-                </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Field
-                  label="Definition"
-                  value={m.definition}
-                  onChange={(v) => updateMetric(idx, { definition: v })}
-                  placeholder="How is this KPI calculated?"
-                  multiline
-                />
-                <Field
-                  label="Tables (comma separated)"
-                  value={m.tables.join(", ")}
-                  onChange={(v) =>
-                    updateMetric(idx, {
-                      tables: v
-                        .split(",")
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  placeholder="public.orders, public.customers"
-                />
-                <Field
-                  label="Grain"
-                  value={m.grain || ""}
-                  onChange={(v) => updateMetric(idx, { grain: v })}
-                  placeholder="e.g., daily, customer_id"
-                />
-                <Field
-                  label="Join paths"
-                  value={m.joins || ""}
-                  onChange={(v) => updateMetric(idx, { joins: v })}
-                  placeholder="orders.customer_id -> customers.customer_id"
-                />
-                <Field
-                  label="Checks (comma separated)"
-                  value={(m.checks || []).join(", ")}
-                  onChange={(v) => updateMetric(idx, { checks: v.split(",").map((s) => s.trim()).filter(Boolean) })}
-                  placeholder="not_null, referential_integrity"
-                />
-              </div>
-            </Card>
-          ))}
-
-          {metrics.length === 0 && (
-            <Card className="p-6 bg-white border border-slate-200 shadow-sm text-sm text-slate-700">
-              No metrics yet. Use “Add metric” to start or wait for suggestions.
-            </Card>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm uppercase text-slate-500 font-semibold">Metrics intent</div>
+          <div className="text-2xl font-semibold text-slate-900">Define the KPIs you care about</div>
+          {connector && (
+            <div className="text-sm text-slate-600 mt-1">
+              Using connector: {connector.name} ({connector.type})
+            </div>
           )}
         </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={addMetric}>
+            Add metric
+          </Button>
+          <Button onClick={save} disabled={saving || !canContinue}>
+            {saving ? "Saving..." : "Continue"}
+          </Button>
+        </div>
+      </div>
+
+      {error && <div className="text-sm text-red-600">{error}</div>}
+      {loading && <div className="text-sm text-slate-600">Loading suggestions...</div>}
+
+      <div className="grid gap-4">
+        {metrics.map((m, idx) => (
+          <Card key={idx} className="p-4 bg-white border border-slate-200 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <Input
+                value={m.name}
+                onChange={(e) => updateMetric(idx, { name: e.target.value })}
+                className="font-semibold text-lg bg-white border-slate-300"
+              />
+              <Button variant="ghost" onClick={() => removeMetric(idx)}>
+                Remove
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field
+                label="Definition"
+                value={m.definition}
+                onChange={(v) => updateMetric(idx, { definition: v })}
+                placeholder="How is this KPI calculated?"
+                multiline
+              />
+              <Field
+                label="Tables (comma separated)"
+                value={m.tables.join(", ")}
+                onChange={(v) =>
+                  updateMetric(idx, {
+                    tables: v
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean),
+                  })
+                }
+                placeholder="public.orders, public.customers"
+              />
+              <Field
+                label="Grain"
+                value={m.grain || ""}
+                onChange={(v) => updateMetric(idx, { grain: v })}
+                placeholder="e.g., daily, customer_id"
+              />
+              <Field
+                label="Join paths"
+                value={m.joins || ""}
+                onChange={(v) => updateMetric(idx, { joins: v })}
+                placeholder="orders.customer_id -> customers.customer_id"
+              />
+              <Field
+                label="Checks (comma separated)"
+                value={(m.checks || []).join(", ")}
+                onChange={(v) => updateMetric(idx, { checks: v.split(",").map((s) => s.trim()).filter(Boolean) })}
+                placeholder="not_null, referential_integrity"
+              />
+            </div>
+          </Card>
+        ))}
+
+        {metrics.length === 0 && (
+          <Card className="p-6 bg-white border border-slate-200 shadow-sm text-sm text-slate-700">
+            No metrics yet. Use “Add metric” to start or wait for suggestions.
+          </Card>
+        )}
       </div>
     </div>
   );

@@ -15,11 +15,12 @@ import {
 import { SchemaSidebar } from "@/components/connectors/SchemaSidebar";
 import { TablePicker, keyFor } from "@/components/connectors/TablePicker";
 import { SelectedTablesPanel } from "@/components/connectors/SelectedTablesPanel";
+import { getRequirementSetId, wizardHref } from "@/lib/wizard";
 
 export default function TablesClient() {
   const router = useRouter();
   const sp = useSearchParams();
-  const requirementSetId = sp.get("requirement_set_id") ?? "";
+  const requirementSetId = getRequirementSetId(sp) ?? "";
 
   const [connectorId, setConnectorId] = useState<string | null>(null);
   const [connector, setConnector] = useState<Connector | null>(null);
@@ -39,18 +40,16 @@ export default function TablesClient() {
     (async () => {
       try {
         const rs = await brdReadRequirementSet(requirementSetId);
-        // prefer snapshot connector id if present
         const cid = (rs as any)?.connector_snapshot_json?.id || rs.connector_id || null;
         setConnectorId(cid);
-        if (cid) {
-          await loadConnector(cid);
-        }
+        if (cid) await loadConnector(cid);
         await hydrateConstraints();
       } catch (e: any) {
         setError(e?.message || "Failed to load requirement set");
       }
     })();
-  }, [requirementSetId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requirementSetId]);
 
   async function hydrateConstraints() {
     try {
@@ -68,7 +67,7 @@ export default function TablesClient() {
       });
       setSelected(map);
     } catch {
-      // ignore
+      /* ignore */
     }
   }
 
@@ -144,9 +143,7 @@ export default function TablesClient() {
         selected_tables: selectedTables,
       });
       await updateConstraints(requirementSetId, merged);
-      router.push(
-        `/portal/onboarding/mozart/data-checks?requirement_set_id=${encodeURIComponent(requirementSetId)}`
-      );
+      router.push(wizardHref("data-checks", requirementSetId));
     } catch (e: any) {
       setError(e?.message || "Failed to save selection");
     } finally {
@@ -156,19 +153,13 @@ export default function TablesClient() {
 
   if (!connectorId) {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-900 flex items-center justify-center">
+      <div className="flex items-center justify-center">
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6 space-y-3 max-w-md text-center">
           <div className="text-lg font-semibold">No connector attached</div>
           <div className="text-sm text-slate-600">
             Attach a connector first on the Connect Data step to pick tables.
           </div>
-          <Button
-            onClick={() =>
-              router.push(
-                `/portal/onboarding/mozart/connect-data?requirement_set_id=${encodeURIComponent(requirementSetId)}`
-              )
-            }
-          >
+          <Button onClick={() => router.push(wizardHref("connect-data", requirementSetId || undefined))}>
             Go to Connect Data
           </Button>
         </div>
@@ -177,77 +168,68 @@ export default function TablesClient() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm uppercase text-slate-500 font-semibold">Select Tables</div>
-            <div className="text-2xl font-semibold text-slate-900">Choose tables to include</div>
-            {connector && (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-sm uppercase text-slate-500 font-semibold">Select Tables</div>
+          <div className="text-2xl font-semibold text-slate-900">Choose tables to include</div>
+          {connector && (
             <div className="text-sm text-slate-600 mt-1">
               {connector.name} · {connector.type} · status {connector.status}
             </div>
           )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onDiscover} disabled={loading}>
-              {loading ? "Discovering..." : "Discover tables"}
-            </Button>
-            <Button onClick={saveAndContinue} disabled={saving || (!skip && selectedKeys.length === 0)}>
-              {saving ? "Saving..." : "Continue"}
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={onDiscover} disabled={loading}>
+            {loading ? "Discovering..." : "Discover tables"}
+          </Button>
+          <Button onClick={saveAndContinue} disabled={saving || (!skip && selectedKeys.length === 0)}>
+            {saving ? "Saving..." : "Continue"}
+          </Button>
+        </div>
+      </div>
+
+      {error && <div className="text-sm text-red-600">{error}</div>}
+
+      <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 space-y-4">
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-slate-700">{selectedKeys.length} tables selected</div>
+          <div className="flex items-center gap-2">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search tables"
+              className="w-56 bg-white border-slate-300"
+            />
+            <Button variant="ghost" onClick={() => setSkip(true)}>
+              Skip (select later)
             </Button>
           </div>
         </div>
 
-        {error && <div className="text-sm text-red-600">{error}</div>}
-
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 space-y-4">
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-slate-700">
-              {selectedKeys.length} tables selected
-            </div>
-            <div className="flex items-center gap-2">
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search tables"
-                className="w-56 bg-white border-slate-300"
-              />
-              <Button variant="ghost" onClick={() => setSkip(true)}>
-                Skip (select later)
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_280px] gap-4">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <div className="text-sm font-semibold text-slate-900 mb-2">Schemas</div>
-              <SchemaSidebar
-                schemas={schemas}
-                selectedSchema={selectedSchema}
-                onSelectSchema={setSelectedSchema}
-                search={schemaSearch}
-                onSearch={setSchemaSearch}
-              />
-            </div>
-
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
-              <TablePicker
-                tables={filteredTables}
-                selected={selected}
-                onToggle={(k) => toggleTable(k)}
-                onToggleAll={toggleAll}
-              />
-            </div>
-
-            <SelectedTablesPanel
-              selectedKeys={selectedKeys}
-              onClear={() => {
-                setSelected({});
-                setSkip(false);
-              }}
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr_280px] gap-4">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="text-sm font-semibold text-slate-900 mb-2">Schemas</div>
+            <SchemaSidebar
+              schemas={schemas}
+              selectedSchema={selectedSchema}
+              onSelectSchema={setSelectedSchema}
+              search={schemaSearch}
+              onSearch={setSchemaSearch}
             />
           </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+            <TablePicker tables={filteredTables} selected={selected} onToggle={(k) => toggleTable(k)} onToggleAll={toggleAll} />
+          </div>
+
+          <SelectedTablesPanel
+            selectedKeys={selectedKeys}
+            onClear={() => {
+              setSelected({});
+              setSkip(false);
+            }}
+          />
         </div>
       </div>
     </div>

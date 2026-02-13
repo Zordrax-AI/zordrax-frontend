@@ -12,6 +12,7 @@ import {
   selectRecommendation,
   Top3Option,
 } from "@/lib/api";
+import { getRequirementSetId, wizardHref } from "@/lib/wizard";
 
 type State =
   | { kind: "idle" }
@@ -36,7 +37,7 @@ export default function RecommendationsClient() {
   const sp = useSearchParams();
   const router = useRouter();
 
-  const requirementSetId = useMemo(() => sp.get("requirement_set_id") ?? "", [sp]);
+  const requirementSetId = useMemo(() => getRequirementSetId(sp) ?? "", [sp]);
 
   const [state, setState] = useState<State>({ kind: "idle" });
   const [selecting, setSelecting] = useState<string>("");
@@ -117,9 +118,7 @@ export default function RecommendationsClient() {
     try {
       setSelecting(optionId);
       await selectRecommendation(requirementSetId, optionId);
-      router.push(
-        `/portal/onboarding/mozart/model-kpis?requirement_set_id=${encodeURIComponent(requirementSetId)}`
-      );
+      router.push(wizardHref("deploy", requirementSetId));
     } catch (e: any) {
       setState({ kind: "error", message: e?.message ?? "Failed to select recommendation." });
     } finally {
@@ -132,8 +131,8 @@ export default function RecommendationsClient() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+    <div className="space-y-6">
+      <div className="space-y-1">
         <div>
           <h1 className="text-3xl font-semibold text-slate-900">Top 3 Recommendations</h1>
           <p className="mt-1 text-sm text-slate-600">
