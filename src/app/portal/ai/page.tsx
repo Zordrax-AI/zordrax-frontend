@@ -18,7 +18,7 @@ export default function AiOnboardingPage() {
       industry,
       cloud: cloud.toLowerCase(),
     });
-    router.push(`/portal/onboarding/deploy?${qs.toString()}`);
+    router.push(`/portal/onboarding/mozart/deploy?${qs.toString()}`);
   }
 
   return (

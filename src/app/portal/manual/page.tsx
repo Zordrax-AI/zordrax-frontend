@@ -26,7 +26,7 @@ export default function ManualWizardPage() {
       governance,
       bi,
     });
-    router.push(`/portal/onboarding/deploy?${qs.toString()}`);
+    router.push(`/portal/onboarding/mozart/deploy?${qs.toString()}`);
   }
 
   return (

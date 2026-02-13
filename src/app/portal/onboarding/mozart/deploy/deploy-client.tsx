@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { brd, deploy } from "@/lib/agent-proxy";
@@ -26,6 +26,7 @@ async function withRetries<T>(fn: () => Promise<T>, tries = 3) {
 
 export default function DeployTimelineClient() {
   const sp = useSearchParams();
+  const router = useRouter();
   const requirementSetId = sp.get("requirement_set_id") ?? "";
 
   const [runId, setRunId] = useState<string>("");
@@ -57,6 +58,9 @@ export default function DeployTimelineClient() {
       setRunId((p as any).run_id || "");
       setStatus((p as any).status || "awaiting_approval");
       setLast(p);
+      if ((p as any).run_id) {
+        router.push(`/portal/runs/${(p as any).run_id}`);
+      }
     } catch (e: any) {
       const msg = e?.message || String(e);
       setError(msg);
@@ -115,6 +119,7 @@ export default function DeployTimelineClient() {
       setLast(r);
       setStatus((r as any).status || status || "pipeline_started");
       startPolling();
+      router.push(`/portal/runs/${runId}`);
     } catch (e: any) {
       setError(e?.message || String(e));
     } finally {

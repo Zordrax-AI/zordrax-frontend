@@ -15,7 +15,7 @@ export default function RunRowActions({ run }: { run: RunRow }) {
   return (
     <div className="flex gap-3 text-xs">
       <button
-        onClick={() => router.push(`/portal/status?run=${run.run_id}`)}
+        onClick={() => router.push(`/portal/runs/${run.run_id}`)}
         className="text-cyan-400 hover:underline"
       >
         View

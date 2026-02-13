@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/Textarea";
 import { brd, connections } from "@/lib/agent-proxy";
+import { brdSetConnector, createConnector, testConnector } from "@/lib/api";
 
 export default function ConnectDataClient() {
   const router = useRouter();
@@ -41,8 +42,14 @@ export default function ConnectDataClient() {
   const [status, setStatus] = useState<"idle" | "working" | "ok" | "error">("idle");
   const [error, setError] = useState("");
   const [snapshot, setSnapshot] = useState<any>(null);
+  const [connectorId, setConnectorId] = useState("");
+  const [connectorStatus, setConnectorStatus] = useState<"idle" | "ok" | "pending" | "error">("idle");
+  const [skipConnector, setSkipConnector] = useState(false);
 
-  const canContinue = useMemo(() => !!requirementSetId && !!snapshot, [requirementSetId, snapshot]);
+  const canContinue = useMemo(
+    () => !!requirementSetId && ((!!snapshot && connectorStatus === "ok") || skipConnector),
+    [requirementSetId, snapshot, connectorStatus, skipConnector]
+  );
 
   async function ensureReqSet() {
     if (requirementSetId) return requirementSetId;
@@ -96,10 +103,35 @@ export default function ConnectDataClient() {
         budget_eur_month: budgetEurMonth,
       });
 
+      // Create connector, test, and attach to requirement set
+      setConnectorStatus("pending");
+      const connector = await createConnector({
+        name: title || "Data Connector",
+        type: sourceType,
+        config: {
+          host,
+          database,
+          schema,
+          cloud,
+          region,
+          environment,
+        },
+      });
+      setConnectorId(connector.id);
+
+      const testConn = await testConnector(connector.id, {
+        host,
+        database,
+        schema,
+      });
+      setConnectorStatus(testConn?.status === "ok" ? "ok" : "pending");
+      await brdSetConnector(reqId, connector.id);
+
       setStatus("ok");
     } catch (e: any) {
       setStatus("error");
       setError(e?.message || String(e));
+      setConnectorStatus("error");
     }
   }
 
@@ -220,10 +252,18 @@ export default function ConnectDataClient() {
           <Button onClick={testAndSave} disabled={status === "working"}>
             {status === "working" ? "Working…" : "Test + Save Snapshot"}
           </Button>
+          <Button variant="outline" onClick={() => setSkipConnector(true)}>
+            Skip (I will connect later)
+          </Button>
           <Button variant="outline" onClick={goNext} disabled={!canContinue}>
             Continue
           </Button>
           <div className="text-xs text-slate-400 self-center">reqset: {requirementSetId || "—"}</div>
+          {connectorId ? (
+            <div className="text-xs text-slate-400 self-center">
+              connector: {connectorId} ({connectorStatus})
+            </div>
+          ) : null}
         </div>
       </Card>
 

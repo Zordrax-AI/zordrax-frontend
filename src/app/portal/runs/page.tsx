@@ -94,7 +94,7 @@ export default function RunsPage() {
                     <td className="py-2 font-mono text-cyan-300">
                       <Link
                         className="hover:underline"
-                        href={`/portal/status?run=${encodeURIComponent(r.run_id)}`}
+                        href={`/portal/runs/${encodeURIComponent(r.run_id)}`}
                       >
                         {r.run_id.slice(0, 8)}…
                       </Link>

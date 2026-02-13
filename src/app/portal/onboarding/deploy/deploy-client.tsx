@@ -86,7 +86,7 @@ export default function DeployClient({ recommendationId }: Props) {
         // ignore
       }
 
-      router.push(`/portal/status?run=${runId}`);
+      router.push(`/portal/runs/${runId}`);
     } catch (e: any) {
       setError(e?.message ?? "Failed to approve/apply infrastructure");
     } finally {
@@ -99,7 +99,7 @@ export default function DeployClient({ recommendationId }: Props) {
       setError("No runId yet. Generate a plan first.");
       return;
     }
-    router.push(`/portal/status?run=${runId}`);
+    router.push(`/portal/runs/${runId}`);
   }
 
   return (

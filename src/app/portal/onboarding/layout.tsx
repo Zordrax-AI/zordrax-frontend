@@ -3,12 +3,11 @@ import { ReactNode } from "react";
 import Link from "next/link";
 
 const navItems = [
-  { label: "Overview", href: "/portal/onboarding" },
-  { label: "Mozart", href: "/portal/onboarding/mozart" },
-  { label: "Questions", href: "/portal/onboarding/questions" },
-  { label: "Recommend", href: "/portal/onboarding/recommend" },
-  { label: "Deploy", href: "/portal/onboarding/deploy" },
-  { label: "Status", href: "/portal/onboarding/status" },
+  { label: "Mozart Wizard", href: "/portal/onboarding/mozart" },
+  { label: "Connect Data", href: "/portal/onboarding/mozart/connect-data" },
+  { label: "Recommendations", href: "/portal/onboarding/mozart/recommendations" },
+  { label: "Deploy", href: "/portal/onboarding/mozart/deploy" },
+  { label: "Runs", href: "/portal/runs" },
 ];
 
 export default function OnboardingLayout({ children }: { children: ReactNode }) {

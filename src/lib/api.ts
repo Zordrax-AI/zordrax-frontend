@@ -82,6 +82,15 @@ export type RunEvent = {
   created_at: string;
 };
 
+export type Connector = {
+  id: string;
+  name: string;
+  type: string;
+  status?: string;
+  config?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+};
+
 export type InfraOutputsResponse = {
   run_id: string;
   found: boolean;
@@ -241,6 +250,16 @@ export async function brdApprove(requirement_set_id: string, actor = "unknown"):
   });
 }
 
+export async function brdSetConnector(requirement_set_id: string, connector_id: string) {
+  return fetchJson<Record<string, unknown>>(
+    `/api/agent/api/brd/requirement-sets/${requirement_set_id}/connector`,
+    {
+      method: "PUT",
+      body: JSON.stringify({ connector_id }),
+    }
+  );
+}
+
 /* ---------- Connections ---------- */
 
 export async function connectionsTest(payload: any): Promise<any> {
@@ -294,6 +313,49 @@ export type DeployRefreshResponse = {
 
 export async function deployRefresh(runId: string): Promise<DeployRefreshResponse> {
   return fetchJson<DeployRefreshResponse>(`/api/agent/api/deploy/${runId}/refresh`, { method: "GET" });
+}
+
+/* ---------- Connectors (new) ---------- */
+
+export async function listConnectors(): Promise<Connector[]> {
+  try {
+    return await fetchJson<Connector[]>(`/api/agent/api/connectors`, { method: "GET" });
+  } catch (e: any) {
+    if (e instanceof ApiError && e.status === 404) return [];
+    throw e;
+  }
+}
+
+export async function createConnector(payload: {
+  name: string;
+  type: string;
+  config: Record<string, unknown>;
+}) {
+  return fetchJson<Connector>(`/api/agent/api/connectors`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getConnector(id: string) {
+  return fetchJson<Connector>(`/api/agent/api/connectors/${encodeURIComponent(id)}`, { method: "GET" });
+}
+
+export async function testConnector(id: string, config?: Record<string, unknown>) {
+  return fetchJson<{ status: string; details?: any }>(`/api/agent/api/connectors/${encodeURIComponent(id)}/test`, {
+    method: "POST",
+    body: JSON.stringify(config ?? {}),
+  });
+}
+
+export async function discoverConnector(id: string, config?: Record<string, unknown>) {
+  return fetchJson<{ status: string; schema?: any }>(
+    `/api/agent/api/connectors/${encodeURIComponent(id)}/discover`,
+    {
+      method: "POST",
+      body: JSON.stringify(config ?? {}),
+    }
+  );
 }
 
 /* ---------- Runs + status ---------- */

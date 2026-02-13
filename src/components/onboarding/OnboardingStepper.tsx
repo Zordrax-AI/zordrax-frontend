@@ -9,15 +9,13 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  { label: "Overview", href: "/portal/onboarding" },
-  { label: "Questions", href: "/portal/onboarding/questions" },
-  { label: "Recommend", href: "/portal/onboarding/recommend" },
-  { label: "Deploy", href: "/portal/onboarding/deploy" },
-  { label: "Status", href: "/portal/status" },
+  { label: "Connect Data", href: "/portal/onboarding/mozart/connect-data" },
+  { label: "Recommendations", href: "/portal/onboarding/mozart/recommendations" },
+  { label: "Deploy", href: "/portal/onboarding/mozart/deploy" },
+  { label: "Run", href: "/portal/runs" },
 ];
 
 function isActive(pathname: string, stepHref: string) {
-  if (stepHref === "/portal/status") return pathname === "/portal/status";
   return pathname === stepHref || pathname.startsWith(stepHref + "/");
 }
 

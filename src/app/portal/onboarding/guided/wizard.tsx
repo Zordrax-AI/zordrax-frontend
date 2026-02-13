@@ -29,7 +29,7 @@ export default function GuidedWizard() {
           Manual onboarding
         </Button>
 
-        <Button onClick={() => router.push("/portal/onboarding/deploy?rec=test-001")}>
+        <Button onClick={() => router.push("/portal/onboarding/mozart/deploy?rec=test-001")}>
           Continue to Deploy
         </Button>
       </div>

@@ -22,7 +22,7 @@ export default function SessionsPage() {
           sessions.map((s) => (
             <a
               key={s.id}
-              href={`/portal/status?run=${encodeURIComponent(s.id)}`}
+              href={`/portal/runs/${encodeURIComponent(s.id)}`}
               className="block rounded border border-slate-800 bg-slate-900/40 p-4 hover:bg-slate-900"
             >
               <div className="flex justify-between">

@@ -1,10 +1,7 @@
-import { Suspense } from "react";
-import DeployClient from "./deploy-client";
+import { redirect } from "next/navigation";
 
-export default function DeployPage() {
-  return (
-    <Suspense fallback={<div>Loading deploy...</div>}>
-      <DeployClient recommendationId="test-001" />
-    </Suspense>
-  );
+export default function LegacyDeployPage({ searchParams }: { searchParams?: Record<string, string> }) {
+  const qs = new URLSearchParams(searchParams ?? {});
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  redirect(`/portal/onboarding/mozart/deploy${suffix}`);
 }
