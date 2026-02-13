@@ -1,6 +1,7 @@
 import "./globals.css";
 import { ReactNode } from "react";
 import Navbar from "@/components/layout/Navbar";
+import { ThemeProvider } from "@/components/theme/theme-provider";
 
 export const metadata = {
   title: "Zordrax Analytica",
@@ -9,10 +10,14 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-slate-950 text-slate-100 antialiased">
-        <Navbar />
-        {children}
+    <html lang="en" suppressHydrationWarning>
+      <body className="antialiased bg-[var(--bg)] text-[var(--fg)]">
+        <ThemeProvider>
+          <Navbar />
+          <div className="min-h-screen bg-[var(--bg)] text-[var(--fg)]">
+            {children}
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );

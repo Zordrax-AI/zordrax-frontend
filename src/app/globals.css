@@ -21,17 +21,41 @@ html, body {
 /* -------------------------------------------------------
    THEME VARIABLES
 ------------------------------------------------------- */
-:root {
-  --background: #0f172a; /* slate-900 */
-  --foreground: #e5e7eb; /* slate-200 */
+:root,
+:root[data-theme="dark"] {
+  --bg: #050812;
+  --fg: #e6eaf2;
+  --muted: #9aa3b2;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-2: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.1);
+  --accent: #22d3ee;
+  --accent-fg: #041018;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+}
+
+:root[data-theme="light"] {
+  --bg: #f6f7fb;
+  --fg: #0b1020;
+  --muted: #4b5565;
+  --card: #ffffff;
+  --card-2: #f1f5f9;
+  --border: rgba(11, 16, 32, 0.12);
+  --accent: #0891b2;
+  --accent-fg: #ffffff;
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
 }
 
 /* -------------------------------------------------------
    GLOBAL BODY STYLING
 ------------------------------------------------------- */
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--bg);
+  color: var(--fg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

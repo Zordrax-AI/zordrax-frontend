@@ -34,13 +34,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         disabled={disabled}
         className={clsx(
           "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition",
-          "focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-slate-950",
+          "focus:outline-none focus:ring-2 focus:ring-[color:var(--accent)] focus:ring-offset-2 focus:ring-offset-[color:var(--bg)]",
           variant === "primary" &&
-            "bg-cyan-400 text-slate-950 hover:bg-cyan-300",
+            "bg-[color:var(--accent)] text-[color:var(--accent-fg)] hover:brightness-95",
           variant === "outline" &&
-            "border border-slate-700 text-slate-200 hover:bg-slate-900",
+            "border border-[color:var(--border)] text-[color:var(--fg)] hover:bg-[color:var(--card-2)]",
           variant === "ghost" &&
-            "text-slate-300 hover:bg-slate-900",
+            "text-[color:var(--fg)] hover:bg-[color:var(--card-2)]",
           disabled &&
             "cursor-not-allowed opacity-50 hover:bg-inherit",
           className

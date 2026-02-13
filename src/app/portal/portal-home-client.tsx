@@ -12,51 +12,16 @@ type HealthState =
   | { kind: "error"; message: string };
 
 const quickStart = [
-  {
-    title: "Run Diagnostics",
-    desc: "Verify backend connectivity and env vars.",
-    href: "/portal/diagnostics",
-    variant: "outline" as const,
-  },
-  {
-    title: "Start Onboarding",
-    desc: "Kick off the Mozart wizard to collect requirements.",
-    href: "/portal/onboarding",
-    variant: "primary" as const,
-  },
-  {
-    title: "Connect Data",
-    desc: "Attach your first connector and discover schemas.",
-    href: "/portal/onboarding/mozart/connect-data",
-    variant: "outline" as const,
-  },
-  {
-    title: "View Recommendations",
-    desc: "See the deterministic Top-3 stack options.",
-    href: "/portal/onboarding/mozart/recommendations",
-    variant: "outline" as const,
-  },
+  { title: "Run Diagnostics", desc: "Verify backend connectivity and env vars.", href: "/portal/diagnostics", variant: "outline" as const },
+  { title: "Start Onboarding", desc: "Kick off the Mozart wizard to collect requirements.", href: "/portal/onboarding", variant: "primary" as const },
+  { title: "Connect Data", desc: "Attach your first connector and discover schemas.", href: "/portal/onboarding/mozart/connect-data", variant: "outline" as const },
+  { title: "View Recommendations", desc: "See the deterministic Top-3 stack options.", href: "/portal/onboarding/mozart/recommendations", variant: "outline" as const },
 ];
 
 const quickActions = [
-  {
-    title: "Start onboarding",
-    desc: "Guided BRD → plan → deploy flow.",
-    href: "/portal/onboarding",
-    variant: "primary" as const,
-  },
-  {
-    title: "View runs",
-    desc: "Inspect deploy plans and timelines.",
-    href: "/portal/runs",
-    variant: "outline" as const,
-  },
-  {
-    title: "Open diagnostics",
-    desc: "Health, env, and connectivity checks.",
-    href: "/portal/diagnostics",
-    variant: "outline" as const,
-  },
+  { title: "Start onboarding", desc: "Guided BRD → plan → deploy flow.", href: "/portal/onboarding", variant: "primary" as const },
+  { title: "View runs", desc: "Inspect deploy plans and timelines.", href: "/portal/runs", variant: "outline" as const },
+  { title: "Open diagnostics", desc: "Health, env, and connectivity checks.", href: "/portal/diagnostics", variant: "outline" as const },
 ];
 
 const learnLinks = [
@@ -89,12 +54,29 @@ export default function PortalHomeClient() {
 
   return (
     <div className="space-y-6">
-      {/* Top section */}
+      <div className="flex flex-col gap-3">
+        <div className="text-3xl font-semibold text-[color:var(--fg)]">Zordrax Analytica Console</div>
+        <div className="text-sm text-[color:var(--muted)]">
+          Launch, govern, and monitor your BRD-driven data stack with the Mozart wizard.
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/portal/onboarding">
+            <Button variant="primary">Start a Project</Button>
+          </Link>
+          <Link href="/portal/runs">
+            <Button variant="outline">View Runs</Button>
+          </Link>
+          <Link href="/portal/diagnostics">
+            <Button variant="ghost">Diagnostics</Button>
+          </Link>
+        </div>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <Card className="p-5 border border-slate-800 bg-slate-900/70">
+        <Card className="p-5">
           <div className="space-y-3">
-            <div className="text-lg font-semibold text-white">Welcome back</div>
-            <p className="text-sm text-slate-300">
+            <div className="text-lg font-semibold text-[color:var(--fg)]">Welcome back</div>
+            <p className="text-sm text-[color:var(--muted)]">
               Move from BRD to deploy-ready plans in minutes. The Mozart wizard keeps your requirement_set_id
               consistent across steps.
             </p>
@@ -109,11 +91,11 @@ export default function PortalHomeClient() {
           </div>
         </Card>
 
-        <Card className="p-4 border border-slate-800 bg-slate-900/70 space-y-3">
+        <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-sm font-semibold text-white">System status</div>
-              <div className="text-xs text-slate-400">Onboarding agent health</div>
+              <div className="text-sm font-semibold text-[color:var(--fg)]">System status</div>
+              <div className="text-xs text-[color:var(--muted)]">Onboarding agent health</div>
             </div>
             <Button variant="outline" onClick={check} disabled={checking}>
               {checking ? "Checking..." : "Recheck"}
@@ -123,15 +105,14 @@ export default function PortalHomeClient() {
         </Card>
       </div>
 
-      {/* Quick start checklist */}
-      <Card className="p-4 border border-slate-800 bg-slate-900/70 space-y-3">
-        <div className="text-sm font-semibold text-white">Quick start</div>
-        <div className="divide-y divide-slate-800">
+      <Card className="p-4 space-y-3">
+        <div className="text-sm font-semibold text-[color:var(--fg)]">Quick start</div>
+        <div className="divide-y divide-[color:var(--border)]">
           {quickStart.map((item) => (
             <div key={item.title} className="py-3 flex items-center justify-between gap-4">
               <div>
-                <div className="text-sm text-slate-100">{item.title}</div>
-                <div className="text-xs text-slate-400">{item.desc}</div>
+                <div className="text-sm text-[color:var(--fg)]">{item.title}</div>
+                <div className="text-xs text-[color:var(--muted)]">{item.desc}</div>
               </div>
               <Link href={item.href}>
                 <Button variant={item.variant}>{item.variant === "primary" ? "Start" : "Open"}</Button>
@@ -141,12 +122,11 @@ export default function PortalHomeClient() {
         </div>
       </Card>
 
-      {/* Quick actions */}
       <div className="grid gap-4 md:grid-cols-3">
         {quickActions.map((item) => (
-          <Card key={item.title} className="p-4 border border-slate-800 bg-slate-900/70 space-y-2">
-            <div className="text-sm font-semibold text-white">{item.title}</div>
-            <div className="text-xs text-slate-400">{item.desc}</div>
+          <Card key={item.title} className="p-4 space-y-2">
+            <div className="text-sm font-semibold text-[color:var(--fg)]">{item.title}</div>
+            <div className="text-xs text-[color:var(--muted)]">{item.desc}</div>
             <Link href={item.href}>
               <Button variant={item.variant} className="mt-2 w-full">
                 {item.title}
@@ -156,28 +136,26 @@ export default function PortalHomeClient() {
         ))}
       </div>
 
-      {/* Learn / docs */}
-      <Card className="p-4 border border-slate-800 bg-slate-900/70 space-y-2">
-        <div className="text-sm font-semibold text-white">Learn & Docs</div>
+      <Card className="p-4 space-y-2">
+        <div className="text-sm font-semibold text-[color:var(--fg)]">Learn & Docs</div>
         <div className="grid gap-2 md:grid-cols-3">
           {learnLinks.map((l) => (
             <Link
               key={l.title}
               href={l.href}
-              className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-sm text-slate-200 hover:border-cyan-500 hover:text-cyan-200 transition"
+              className="flex items-center justify-between rounded-lg border border-[color:var(--border)] bg-[color:var(--card-2)] px-3 py-2 text-sm text-[color:var(--fg)] hover:border-[color:var(--accent)] hover:text-[color:var(--accent)] transition"
             >
               <span>{l.title}</span>
-              <span className="text-xs text-slate-500">↗</span>
+              <span className="text-xs text-[color:var(--muted)]">↗</span>
             </Link>
           ))}
         </div>
       </Card>
 
-      {/* Runs empty state */}
-      <Card className="p-4 border border-slate-800 bg-slate-900/70 space-y-2">
-        <div className="text-sm font-semibold text-white">Deployments</div>
-        <div className="text-sm text-slate-300">No deployments yet.</div>
-        <div className="text-xs text-slate-500">
+      <Card className="p-4 space-y-2">
+        <div className="text-sm font-semibold text-[color:var(--fg)]">Deployments</div>
+        <div className="text-sm text-[color:var(--muted)]">No deployments yet.</div>
+        <div className="text-xs text-[color:var(--muted)]">
           Start onboarding to generate a deploy plan, then approve to run Terraform.
         </div>
         <Link href="/portal/onboarding">
@@ -192,14 +170,14 @@ export default function PortalHomeClient() {
 
 function Status({ state }: { state: HealthState }) {
   if (state.kind === "ok") {
-    return <div className="text-sm text-emerald-300">Agent reachable</div>;
+    return <div className="text-sm text-[color:var(--success)]">Agent reachable</div>;
   }
   if (state.kind === "error") {
     return (
-      <div className="text-sm text-red-300">
+      <div className="text-sm text-[color:var(--danger)]">
         Agent unreachable{state.message ? `: ${state.message}` : ""}
       </div>
     );
   }
-  return <div className="text-sm text-slate-400">Checking...</div>;
+  return <div className="text-sm text-[color:var(--muted)]">Checking...</div>;
 }
