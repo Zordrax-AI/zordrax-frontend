@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { listConnectors, type Connector } from "@/lib/api";
 
-type StatusFilter = "all" | "connected" | "error" | "unknown";
+type StatusFilter = "all" | "connected" | "failed" | "unknown";
 
 export default function ConnectorsPage() {
   const [connectors, setConnectors] = useState<Connector[]>([]);
@@ -39,7 +39,7 @@ export default function ConnectorsPage() {
       const matchesStatus = statusFilter === "all" || status === statusFilter;
       const matchesSearch =
         term === "" ||
-        c.name.toLowerCase().includes(term) ||
+        (c.name || "").toLowerCase().includes(term) ||
         (c.type || "").toLowerCase().includes(term) ||
         (c.id || "").toLowerCase().includes(term);
       return matchesStatus && matchesSearch;
@@ -51,7 +51,9 @@ export default function ConnectorsPage() {
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Connectors</h1>
-          <p className="text-sm text-[color:var(--muted)]">Manage and monitor data sources.</p>
+          <p className="text-sm text-[color:var(--muted)]">
+            Manage connections, discover tables, and maintain selections.
+          </p>
         </div>
         <Link href="/portal/connectors/add">
           <Button variant="primary">Add Connector</Button>
@@ -69,7 +71,7 @@ export default function ConnectorsPage() {
             >
               <option value="all">All statuses</option>
               <option value="connected">Connected</option>
-              <option value="error">Error</option>
+              <option value="failed">Failed</option>
               <option value="unknown">Unknown</option>
             </select>
             <input
@@ -87,9 +89,20 @@ export default function ConnectorsPage() {
           </div>
         )}
 
-        {!error && filtered.length === 0 && (
-          <div className="rounded-md border border-dashed border-[color:var(--border)] bg-[color:var(--card-2)] px-4 py-6 text-sm text-[color:var(--muted)]">
-            No connectors yet.
+        {loading && (
+          <div className="rounded-md border border-[color:var(--border)] bg-[color:var(--card-2)] px-4 py-4 text-sm text-[color:var(--muted)]">
+            Loading connectors…
+          </div>
+        )}
+
+        {!loading && filtered.length === 0 && (
+          <div className="rounded-md border border-dashed border-[color:var(--border)] bg-[color:var(--card-2)] px-4 py-6 space-y-3 text-sm text-[color:var(--muted)]">
+            <div>No connectors yet.</div>
+            <div className="flex gap-3">
+              <Link href="/portal/connectors/add">
+                <Button variant="primary">Add Connector</Button>
+              </Link>
+            </div>
           </div>
         )}
 
@@ -112,7 +125,7 @@ export default function ConnectorsPage() {
                       <div className="font-medium text-[color:var(--fg)]">{c.name}</div>
                       <div className="text-xs text-[color:var(--muted)]">{c.id}</div>
                     </td>
-                    <td className="py-2 text-[color:var(--muted)]">{c.type || "—"}</td>
+                    <td className="py-2 text-[color:var(--muted)]">{c.type || "--"}</td>
                     <td className="py-2">
                       <StatusBadge status={c.status} />
                     </td>
@@ -138,16 +151,16 @@ export default function ConnectorsPage() {
 function normalizeStatus(status: Connector["status"]): StatusFilter {
   const s = String(status || "").toLowerCase();
   if (s.includes("ok") || s.includes("ready") || s.includes("connected")) return "connected";
-  if (s.includes("err") || s.includes("fail")) return "error";
+  if (s.includes("err") || s.includes("fail")) return "failed";
   return "unknown";
 }
 
 function StatusBadge({ status }: { status: Connector["status"] }) {
   const norm = normalizeStatus(status);
   const tone =
-    norm === "connected" ? "success" : norm === "error" ? "danger" : "default";
+    norm === "connected" ? "success" : norm === "failed" ? "danger" : "default";
   const label =
-    norm === "connected" ? "Connected" : norm === "error" ? "Error" : "Unknown";
+    norm === "connected" ? "Connected" : norm === "failed" ? "Failed" : "Unknown";
   const base = "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium border";
   const toneClass =
     tone === "success"
