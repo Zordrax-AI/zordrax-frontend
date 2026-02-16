@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useTheme } from "@/components/theme/theme-provider";
+import ThemeToggle from "@/components/theme/ThemeToggle";
 
 const navItems = [
   { label: "Home", href: "/" },
@@ -11,8 +11,6 @@ const navItems = [
 ];
 
 export default function Navbar() {
-  const { theme, toggleTheme } = useTheme();
-
   return (
     <header className="border-b border-[color:var(--border)] bg-[color:var(--card)]">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
@@ -31,12 +29,7 @@ export default function Navbar() {
             </Link>
           ))}
 
-          <button
-            onClick={toggleTheme}
-            className="rounded-md border border-[color:var(--border)] px-3 py-1 text-xs text-[color:var(--fg)] hover:bg-[color:var(--card-2)]"
-          >
-            {theme === "dark" ? "Light" : "Dark"}
-          </button>
+          <ThemeToggle />
         </div>
       </nav>
     </header>
