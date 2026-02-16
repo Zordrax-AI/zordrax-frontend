@@ -9,7 +9,7 @@ export default function PortalHomePage() {
             <p className="text-sm uppercase tracking-wide text-[color:var(--muted)]">Portal</p>
             <h1 className="text-3xl font-semibold text-[color:var(--fg)]">Zordrax-Analytica Console</h1>
             <p className="text-sm text-[color:var(--muted)]">
-              AI-augmented onboarding -> deterministic plans -> Terraform deploys.
+              {"AI-augmented onboarding -> deterministic plans -> Terraform deploys."}
             </p>
             <div className="flex flex-wrap gap-3">
               <a
