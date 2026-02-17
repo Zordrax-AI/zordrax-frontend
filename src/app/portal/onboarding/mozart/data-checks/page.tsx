@@ -57,9 +57,13 @@ function ChecksInner() {
         setSummary(res as ProfilingSummary);
       } catch (e: any) {
         if (cancelled) return;
-        // Fall back to a stub summary derived from selections
         setSummary(buildStubSummary(selectedTables));
-        setError(e?.message || "Profiling not available yet. Using stub values.");
+        const msg = e?.message || "";
+        if (!msg.includes("404")) {
+          setError(msg || "Profiling not available yet. Using stub values.");
+        } else {
+          setError("No profiling yet. Using stub values.");
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -82,11 +86,15 @@ function ChecksInner() {
     setSaving(true);
     setError(null);
     setMessage(null);
-    const payload = summary || buildStubSummary(selectedTables);
+    const payload = {
+      ...(summary || buildStubSummary(selectedTables)),
+      selected_tables: selectedTables,
+    };
     try {
       const res = await client.postProfiling(requirementSetId, payload);
       setSummary(res as ProfilingSummary);
       setMessage("Profiling saved");
+      setError(null);
     } catch (e: any) {
       setError(e?.message || "Failed to save profiling");
     } finally {

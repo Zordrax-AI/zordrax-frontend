@@ -4,14 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import {
-  deployPlan,
-  deployApprove,
-  refreshRun,
-  submitRequirementSet,
-  approveRequirementSet,
-} from "@/lib/api";
-import { getRequirementSetId } from "@/lib/wizard";
+import {
+  deployPlan,
+  deployApprove,
+  refreshRun,
+  submitRequirementSet,
+  approveRequirementSet,
+  brdUpsertGuardrails,
+  brdReadRequirementSet,
+  getConstraints,
+} from "@/lib/api";
+import { getRequirementSetId } from "@/lib/wizard";
 
 async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -40,18 +43,41 @@ export default function DeployTimelineClient() {
   const [status, setStatus] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>("");
-  const [last, setLast] = useState<any>(null);
-  const [needsApproval, setNeedsApproval] = useState(false);
-  const pollRef = useRef<NodeJS.Timeout | null>(null);
-
-  const canPlan = useMemo(() => !!requirementSetId && !busy, [requirementSetId, busy]);
-  const canApprove = useMemo(() => !!runId && !busy, [runId, busy]);
-
-  async function doPlan() {
-    if (!requirementSetId) return;
-    setBusy(true);
-    setError("");
-    setNeedsApproval(false);
+  const [last, setLast] = useState<any>(null);
+  const [needsApproval, setNeedsApproval] = useState(false);
+  const [budget, setBudget] = useState<number>(3000);
+  const [status, setStatus] = useState<string>("");
+  const [hasBudget, setHasBudget] = useState<boolean>(true);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  const canPlan = useMemo(() => !!requirementSetId && !busy, [requirementSetId, busy]);
+  const canApprove = useMemo(() => !!runId && !busy, [runId, busy]);
+
+  useEffect(() => {
+    if (!requirementSetId) return;
+    (async () => {
+      try {
+        const rs = await brdReadRequirementSet(requirementSetId);
+        if (rs?.status) setStatus(rs.status);
+        const constraints = await getConstraints(requirementSetId).catch(() => ({}));
+        const g = (constraints as any)?.guardrails || {};
+        if (g.budget_eur_month) {
+          setBudget(Number(g.budget_eur_month));
+          setHasBudget(true);
+        } else {
+          setHasBudget(false);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [requirementSetId, setStatus, setHasBudget, setBudget]);
+
+  async function doPlan() {
+    if (!requirementSetId) return;
+    setBusy(true);
+    setError("");
+    setNeedsApproval(false);
     try {
       const p = await deployPlan({
         requirement_set_id: requirementSetId,
@@ -59,25 +85,25 @@ export default function DeployTimelineClient() {
         region: "westeurope",
         environment: "dev",
         enable_apim: false,
-        backend_app_hostname: "example.azurewebsites.net",
-      });
-
-      setRunId((p as any).run_id || "");
-      setStatus((p as any).status || "awaiting_approval");
-      setLast(p);
-      if ((p as any).run_id) {
-        const qs = new URLSearchParams({
-          run_id: (p as any).run_id,
-          requirement_set_id: requirementSetId,
+          backend_app_hostname: "example.azurewebsites.net",
+        });
+
+        setRunId((p as any).run_id || "");
+        setStatus((p as any).status || "awaiting_approval");
+        setLast(p);
+        if ((p as any).run_id) {
+          const qs = new URLSearchParams({
+            run_id: (p as any).run_id,
+            requirement_set_id: requirementSetId,
         });
         router.push(`/portal/onboarding/mozart/run?${qs.toString()}`);
       }
     } catch (e: any) {
-      const msg = e?.message || String(e);
-      setError(msg);
-      const lower = msg.toLowerCase();
-      if (msg.includes("409") || lower.includes("requirement_set_not_approved")) {
-        try {
+      const msg = e?.message || String(e);
+      setError(msg);
+      const lower = msg.toLowerCase();
+      if (msg.includes("409") || lower.includes("requirement_set_not_approved")) {
+        try {
           await submitRequirementSet(requirementSetId);
           await approveRequirementSet(requirementSetId);
           setNeedsApproval(false);
@@ -136,11 +162,30 @@ export default function DeployTimelineClient() {
       });
       router.push(`/portal/onboarding/mozart/run?${qs.toString()}`);
     } catch (e: any) {
-      setError(e?.message || String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
+      setError(e?.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function ensureBudget() {
+    if (!requirementSetId) return;
+    setBusy(true);
+    setError("");
+    try {
+      await brdUpsertGuardrails(requirementSetId, {
+        budget_eur_month: budget,
+        pii_present: false,
+        gdpr_required: false,
+        private_networking_required: false,
+      });
+      setHasBudget(true);
+    } catch (e: any) {
+      setError(e?.message || "Failed to save budget");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function doRefresh() {
     if (!runId) return;
@@ -195,14 +240,32 @@ export default function DeployTimelineClient() {
       ) : null}
 
       <Card className="p-4 space-y-3 bg-white border border-slate-200">
-        <div className="text-sm text-slate-800">
-          Requirement Set: <span className="text-slate-600">{requirementSetId || "--"}</span>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={doPlan} disabled={!canPlan}>
-            {busy ? "Working..." : "Create Plan"}
-          </Button>
+        <div className="text-sm text-slate-800">
+          Requirement Set: <span className="text-slate-600">{requirementSetId || "--"}</span>
+        </div>
+        <div className="text-sm text-slate-700">Status: {status || "--"}</div>
+
+        {!hasBudget && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <div className="text-sm text-amber-800 font-semibold">Budget required</div>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                className="border border-slate-300 rounded px-2 py-1 text-sm"
+                value={budget}
+                onChange={(e) => setBudget(Number(e.target.value))}
+              />
+              <Button variant="outline" onClick={ensureBudget} disabled={busy}>
+                Save budget
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={doPlan} disabled={!canPlan}>
+            {busy ? "Working..." : "Create Plan"}
+          </Button>
           {needsApproval ? (
             <Button variant="outline" onClick={doSubmitApprove} disabled={busy}>
               Submit + Approve requirement set

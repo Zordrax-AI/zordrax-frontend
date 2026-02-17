@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -19,6 +19,33 @@ export default function RunPage() {
   const { data, error } = useRunStatus(runId || undefined, 2500);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [events, setEvents] = useState<any[]>([]);
+  const lastIdRef = useRef<string | number | undefined>(undefined);
+
+  // events polling
+  useEffect(() => {
+    if (!runId) return;
+    let stop = false;
+    async function loadEvents() {
+      try {
+        const res = await client.getRunEvents(runId, lastIdRef.current);
+        if (stop || !res) return;
+        const list = Array.isArray(res) ? res : (res.events as any[]) || [];
+        if (list.length) {
+          lastIdRef.current = list[list.length - 1]?.id ?? lastIdRef.current;
+          setEvents((prev) => [...prev, ...list]);
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    loadEvents();
+    const t = setInterval(loadEvents, 2000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [runId]);
 
   if (!runId) {
     return (
@@ -58,6 +85,32 @@ export default function RunPage() {
     }
   }
 
+  async function approve() {
+    if (!runId) return;
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      await client.approveRun(runId);
+    } catch (e: any) {
+      setRefreshError(e?.message || "Approve failed");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  async function apply() {
+    if (!runId) return;
+    setRefreshing(true);
+    setRefreshError(null);
+    try {
+      await client.applyRun(runId);
+    } catch (e: any) {
+      setRefreshError(e?.message || "Apply failed");
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div className="flex items-center justify-between">
@@ -86,6 +139,12 @@ export default function RunPage() {
           <Button variant="outline" onClick={refreshOnce} disabled={refreshing}>
             {refreshing ? "Refreshing..." : "Refresh"}
           </Button>
+          <Button variant="outline" onClick={approve} disabled={refreshing}>
+            Approve
+          </Button>
+          <Button variant="outline" onClick={apply} disabled={refreshing}>
+            Apply
+          </Button>
         </div>
       </div>
 
@@ -111,7 +170,7 @@ export default function RunPage() {
         <div className="space-y-2">
           {events.length === 0 && <div className="text-sm text-slate-500">No events yet.</div>}
           {events.map((e, idx) => (
-            <div key={`${e.created_at || e.ts || idx}`} className="rounded border border-slate-200 px-3 py-2">
+            <div key={`${e.id || e.created_at || e.ts || idx}`} className="rounded border border-slate-200 px-3 py-2">
               <div className="flex items-center gap-2 text-sm text-slate-900">
                 <span className="font-mono text-xs text-slate-600">
                   {(e.created_at || e.ts || "").toString().replace("T", " ").replace("Z", "") || "pending"}

@@ -18,12 +18,12 @@ export function useRunStatus(runId?: string | null, intervalMs = 2000) {
 
   useEffect(() => {
     if (!runId) return;
-    const id = runId;
+    const id = String(runId);
     let stop = false;
 
     async function tick() {
       try {
-        const res = await client.getRunStatus(id);
+        const res = await client.refreshRun ? client.refreshRun(id) : client.getRunStatus(id);
         if (stop) return;
         setData(res);
         const st = res.current_status || res.status;

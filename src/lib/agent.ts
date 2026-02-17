@@ -2,6 +2,15 @@
 export const AGENT_PROXY_BASE = "/api/agent"; // ALWAYS same-origin via Next route
 export const BASE = process.env.NEXT_PUBLIC_AGENT_BASE_URL || "";
 
+function safeJson(text: string) {
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!BASE) throw new Error("NEXT_PUBLIC_AGENT_BASE_URL is not set");
   const res = await fetch(`${BASE}${path}`, {
@@ -13,12 +22,7 @@ async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T>
     },
   });
   const text = await res.text();
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    /* ignore */
-  }
+  const json = safeJson(text);
   if (!res.ok) {
     const message = (json && (json.detail || json.message)) || text || `Request failed ${res.status}`;
     throw new Error(message);
@@ -57,17 +61,33 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
   }
 
   const text = await res.text();
+  const json = safeJson(text);
 
   if (!res.ok) {
-    try {
-      const j = JSON.parse(text);
-      throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${j?.detail ?? text}`);
-    } catch {
-      throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${text}`);
-    }
+    const detail = (json && (json.detail || json.message)) || text;
+    throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${detail}`);
   }
 
-  return text ? (JSON.parse(text) as T) : ({} as T);
+  return json ?? (text as unknown as T) ?? ({} as T);
+}
+
+export async function agentGet<T>(path: string, params?: Record<string, string | number | undefined>) {
+  const qs = params
+    ? "?" +
+      Object.entries(params)
+        .filter(([, v]) => v !== undefined && v !== null)
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .join("&")
+    : "";
+  return fetchJSON<T>(`${path}${qs}`, { method: "GET" });
+}
+
+export async function agentPost<T>(path: string, body?: any) {
+  return fetchJSON<T>(path, { method: "POST", body: body !== undefined ? JSON.stringify(body) : undefined });
+}
+
+export async function agentPut<T>(path: string, body?: any) {
+  return fetchJSON<T>(path, { method: "PUT", body: body !== undefined ? JSON.stringify(body) : undefined });
 }
 
 export const brdApi = {
@@ -144,10 +164,27 @@ export const client = {
   createRequirementSet: (payload?: any) => fetchJSON<any>("/api/requirement-sets", { method: "POST", body: JSON.stringify(payload || {}) }),
   getRequirementSet: (id: string) => fetchJSON<any>(`/api/requirement-sets/${id}`, { method: "GET" }),
   postProfiling: (id: string, payload: any) =>
-    fetchJSON<any>(`/api/requirement-sets/${id}/profiling`, { method: "POST", body: JSON.stringify(payload) }),
-  getProfiling: (id: string) => fetchJSON<any>(`/api/requirement-sets/${id}/profiling`, { method: "GET" }),
+    fetchJSON<any>(`/api/profiling/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  getProfiling: (id: string) => fetchJSON<any>(`/api/profiling/${id}`, { method: "GET" }),
   planDeploy: (payload: any) => fetchJSON<any>("/api/deploy/plan", { method: "POST", body: JSON.stringify(payload) }),
-  getRecommendations: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/recommendations`, { method: "GET" }),
+  getRecommendations: (requirementSetId: string) =>
+    fetchJSON<any>(`/api/recommendations/top3?requirement_set_id=${encodeURIComponent(requirementSetId)}`, {
+      method: "GET",
+    }),
+  selectRecommendation: (requirementSetId: string, optionId: string) =>
+    fetchJSON<any>("/api/recommendations/select", {
+      method: "POST",
+      body: JSON.stringify({ requirement_set_id: requirementSetId, option_id: optionId }),
+    }),
   approveRun: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/approve`, { method: "POST" }),
+  applyRun: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/apply`, { method: "POST" }),
+  refreshRun: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/refresh`, { method: "GET" }),
   getRunStatus: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/status`, { method: "GET" }),
+  getRunOutputs: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/outputs`, { method: "GET" }),
+  getRunEvents: (runId: string, after_id?: string | number) =>
+    fetchJSON<any>(`/runs/${runId}/events${after_id ? `?after_id=${after_id}` : ""}`, { method: "GET" }),
+  listRuns: (limit = 50) => fetchJSON<any>(`/runs/?limit=${limit}`, { method: "GET" }),
+  getRequirementSetInputs: (id: string) =>
+    fetchJSON<any>(`/api/brd/requirement-sets/${id}/inputs`, { method: "GET" }),
+  getRequirementSetServer: (id: string) => fetchJSON<any>(`/api/brd/requirement-sets/${id}`, { method: "GET" }),
 };

@@ -4,14 +4,8 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import {
-  brdReadRequirementSet,
-  getConnector,
-  getConstraints,
-  getTop3Recommendations,
-  selectRecommendation,
-  Top3Option,
-} from "@/lib/api";
+import { brdReadRequirementSet, getConnector, getConstraints, Top3Option } from "@/lib/api";
+import { client } from "@/lib/agent";
 import { getRequirementSetId, wizardHref } from "@/lib/wizard";
 
 type State =
@@ -53,7 +47,7 @@ export default function RecommendationsClient() {
     (async () => {
       try {
         setState({ kind: "loading" });
-        const res = await getTop3Recommendations(requirementSetId);
+        const res = await client.getRecommendations(requirementSetId);
         if (cancelled) return;
         const options = Array.isArray(res) ? res : (res as any)?.options ?? [];
         const generated_at = (res as any)?.generated_at ?? "";
@@ -119,7 +113,7 @@ export default function RecommendationsClient() {
     if (!requirementSetId) return;
     try {
       setSelecting(optionId);
-      await selectRecommendation(requirementSetId, optionId);
+      await client.selectRecommendation(requirementSetId, optionId);
       router.push(wizardHref("deploy", requirementSetId));
     } catch (e: any) {
       setState({ kind: "error", message: e?.message ?? "Failed to select recommendation." });
