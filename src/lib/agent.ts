@@ -1,5 +1,30 @@
 // src/lib/agent.ts
 export const AGENT_PROXY_BASE = "/api/agent"; // ALWAYS same-origin via Next route
+export const BASE = process.env.NEXT_PUBLIC_AGENT_BASE_URL || "";
+
+async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (!BASE) throw new Error("NEXT_PUBLIC_AGENT_BASE_URL is not set");
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok) {
+    const message = (json && (json.detail || json.message)) || text || `Request failed ${res.status}`;
+    throw new Error(message);
+  }
+  return (json as T) ?? (text as unknown as T);
+}
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -112,4 +137,17 @@ export const deployApi = {
   approveRun: (runId: string) => request<any>("POST", `/api/agent/api/deploy/${runId}/approve`),
 
   refresh: (runId: string) => request<any>("GET", `/api/agent/api/deploy/${runId}/refresh`),
+};
+
+// Lightweight direct client (browser-safe, no secrets)
+export const client = {
+  createRequirementSet: (payload?: any) => fetchJSON<any>("/api/requirement-sets", { method: "POST", body: JSON.stringify(payload || {}) }),
+  getRequirementSet: (id: string) => fetchJSON<any>(`/api/requirement-sets/${id}`, { method: "GET" }),
+  postProfiling: (id: string, payload: any) =>
+    fetchJSON<any>(`/api/requirement-sets/${id}/profiling`, { method: "POST", body: JSON.stringify(payload) }),
+  getProfiling: (id: string) => fetchJSON<any>(`/api/requirement-sets/${id}/profiling`, { method: "GET" }),
+  planDeploy: (payload: any) => fetchJSON<any>("/api/deploy/plan", { method: "POST", body: JSON.stringify(payload) }),
+  getRecommendations: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/recommendations`, { method: "GET" }),
+  approveRun: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/approve`, { method: "POST" }),
+  getRunStatus: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/status`, { method: "GET" }),
 };

@@ -4,7 +4,8 @@ export type WizardStep =
   | "data-checks"
   | "metrics-intent"
   | "recommendations"
-  | "deploy";
+  | "deploy"
+  | "run";
 
 export function getRequirementSetId(
   searchParams: URLSearchParams | Record<string, string | string[] | undefined>

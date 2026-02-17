@@ -144,8 +144,7 @@ export default function RecommendationsClient() {
 
         <Card className="p-4 bg-white border border-slate-200 shadow-sm space-y-2">
           <div className="text-sm text-slate-700">
-            Requirement Set:{" "}
-            <span className="font-mono text-slate-900">{requirementSetId || "—"}</span>
+            Requirement Set: <span className="font-mono text-slate-900">{requirementSetId || "--"}</span>
           </div>
           <div className="text-xs text-slate-500">Inputs used</div>
           {summary ? (
@@ -163,7 +162,7 @@ export default function RecommendationsClient() {
                 )}
               </SummaryItem>
               <SummaryItem label="Selected tables">{summary.tablesCount || 0}</SummaryItem>
-              <SummaryItem label="Refresh">{summary.refreshFrequency || "—"}</SummaryItem>
+              <SummaryItem label="Refresh">{summary.refreshFrequency || "--"}</SummaryItem>
               <SummaryItem label="PII / GDPR">
                 {summary.pii ? "PII" : "No PII"} / {summary.gdpr ? "GDPR" : "No GDPR"}
               </SummaryItem>
@@ -177,17 +176,17 @@ export default function RecommendationsClient() {
                   summary.streaming ? `Streaming: ${summary.streaming}` : null,
                 ]
                   .filter(Boolean)
-                  .join(" • ") || "—"}
+                  .join(" / ") || "--"}
               </SummaryItem>
             </div>
           ) : (
-            <div className="text-sm text-slate-500">Loading inputs…</div>
+            <div className="text-sm text-slate-500">Loading inputs...</div>
           )}
         </Card>
 
         {state.kind === "loading" && (
           <Card className="p-4 bg-white border border-slate-200 shadow-sm text-slate-700">
-            Loading recommendations…
+            Loading recommendations...
           </Card>
         )}
 
@@ -210,21 +209,30 @@ export default function RecommendationsClient() {
               {state.options.map((opt, idx) => {
                 const key = (opt as any).id || (opt as any).key || String(idx);
                 const tf = (opt as any).terraform || {};
+                const rank = (opt as any).rank ?? idx + 1;
+                const summaryText =
+                  typeof (opt as any).summary === "string"
+                    ? (opt as any).summary
+                    : typeof (opt as any).description === "string"
+                    ? (opt as any).description
+                    : JSON.stringify((opt as any).summary ?? (opt as any).description ?? {}, null, 0);
+                const cost = (opt as any).estimated_monthly_cost_eur;
+                const riskFlags = Array.isArray((opt as any).risk_flags) ? (opt as any).risk_flags : [];
                 return (
                   <Card key={key} className="p-4 bg-white border border-slate-200 shadow-sm space-y-3">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                      <div className="text-slate-900 text-sm">
-                        <span className="text-slate-500">#{(opt as any).rank}</span>{" "}
-                        <span className="font-semibold text-slate-900">{opt.title}</span>
+                        <div className="text-slate-900 text-sm">
+                          <span className="text-slate-500">#{rank}</span>{" "}
+                          <span className="font-semibold text-slate-900">{opt.title ?? "Option"}</span>
+                        </div>
+                        <div className="text-slate-700 text-sm mt-1">{summaryText}</div>
                       </div>
-                        <div className="text-slate-700 text-sm mt-1">{(opt as any).summary}</div>
-                    </div>
 
                       <div className="text-right">
                         <div className="text-slate-500 text-sm">Est. monthly</div>
                         <div className="text-slate-900 font-semibold">
-                          €{(opt as any).estimated_monthly_cost_eur?.toLocaleString?.() ?? "—"}
+                          {typeof cost === "number" ? `EUR ${cost.toLocaleString()}` : "EUR --"}
                         </div>
                       </div>
                     </div>
@@ -232,15 +240,16 @@ export default function RecommendationsClient() {
                     <div className="text-xs text-slate-600">
                       Terraform:{" "}
                       <span className="text-slate-800">
-                        {tf.cloud}/{tf.warehouse}/{tf.etl}/{tf.governance}
+                        {tf.cloud || "cloud"}/{tf.warehouse || "warehouse"}/{tf.etl || "etl"}/
+                        {tf.governance || "governance"}
                         {tf.enable_bi ? `/bi:${tf.bi_tool || "yes"}` : ""}
                         {tf.enable_apim ? `/apim:yes` : ""}
                       </span>
                     </div>
 
-                    {(opt as any).risk_flags?.length > 0 && (
+                    {riskFlags.length > 0 && (
                       <div className="flex flex-wrap gap-2">
-                        {(opt as any).risk_flags.map((r: any) => (
+                        {riskFlags.map((r: any) => (
                           <span
                             key={r}
                             className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200"

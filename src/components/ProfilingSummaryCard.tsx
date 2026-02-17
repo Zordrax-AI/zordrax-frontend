@@ -13,18 +13,18 @@ export default function ProfilingSummaryCard({ summary }: Props) {
     <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
       <div className="text-sm font-semibold text-slate-900">Profiling Summary</div>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-        <Stat label="Tables" value={totals.tables ?? "—"} />
-        <Stat label="Rows est." value={totals.rows_estimate ? totals.rows_estimate.toLocaleString() : "—"} />
+        <Stat label="Tables" value={totals.tables ?? "--"} />
+        <Stat label="Rows est." value={totals.rows_estimate ? totals.rows_estimate.toLocaleString() : "--"} />
         <Stat
           label="Size est."
           value={
             totals.size_bytes_estimate
               ? `${Math.round(totals.size_bytes_estimate / 1024 / 1024)} MB`
-              : "—"
-          }
-        />
-        <Stat label="Refresh plan" value={summary.refresh_plan ?? "—"} />
-        <Stat label="Ingestion" value={summary.ingestion_recommendation ?? "—"} />
+              : "--"
+        }
+      />
+        <Stat label="Refresh plan" value={summary.refresh_plan ?? "--"} />
+        <Stat label="Ingestion" value={summary.ingestion_recommendation ?? "--"} />
         <Stat label="PII flagged" value={pii.flagged_tables ?? 0} />
       </div>
 
@@ -38,7 +38,7 @@ export default function ProfilingSummaryCard({ summary }: Props) {
                 {t.schema ? `${t.schema}.` : ""}
                 {t.name}
               </span>
-              <span className="text-slate-600">{t.row_estimate ? t.row_estimate.toLocaleString() : "—"} rows</span>
+              <span className="text-slate-600">{t.row_estimate ? t.row_estimate.toLocaleString() : "--"} rows</span>
             </div>
           ))}
         </div>

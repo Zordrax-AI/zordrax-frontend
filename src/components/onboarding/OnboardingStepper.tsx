@@ -9,13 +9,13 @@ type Step = {
 };
 
 const STEPS: Step[] = [
-  { label: "Connect Data", href: "/portal/onboarding/mozart/connect-data" },
+  { label: "Connect Data", href: "/portal/onboarding/mozart/connect" },
   { label: "Select Tables", href: "/portal/onboarding/mozart/tables" },
   { label: "Data Checks", href: "/portal/onboarding/mozart/data-checks" },
   { label: "Metrics Intent", href: "/portal/onboarding/mozart/metrics-intent" },
   { label: "Recommendations", href: "/portal/onboarding/mozart/recommendations" },
   { label: "Deploy", href: "/portal/onboarding/mozart/deploy" },
-  { label: "Run", href: "/portal/runs" },
+  { label: "Run", href: "/portal/onboarding/mozart/run" },
 ];
 
 function isActive(pathname: string, stepHref: string) {

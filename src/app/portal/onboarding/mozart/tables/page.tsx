@@ -18,7 +18,7 @@ const STUB_TABLES: TableItem[] = [
 
 export default function TablesPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-[color:var(--muted)]">Loading…</div>}>
+    <Suspense fallback={<div className="p-6 text-[color:var(--muted)]">Loading...</div>}>
       <TablesInner />
     </Suspense>
   );
@@ -118,7 +118,7 @@ function TablesInner() {
       <Card className="p-4 space-y-4">
         <div className="flex flex-wrap gap-3">
           <Button variant="primary" onClick={discoverTables} disabled={loading}>
-            {loading ? "Discovering…" : "Discover tables"}
+            {loading ? "Discovering..." : "Discover tables"}
           </Button>
           <Button variant="outline" onClick={selectAll} disabled={!tables.length}>
             Select all
@@ -141,7 +141,7 @@ function TablesInner() {
 
         {!tables.length && !loading && (
           <div className="rounded-md border border-dashed border-[color:var(--border)] bg-[color:var(--card-2)] px-4 py-6 text-sm text-[color:var(--muted)]">
-            No tables yet. Click “Discover tables” to load them.
+            No tables yet. Click Discover tables to load them.
           </div>
         )}
 
@@ -179,7 +179,13 @@ function TablesInner() {
       </Card>
 
       <div className="flex items-center justify-between">
-        <Link href="/portal/onboarding/connect">
+        <Link
+          href={
+            requirementSetId
+              ? `/portal/onboarding/mozart/connect?requirement_set_id=${encodeURIComponent(requirementSetId)}`
+              : "/portal/onboarding/mozart/connect"
+          }
+        >
           <Button variant="outline">Back</Button>
         </Link>
         <Link href={continueHref} aria-disabled={selected.size === 0}>
