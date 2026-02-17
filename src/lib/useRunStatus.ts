@@ -23,7 +23,7 @@ export function useRunStatus(runId?: string | null, intervalMs = 2000) {
 
     async function tick() {
       try {
-        const res = await client.refreshRun ? client.refreshRun(id) : client.getRunStatus(id);
+        const res = (await (client.refreshRun ? client.refreshRun(id) : client.getRunStatus(id))) as RunStatus;
         if (stop) return;
         setData(res);
         const st = res.current_status || res.status;

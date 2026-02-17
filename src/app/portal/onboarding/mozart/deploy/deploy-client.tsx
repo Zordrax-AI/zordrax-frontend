@@ -10,7 +10,7 @@ import {
   refreshRun,
   submitRequirementSet,
   approveRequirementSet,
-  brdUpsertGuardrails,
+  upsertGuardrails,
   brdReadRequirementSet,
   getConstraints,
 } from "@/lib/api";
@@ -40,13 +40,12 @@ export default function DeployTimelineClient() {
   const requirementSetId = getRequirementSetId(sp) ?? "";
 
   const [runId, setRunId] = useState<string>("");
-  const [status, setStatus] = useState<string>("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>("");
+  const [status, setStatus] = useState<string>("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>("");
   const [last, setLast] = useState<any>(null);
   const [needsApproval, setNeedsApproval] = useState(false);
   const [budget, setBudget] = useState<number>(3000);
-  const [status, setStatus] = useState<string>("");
   const [hasBudget, setHasBudget] = useState<boolean>(true);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -173,7 +172,7 @@ export default function DeployTimelineClient() {
     setBusy(true);
     setError("");
     try {
-      await brdUpsertGuardrails(requirementSetId, {
+      await upsertGuardrails(requirementSetId, {
         budget_eur_month: budget,
         pii_present: false,
         gdpr_required: false,

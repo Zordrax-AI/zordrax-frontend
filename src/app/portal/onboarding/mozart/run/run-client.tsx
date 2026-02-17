@@ -19,7 +19,7 @@ export default function RunPage() {
   const { data, error } = useRunStatus(runId || undefined, 2500);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
-  const [events, setEvents] = useState<any[]>([]);
+  const [eventLog, setEventLog] = useState<any[]>([]);
   const lastIdRef = useRef<string | number | undefined>(undefined);
 
   // events polling
@@ -33,7 +33,7 @@ export default function RunPage() {
         const list = Array.isArray(res) ? res : (res.events as any[]) || [];
         if (list.length) {
           lastIdRef.current = list[list.length - 1]?.id ?? lastIdRef.current;
-          setEvents((prev) => [...prev, ...list]);
+          setEventLog((prev) => [...prev, ...list]);
         }
       } catch {
         /* ignore */
@@ -70,7 +70,7 @@ export default function RunPage() {
   }
 
   const status = data?.current_status || data?.status || "unknown";
-  const events = data?.events || [];
+  const events = [...eventLog, ...(data?.events || [])];
 
   async function refreshOnce() {
     if (!runId) return;
