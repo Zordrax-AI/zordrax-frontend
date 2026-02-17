@@ -32,6 +32,7 @@ function ChecksInner() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || !tablesKey) return;
@@ -52,18 +53,19 @@ function ChecksInner() {
     setError(null);
     (async () => {
       try {
-        const res = await client.getProfiling(requirementSetId);
+        const res = await fetch(`/api/profiling/${requirementSetId}`, { cache: "no-store" });
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(`${res.status} ${text || res.statusText}`);
+        }
+        const json = text ? JSON.parse(text) : {};
         if (cancelled) return;
-        setSummary(res as ProfilingSummary);
+        setSummary(json as ProfilingSummary);
+        setError(null);
       } catch (e: any) {
         if (cancelled) return;
         setSummary(buildStubSummary(selectedTables));
-        const msg = e?.message || "";
-        if (!msg.includes("404")) {
-          setError(msg || "Profiling not available yet. Using stub values.");
-        } else {
-          setError("No profiling yet. Using stub values.");
-        }
+        setError(e?.message || "Failed to fetch profiling. Using stub values.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -91,8 +93,17 @@ function ChecksInner() {
       selected_tables: selectedTables,
     };
     try {
-      const res = await client.postProfiling(requirementSetId, payload);
-      setSummary(res as ProfilingSummary);
+      const res = await fetch(`/api/profiling/${requirementSetId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`${res.status} ${text || res.statusText}`);
+      }
+      const json = text ? JSON.parse(text) : payload;
+      setSummary(json as ProfilingSummary);
       setMessage("Profiling saved");
       setError(null);
     } catch (e: any) {
@@ -167,6 +178,17 @@ function ChecksInner() {
             Continue to KPIs
           </Button>
         </Link>
+      </div>
+
+      <div className="space-y-2">
+        <Button variant="outline" onClick={() => setShowDebug((v) => !v)}>
+          {showDebug ? "Hide debug" : "Show debug JSON"}
+        </Button>
+        {showDebug && (
+          <pre className="text-xs bg-slate-900 text-slate-100 p-3 rounded border border-slate-700 overflow-auto">
+            {JSON.stringify(summary || buildStubSummary(selectedTables), null, 2)}
+          </pre>
+        )}
       </div>
     </div>
   );

@@ -5,14 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { brdReadRequirementSet, getConnector, getConstraints, Top3Option } from "@/lib/api";
-import { client } from "@/lib/agent";
+import { client, BASE } from "@/lib/agent";
 import { getRequirementSetId, wizardHref } from "@/lib/wizard";
 
 type State =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "error"; message: string }
-  | { kind: "ready"; options: Top3Option[]; generated_at: string };
+  | { kind: "ready"; options: Top3Option[]; generated_at: string; raw?: any };
 
 type InputsSummary = {
   connectorName?: string;
@@ -36,6 +36,7 @@ export default function RecommendationsClient() {
   const [state, setState] = useState<State>({ kind: "idle" });
   const [selecting, setSelecting] = useState<string>("");
   const [summary, setSummary] = useState<InputsSummary | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     if (!requirementSetId) {
@@ -47,11 +48,17 @@ export default function RecommendationsClient() {
     (async () => {
       try {
         setState({ kind: "loading" });
-        const res = await client.getRecommendations(requirementSetId);
+        const url = `/api/za/api/recommendations/top3?requirement_set_id=${encodeURIComponent(requirementSetId)}`;
+        const res = await fetch(url, { cache: "no-store" });
+        const text = await res.text();
+        if (!res.ok) {
+          throw new Error(`${res.status} ${text || res.statusText}`);
+        }
+        const json = text ? JSON.parse(text) : {};
         if (cancelled) return;
-        const options = Array.isArray(res) ? res : (res as any)?.options ?? [];
-        const generated_at = (res as any)?.generated_at ?? "";
-        setState({ kind: "ready", options, generated_at });
+        const options = Array.isArray(json) ? json : (json as any)?.options ?? [];
+        const generated_at = (json as any)?.generated_at ?? "";
+        setState({ kind: "ready", options, generated_at, raw: json });
       } catch (e: any) {
         if (cancelled) return;
         setState({ kind: "error", message: e?.message ?? "Failed to load recommendations." });
@@ -263,6 +270,14 @@ export default function RecommendationsClient() {
                 );
               })}
             </div>
+            <Button variant="outline" onClick={() => setShowDebug((v) => !v)}>
+              {showDebug ? "Hide debug" : "Show debug"}
+            </Button>
+            {showDebug && (
+              <pre className="text-xs bg-slate-900 text-slate-100 p-3 rounded border border-slate-700 overflow-auto">
+                {JSON.stringify(state.raw, null, 2)}
+              </pre>
+            )}
           </>
         )}
       </div>
