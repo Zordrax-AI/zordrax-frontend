@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { discoverConnector } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
 type TableItem = { id: string; schema?: string; table: string };
@@ -68,14 +69,7 @@ function TablesInner() {
         setMessage("Loaded stub tables. No connector_id provided.");
         return;
       }
-      const res = await fetch(`/api/connectors/${encodeURIComponent(connectorId)}/discover`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!res.ok) {
-        throw new Error(`Discover failed (${res.status})`);
-      }
-      const data = await res.json();
+      const data = await discoverConnector(connectorId);
       const parsed = extractTables(data);
       setTables(parsed);
       setMessage(`Discovered ${parsed.length} table${parsed.length === 1 ? "" : "s"}.`);
