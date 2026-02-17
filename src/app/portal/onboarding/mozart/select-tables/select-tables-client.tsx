@@ -92,10 +92,7 @@ export default function SelectTablesClient() {
     if (!requirementSetId) return;
     const selectedTables = Object.entries(selected)
       .filter(([_, v]) => v)
-      .map(([k]) => {
-        const [schema, table] = k.split(".");
-        return { schema, table };
-      });
+      .map(([k]) => k);
     try {
       await updateConstraints(requirementSetId, { selected_tables: selectedTables });
       router.push(

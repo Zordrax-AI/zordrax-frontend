@@ -44,7 +44,16 @@ export default function ApprovalPage() {
     setLoading(true);
     setMessage(null);
     try {
-      const res = await deployPlan({ requirement_set_id: reqId, connector_id: connectorId || undefined });
+      const res = await deployPlan({
+        requirement_set_id: reqId,
+        connector_id: connectorId || undefined,
+        recommendation_id: undefined,
+        name_prefix: "zordrax",
+        region: "westeurope",
+        environment: "dev",
+        enable_apim: false,
+        backend_app_hostname: "example.azurewebsites.net",
+      });
       localStorage.setItem("za_run_id", res.run_id);
       setMessage("Plan created");
       router.push(`/onboarding/run/${encodeURIComponent(res.run_id)}`);
@@ -72,8 +81,8 @@ export default function ApprovalPage() {
         </div>
         {summary ? (
           <div className="text-sm text-[color:var(--muted)]">
-            Tables: {summary.totals.tables} • Size:{" "}
-            {summary.totals.size_bytes_estimate ? Math.round(summary.totals.size_bytes_estimate / 1024 / 1024) + " MB" : "n/a"} •{" "}
+            Tables: {summary.totals.tables} - Size:{" "}
+            {summary.totals.size_bytes_estimate ? Math.round(summary.totals.size_bytes_estimate / 1024 / 1024) + " MB" : "n/a"} -{" "}
             Ingestion: {summary.ingestion_recommendation || "n/a"}
           </div>
         ) : (

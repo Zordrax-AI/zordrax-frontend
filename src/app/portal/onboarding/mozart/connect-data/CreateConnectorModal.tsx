@@ -68,7 +68,7 @@ export function CreateConnectorModal({
         id = draft.id;
         setDraftId(draft.id);
       }
-      await testConnector(id!, config);
+      await testConnector(id!);
       setTestedOk(true);
       setMessage("Connection looks good.");
     } catch (e: any) {
@@ -94,7 +94,7 @@ export function CreateConnectorModal({
         id = c.id;
         setDraftId(c.id);
       }
-      await testConnector(id!, config).catch(() => {});
+      await testConnector(id!).catch(() => {});
       setTestedOk(true);
       const selectedTables = Object.entries(selected)
         .filter(([_, v]) => v)

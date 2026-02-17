@@ -98,7 +98,11 @@ export default function RunDetailPage() {
                 <tr key={key} className="border-t border-slate-800">
                   <td className="py-2 font-mono text-cyan-300">{key}</td>
                   <td className="py-2 font-mono text-slate-200 break-all">
-                    {typeof val?.value === "string" ? val.value : JSON.stringify(val?.value ?? null)}
+                    {typeof (val as any)?.value === "string"
+                      ? (val as any).value
+                      : typeof val === "string"
+                      ? val
+                      : JSON.stringify((val as any)?.value ?? val ?? null)}
                   </td>
                 </tr>
               ))}

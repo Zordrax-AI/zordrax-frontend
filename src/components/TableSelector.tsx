@@ -61,7 +61,7 @@ export function TableSelector({ tables, selected, onChange }: Props) {
               <div className="flex-1">
                 <div className="font-medium text-[color:var(--fg)]">{id}</div>
                 <div className="text-xs text-[color:var(--muted)]">
-                  {t.row_estimate ? `${t.row_estimate.toLocaleString()} rows` : "rows n/a"} •{" "}
+                  {t.row_estimate ? `${t.row_estimate.toLocaleString()} rows` : "rows n/a"} -{" "}
                   {t.size_bytes_estimate ? `${Math.round(t.size_bytes_estimate / 1024 / 1024)} MB` : "size n/a"}
                 </div>
                 {t.pii_flags && t.pii_flags.length > 0 && (
@@ -75,3 +75,4 @@ export function TableSelector({ tables, selected, onChange }: Props) {
     </div>
   );
 }
+

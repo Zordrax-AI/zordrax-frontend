@@ -47,12 +47,11 @@ export default function QuestionsClient() {
     setTouched(true);
     if (!canContinue) return;
 
-    const qs = new URLSearchParams({
-      mode,
-      industry: industry.trim(),
-      scale,
-      cloud,
-    });
+    const qs = new URLSearchParams();
+    if (mode) qs.set("mode", mode);
+    qs.set("industry", industry.trim());
+    if (scale) qs.set("scale", scale);
+    if (cloud) qs.set("cloud", cloud);
 
     router.push(`/portal/onboarding/recommend?${qs.toString()}`);
   }

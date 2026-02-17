@@ -76,8 +76,8 @@ export default function DeployClient({ recommendationId }: Props) {
 
       setPlan((p) =>
         p
-          ? { ...p, status: res.status ?? p.status }
-          : ({ run_id: runId, status: res.status ?? "running", plan_summary: {} } as any)
+          ? { ...p, status: (res as any).status ?? p.status }
+          : ({ run_id: runId, status: (res as any).status ?? "running", plan_summary: {} } as any)
       );
 
       try {

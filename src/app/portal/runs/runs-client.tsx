@@ -98,13 +98,13 @@ export default function RunsClient() {
                       </Link>
                     </td>
                     <td className="py-2">{r.mode}</td>
-                    <td className="py-2">{r.status}</td>
-                    <td className="py-2">{r.stage}</td>
-                    <td className="py-2">
-                      {new Date(r.created_at).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
+                  <td className="py-2">{r.status}</td>
+                  <td className="py-2">{r.stage}</td>
+                  <td className="py-2">
+                      {r.created_at ? new Date(r.created_at).toLocaleString() : "—"}
+                  </td>
+                </tr>
+              ))}
               </tbody>
             </table>
           </div>

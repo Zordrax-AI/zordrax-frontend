@@ -179,7 +179,7 @@ export default function ConnectorsPage() {
                   <div>
                     <div className="font-medium">{c.name}</div>
                     <div className="text-xs text-[color:var(--muted)]">
-                      {c.type} {c.host ? `• ${c.host}` : ""}
+                      {c.type} {c.host ? `- ${c.host}` : ""}
                     </div>
                   </div>
                   {c.status && <StatusPill status={c.status} />}

@@ -60,7 +60,9 @@ export function RunTimeline({ runId }: Props) {
                 <span>{e.level}</span>
                 <span>{e.stage}</span>
                 <span>{e.status}</span>
-                <span className="ml-auto">{new Date(e.created_at).toLocaleString()}</span>
+                <span className="ml-auto">
+                  {e.created_at ? new Date(e.created_at).toLocaleString() : "—"}
+                </span>
               </div>
               <div className="mt-1 whitespace-pre-wrap">{e.message}</div>
             </div>

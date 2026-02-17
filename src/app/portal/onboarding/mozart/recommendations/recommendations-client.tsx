@@ -55,7 +55,9 @@ export default function RecommendationsClient() {
         setState({ kind: "loading" });
         const res = await getTop3Recommendations(requirementSetId);
         if (cancelled) return;
-        setState({ kind: "ready", options: res.options ?? [], generated_at: res.generated_at });
+        const options = Array.isArray(res) ? res : (res as any)?.options ?? [];
+        const generated_at = (res as any)?.generated_at ?? "";
+        setState({ kind: "ready", options, generated_at });
       } catch (e: any) {
         if (cancelled) return;
         setState({ kind: "error", message: e?.message ?? "Failed to load recommendations." });
@@ -205,55 +207,58 @@ export default function RecommendationsClient() {
             <div className="text-xs text-slate-500">Generated at: {state.generated_at}</div>
 
             <div className="space-y-4">
-              {state.options.map((opt) => (
-                <Card key={opt.id} className="p-4 bg-white border border-slate-200 shadow-sm space-y-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
+              {state.options.map((opt, idx) => {
+                const key = (opt as any).id || (opt as any).key || String(idx);
+                const tf = (opt as any).terraform || {};
+                return (
+                  <Card key={key} className="p-4 bg-white border border-slate-200 shadow-sm space-y-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
                       <div className="text-slate-900 text-sm">
-                        <span className="text-slate-500">#{opt.rank}</span>{" "}
+                        <span className="text-slate-500">#{(opt as any).rank}</span>{" "}
                         <span className="font-semibold text-slate-900">{opt.title}</span>
                       </div>
-                      <div className="text-slate-700 text-sm mt-1">{opt.summary}</div>
+                        <div className="text-slate-700 text-sm mt-1">{(opt as any).summary}</div>
                     </div>
 
-                    <div className="text-right">
-                      <div className="text-slate-500 text-sm">Est. monthly</div>
-                      <div className="text-slate-900 font-semibold">
-                        €{opt.estimated_monthly_cost_eur.toLocaleString()}
+                      <div className="text-right">
+                        <div className="text-slate-500 text-sm">Est. monthly</div>
+                        <div className="text-slate-900 font-semibold">
+                          €{(opt as any).estimated_monthly_cost_eur?.toLocaleString?.() ?? "—"}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="text-xs text-slate-600">
-                    Terraform:{" "}
-                    <span className="text-slate-800">
-                      {opt.terraform.cloud}/{opt.terraform.warehouse}/{opt.terraform.etl}/
-                      {opt.terraform.governance}
-                      {opt.terraform.enable_bi ? `/bi:${opt.terraform.bi_tool || "yes"}` : ""}
-                      {opt.terraform.enable_apim ? `/apim:yes` : ""}
-                    </span>
-                  </div>
-
-                  {opt.risk_flags?.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {opt.risk_flags.map((r) => (
-                        <span
-                          key={r}
-                          className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200"
-                        >
-                          {r}
-                        </span>
-                      ))}
+                    <div className="text-xs text-slate-600">
+                      Terraform:{" "}
+                      <span className="text-slate-800">
+                        {tf.cloud}/{tf.warehouse}/{tf.etl}/{tf.governance}
+                        {tf.enable_bi ? `/bi:${tf.bi_tool || "yes"}` : ""}
+                        {tf.enable_apim ? `/apim:yes` : ""}
+                      </span>
                     </div>
-                  )}
 
-                  <div className="flex gap-2">
-                    <Button onClick={() => onSelect(opt.id)} disabled={!!selecting}>
-                      {selecting === opt.id ? "Selecting..." : "Select"}
-                    </Button>
-                  </div>
-                </Card>
-              ))}
+                    {(opt as any).risk_flags?.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {(opt as any).risk_flags.map((r: any) => (
+                          <span
+                            key={r}
+                            className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200"
+                          >
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button onClick={() => onSelect(key)} disabled={!!selecting}>
+                        {selecting === key ? "Selecting..." : "Select"}
+                      </Button>
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           </>
         )}

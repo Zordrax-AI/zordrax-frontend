@@ -150,8 +150,8 @@ export default function DataChecksClient() {
       if (connector?.id) {
         const prof = await profileConnector(connector.id).catch(() => null);
         if (prof) {
-          setProfilingSummary(prof);
-          const tables = prof.largest_tables?.map((t: any) => ({ schema: t.schema, table: t.table })) || [];
+          setProfilingSummary(prof as any);
+          const tables = (prof as any).largest_tables?.map((t: any) => ({ schema: t.schema, table: t.table })) || [];
           if (tables.length) setProfiling(mockProfiling(tables));
           return;
         }

@@ -13,14 +13,13 @@ export function SummaryCards({ summary }: Props) {
   return (
     <div className="grid gap-3 md:grid-cols-3">
       <Card title="Tables">{summary.totals.tables}</Card>
-      <Card title="Rows estimate">{summary.totals.rows_estimate ? summary.totals.rows_estimate.toLocaleString() : "—"}</Card>
-      <Card title="Size estimate">{totalSizeMb ? `${totalSizeMb} MB` : "—"}</Card>
+      <Card title="Rows estimate">{summary.totals.rows_estimate ? summary.totals.rows_estimate.toLocaleString() : "n/a"}</Card>
+      <Card title="Size estimate">{totalSizeMb ? `${totalSizeMb} MB` : "n/a"}</Card>
       <Card title="Biggest tables">
         <ul className="text-sm space-y-1">
           {biggest.slice(0, 3).map((t) => (
             <li key={`${t.schema || "public"}.${t.name}`}>
-              {t.schema ? `${t.schema}.` : ""}
-              {t.name} — {t.row_estimate ? `${t.row_estimate.toLocaleString()} rows` : "rows n/a"}
+              {t.schema ? `${t.schema}.` : ""}{t.name} - {t.row_estimate ? `${t.row_estimate.toLocaleString()} rows` : "rows n/a"}
             </li>
           ))}
         </ul>
