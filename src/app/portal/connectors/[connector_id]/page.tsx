@@ -94,14 +94,18 @@ export default function ConnectorDetailPage() {
       const entry = { ts: new Date().toISOString(), action: "test" as const, ok: true };
       appendLog(connectorId, entry);
       setLogs((prev) => [entry, ...prev]);
-      appendAudit(connectorId, { ts: new Date().toISOString(), user: "local", action: "test_connection", detail: "success" });
+      const auditEntry = { ts: new Date().toISOString(), user: "local", action: "test_connection", detail: "success" };
+      appendAudit(connectorId, auditEntry);
+      setAudit((prev) => [auditEntry, ...prev]);
     } catch (e: any) {
       const msg = e?.message || "Connection test failed.";
       setActionMessage({ kind: "error", text: msg });
       const entry = { ts: new Date().toISOString(), action: "test" as const, ok: false, message: msg };
       appendLog(connectorId, entry);
       setLogs((prev) => [entry, ...prev]);
-      appendAudit(connectorId, { ts: new Date().toISOString(), user: "local", action: "test_connection", detail: "fail" });
+      const auditEntry = { ts: new Date().toISOString(), user: "local", action: "test_connection", detail: "fail" };
+      appendAudit(connectorId, auditEntry);
+      setAudit((prev) => [auditEntry, ...prev]);
     } finally {
       setActionLoading(null);
     }
@@ -121,14 +125,18 @@ export default function ConnectorDetailPage() {
       const entry = { ts: new Date().toISOString(), action: "discover" as const, ok: true, message: msg };
       appendLog(connectorId, entry);
       setLogs((prev) => [entry, ...prev]);
-      appendAudit(connectorId, { ts: new Date().toISOString(), user: "local", action: "discover_tables", detail: "success" });
+      const auditEntry = { ts: new Date().toISOString(), user: "local", action: "discover_tables", detail: "success" };
+      appendAudit(connectorId, auditEntry);
+      setAudit((prev) => [auditEntry, ...prev]);
     } catch (e: any) {
       const msg = e?.message || "Discovery failed.";
       setActionMessage({ kind: "error", text: msg });
       const entry = { ts: new Date().toISOString(), action: "discover" as const, ok: false, message: msg };
       appendLog(connectorId, entry);
       setLogs((prev) => [entry, ...prev]);
-      appendAudit(connectorId, { ts: new Date().toISOString(), user: "local", action: "discover_tables", detail: "fail" });
+      const auditEntry = { ts: new Date().toISOString(), user: "local", action: "discover_tables", detail: "fail" };
+      appendAudit(connectorId, auditEntry);
+      setAudit((prev) => [auditEntry, ...prev]);
     } finally {
       setActionLoading(null);
     }
@@ -154,6 +162,10 @@ export default function ConnectorDetailPage() {
       action: "save_table_selection",
       detail: `selected ${arr.length}`,
     });
+    setAudit((prev) => [
+      { ts: new Date().toISOString(), user: "local", action: "save_table_selection", detail: `selected ${arr.length}` },
+      ...prev,
+    ]);
     setTimeout(() => setTableMessage(null), 2000);
   }
 
@@ -203,7 +215,7 @@ export default function ConnectorDetailPage() {
               discoverInfo={discoverInfo}
             />
           )}
-          {tab === "logs" && <Placeholder title="Logs" body="Connector events will appear here" />}
+          {tab === "logs" && <LogsTab logs={logs} />}
           {tab === "tables" && (
             <ManageTablesTab
               tables={tables}
@@ -422,6 +434,47 @@ function ManageTablesTab({
   );
 }
 
+function LogsTab({
+  logs,
+}: {
+  logs: { ts: string; action: "test" | "discover"; ok: boolean; message?: string }[];
+}) {
+  if (!logs.length) {
+    return (
+      <div className="rounded-md border border-dashed border-[color:var(--border)] bg-[color:var(--card-2)] px-4 py-6 text-sm text-[color:var(--muted)]">
+        No logs yet. Run Test Connection or Discover Tables.
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-auto">
+      <table className="w-full text-sm">
+        <thead className="text-[color:var(--muted)]">
+          <tr className="border-b border-[color:var(--border)]">
+            <th className="py-2 text-left">Time</th>
+            <th className="py-2 text-left">Action</th>
+            <th className="py-2 text-left">Result</th>
+            <th className="py-2 text-left">Message</th>
+          </tr>
+        </thead>
+        <tbody>
+          {logs.map((log) => (
+            <tr key={`${log.ts}-${log.action}-${log.ok}`} className="border-b border-[color:var(--border)]">
+              <td className="py-2 text-[color:var(--muted)]">{new Date(log.ts).toLocaleString()}</td>
+              <td className="py-2 capitalize">{log.action}</td>
+              <td className="py-2">
+                <ResultBadge ok={log.ok} />
+              </td>
+              <td className="py-2 text-[color:var(--muted)]">{log.message || "--"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 function StatusBadge({ status }: { status: Connector["status"] }) {
   const norm = normalizeStatus(status);
   const tone =
@@ -550,5 +603,21 @@ function AuditTab({
         </tbody>
       </table>
     </div>
+  );
+}
+
+function ResultBadge({ ok }: { ok: boolean }) {
+  const tone = ok ? "success" : "danger";
+  const label = ok ? "Success" : "Fail";
+  const base = "inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium border";
+  const toneClass =
+    tone === "success"
+      ? "border-[color:var(--success)] text-[color:var(--success)] bg-[color:var(--success-bg,rgba(16,185,129,0.12))]"
+      : "border-[color:var(--danger)] text-[color:var(--danger)] bg-[color:var(--danger-bg,rgba(244,63,94,0.12))]";
+  return (
+    <span className={`${base} ${toneClass}`}>
+      <span className="h-2 w-2 rounded-full bg-current opacity-70" />
+      {label}
+    </span>
   );
 }

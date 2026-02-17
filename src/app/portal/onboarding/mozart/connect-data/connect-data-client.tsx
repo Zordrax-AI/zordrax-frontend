@@ -26,6 +26,7 @@ export default function ConnectDataClient() {
   const [error, setError] = useState("");
   const [skip, setSkip] = useState(false);
   const [modalItem, setModalItem] = useState<CatalogItem | null>(null);
+  const [status, setStatus] = useState<string | undefined>(undefined);
 
   // debounced search
   useEffect(() => {
@@ -56,6 +57,7 @@ export default function ConnectDataClient() {
     try {
       const rs = await brdReadRequirementSet(requirementSetId);
       setAttachedId(rs.connector_id || null);
+      if (rs.status) setStatus(rs.status);
     } catch {
       // ignore
     }
@@ -96,6 +98,20 @@ export default function ConnectDataClient() {
   }
 
   const canContinue = useMemo(() => !!attachedId || skip, [attachedId, skip]);
+  const isDraft = (status || "draft").toLowerCase() === "draft";
+
+  if (!requirementSetId) {
+    return (
+      <div className="space-y-4 text-[color:var(--fg)]">
+        <div className="rounded-md border border-[color:var(--danger)] bg-[color:var(--danger-bg,rgba(244,63,94,0.12))] px-4 py-3 text-sm text-[color:var(--danger)]">
+          No requirement_set_id found. Create a requirement set to continue.
+        </div>
+        <Button variant="primary" onClick={() => router.push("/onboarding/new")}>
+          Create requirement set
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
@@ -115,7 +131,7 @@ export default function ConnectDataClient() {
           <Button variant="ghost" onClick={() => setSkip(true)}>
             Skip
           </Button>
-          <Button onClick={continueNext} disabled={!canContinue}>
+          <Button onClick={continueNext} disabled={!canContinue || !isDraft}>
             Continue
           </Button>
         </div>
@@ -130,6 +146,11 @@ export default function ConnectDataClient() {
           onAttach={attachConnector}
           onRefresh={refreshConnectors}
         />
+        {!isDraft && (
+          <div className="rounded-md border border-[color:var(--warning,#f59e0b)] bg-[color:var(--warning-bg,rgba(245,158,11,0.12))] px-3 py-2 text-xs text-[color:var(--warning-text,#b45309)]">
+            Requirement set is approved; create a new version to change connectors.
+          </div>
+        )}
       </div>
 
       <CreateConnectorModal

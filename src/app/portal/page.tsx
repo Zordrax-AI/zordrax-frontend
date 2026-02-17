@@ -13,7 +13,7 @@ export default function PortalHomePage() {
             </p>
             <div className="flex flex-wrap gap-3">
               <a
-                href="/portal/onboarding"
+                href="/onboarding/new"
                 className="rounded-md bg-[color:var(--accent)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition"
               >
                 Start Onboarding
@@ -38,7 +38,7 @@ export default function PortalHomePage() {
               <div className="text-sm font-semibold text-[color:var(--fg)]">Start Onboarding</div>
               <p className="mt-1 text-xs text-[color:var(--muted)]">Kick off the guided flow to capture requirements.</p>
               <a
-                href="/portal/onboarding"
+                href="/onboarding/new"
                 className="mt-3 inline-flex w-full justify-center rounded-md bg-[color:var(--accent)] px-3 py-2 text-xs font-medium text-white hover:opacity-90 transition"
               >
                 Open Wizard

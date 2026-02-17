@@ -1,6 +1,8 @@
+const isWin = process.platform === "win32";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "standalone"
+  ...(isWin ? {} : { output: "standalone" }),
 };
 
 export default nextConfig;
