@@ -1,520 +1,140 @@
-// C:\Users\Zordr\Desktop\frontend-repo\src\lib\api.ts
-/* =========================================================
-   Zordrax Frontend <-> Onboarding Agent API (SSOT)
-   CANONICAL RULE:
-   - Browser calls ONLY the Next.js proxy: /api/agent/...
-   - Never call the onboarding service directly from the browser
-   - Never require browser-side API keys
-========================================================= */
+import { RequirementSet, Connector, ConnectionTestResult, TableInfo, ProfilingSummary, DeployPlanResponse, RunStatus } from "./types";
 
-export type RecommendRequest = {
-  mode: "manual" | "ai";
-  industry: string;
-  scale: "small" | "medium" | "large";
-  cloud: "azure" | "aws" | "gcp";
-};
+const API_BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_BASE || "";
 
-export type ArchitectureRecommendation = {
-  source: "ai" | "manual";
-  title?: string;
-  [k: string]: unknown;
-};
+type HttpMethod = "GET" | "POST" | "PUT";
 
-export type RecommendationSnapshotCreate = {
-  final: Record<string, unknown>;
-  ai: Record<string, unknown> | null;
-  diff: unknown[];
-  source_query: Record<string, unknown>;
-};
-
-export type DeployPlanRequest = {
-  // Legacy (older backend shapes)
-  recommendation_id?: string;
-
-  // ✅ canonical for SSOT deploy
-  requirement_set_id?: string;
-
-  name_prefix?: string;
-  region?: string;
-  environment?: string;
-  enable_apim?: boolean;
-  backend_app_hostname?: string;
-};
-
-export type DeployPlanResponse = {
-  run_id: string;
-  status: string;
-  plan_summary: Record<string, unknown>;
-  policy_warnings?: string[];
-};
-
-export type DeployApplyResponse = {
-  run_id: string;
-  status: string;
-  pipeline_run_id?: number | string;
-};
-
-export type RunRow = {
-  run_id: string;
-  mode: "manual" | "ai" | "deploy";
-  title?: string;
-  status: string;
-  stage: string;
-  cancel_requested: boolean;
-  created_at: string;
-  updated_at: string;
-
-  deploy?: {
-    status?: string;
-    pipeline_run_id?: number | string;
-    region?: string;
-    environment?: string;
-  };
-};
-
-export type RunEvent = {
-  id: number;
-  run_id: string;
-  level: "info" | "warning" | "error";
-  stage: string;
-  status: string;
-  message: string;
-  created_at: string;
-};
-
-export type Connector = {
-  id: string;
-  name: string;
-  type: string;
-  status?: string;
-  config?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
-  discovered_schema_json?: Record<string, string[]>;
-};
-
-export type InfraOutputsResponse = {
-  run_id: string;
-  found: boolean;
-  status: "succeeded" | "failed" | "running" | string;
-  outputs?: Record<string, { type: string; value: unknown; sensitive: boolean }>;
-  updated_at?: string;
-};
-
-export type RunsListResponse = RunRow[] | { items: RunRow[] } | { runs: RunRow[] };
-
-export type RequirementSet = {
-  id: string;
-  session_id?: string;
-  status?: string;
-  connector_id?: string | null;
-  created_by?: string;
-  title?: string;
-};
-
-export class ApiError extends Error {
-  status: number;
-  url: string;
-  body: string;
-
-  constructor(args: { status: number; url: string; body: string; message?: string }) {
-    super(args.message ?? `Request failed (${args.status})`);
-    this.name = "ApiError";
-    this.status = args.status;
-    this.url = args.url;
-    this.body = args.body;
-  }
+interface ApiOptions extends RequestInit {
+  timeoutMs?: number;
 }
 
-/* =========================================================
-   Proxy base (same-origin)
-   Everything goes through /api/agent which proxies to the ACA.
-========================================================= */
-
-export const AGENT_PROXY_BASE = "/api/agent";
-
-/** Back-compat for older pages (Diagnostics imports API_BASE) */
-export const API_BASE = AGENT_PROXY_BASE;
-
-
-/* =========================================================
-   Fetch helper
-========================================================= */
-
-async function readErrorBody(res: Response): Promise<string> {
-  try {
-    const ct = res.headers.get("content-type") || "";
-    if (ct.includes("application/json")) {
-      const j = await res.json();
-      return typeof j === "string" ? j : JSON.stringify(j);
-    }
-    return await res.text();
-  } catch {
-    return `${res.status} ${res.statusText}`;
+export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
+  if (!API_BASE) {
+    throw new Error("NEXT_PUBLIC_ONBOARDING_API_BASE is not set");
   }
-}
 
-async function fetchJson<T>(path: string, opts?: RequestInit & { idempotencyKey?: string }): Promise<T> {
-  // Do not double-prefix when caller already includes /api/agent
-  const normalizedPath = path.startsWith("/api/agent") ? path.replace(/^\/api\/agent/, "") : path;
-  const url = `${API_BASE}${normalizedPath.startsWith("/") ? "" : "/"}${normalizedPath}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 12000);
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(opts?.headers as Record<string, string> | undefined),
-  };
+  const { timeoutMs, headers, ...rest } = options;
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...rest,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(headers || {}),
+    },
+    signal: controller.signal,
+  }).catch((err) => {
+    clearTimeout(timeout);
+    throw err;
+  });
 
-  if (opts?.idempotencyKey) headers["X-Idempotency-Key"] = opts.idempotencyKey;
-
-  const res = await fetch(url, { ...opts, headers });
-
-  if (!res.ok) {
-    const body = await readErrorBody(res);
-    throw new ApiError({
-      status: res.status,
-      url,
-      body,
-      message: body || `Request failed: ${res.status} ${res.statusText}`,
-    });
-  }
+  clearTimeout(timeout);
 
   const text = await res.text();
-  if (!text) return {} as T;
-
+  let json: any;
   try {
-    return JSON.parse(text) as T;
+    json = text ? JSON.parse(text) : null;
   } catch {
-    return text as unknown as T;
+    json = text;
+  }
+
+  if (!res.ok) {
+    const message = json?.message || json?.detail || text || `Request failed with status ${res.status}`;
+    const error = new Error(message);
+    (error as any).status = res.status;
+    throw error;
+  }
+  return json as T;
+}
+
+export async function poll<T>(
+  fn: () => Promise<T>,
+  {
+    intervalMs = 3000,
+    timeoutMs = 10 * 60 * 1000,
+    until,
+  }: { intervalMs?: number; timeoutMs?: number; until?: (result: T) => boolean } = {}
+): Promise<T> {
+  const start = Date.now();
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const result = await fn();
+    if (!until || until(result)) {
+      return result;
+    }
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("Polling timed out");
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
   }
 }
 
-/* helper: try primary, fall back on 404 */
-async function tryOr404<T>(primary: () => Promise<T>, fallback: () => Promise<T>): Promise<T> {
-  try {
-    return await primary();
-  } catch (e: any) {
-    if (e instanceof ApiError && e.status === 404) {
-      return await fallback();
-    }
-    throw e;
-  }
-}
+const ENDPOINTS = {
+  requirementSets: "/api/brd/requirement-sets",
+  requirementSet: (id: string) => `/api/brd/requirement-sets/${id}`,
+  connectors: "/api/connectors",
+  connector: (id: string) => `/api/connectors/${id}`,
+  connectorTest: (id: string) => `/api/connectors/${id}/test`,
+  connectorDiscover: (id: string) => `/api/connectors/${id}/discover`,
+  profiling: (id: string) => `/api/connectors/${id}/profiling`,
+  deployPlan: "/api/deploy/plan",
+  refreshRun: (runId: string) => `/api/deploy/${runId}/refresh`,
+};
 
-/* =========================================================
-   Endpoints (all through proxy)
-========================================================= */
-
-export async function health(): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>("/health", { method: "GET" });
-}
-
-/* ---------- BRD flow (Mozart uses these) ---------- */
-
-export async function brdCreateSession(created_by = "unknown", title?: string): Promise<{ session_id: string }> {
-  // backend ignores title if not in model; safe to send
-  return fetchJson<{ session_id: string }>("/api/agent/api/brd/sessions", {
-    method: "POST",
-    body: JSON.stringify({ created_by, title }),
-  });
-}
-
-export async function brdCreateRequirementSet(args: {
-  session_id: string;
-  title?: string;
-  created_by?: string;
-}): Promise<{ id: string; status: string }> {
-  return fetchJson<any>("/api/agent/api/brd/requirement-sets", {
-    method: "POST",
-    body: JSON.stringify({
-      session_id: args.session_id,
-      title: args.title ?? "Requirement Set",
-      created_by: args.created_by ?? "unknown",
-    }),
-  });
-}
-
-export async function brdUpsertConstraints(requirement_set_id: string, body: any): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/api/agent/api/brd/constraints/${requirement_set_id}`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
-}
-
-export async function brdUpsertGuardrails(requirement_set_id: string, body: any): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/api/agent/api/brd/guardrails/${requirement_set_id}`, {
-    method: "PUT",
-    body: JSON.stringify(body),
-  });
-}
-
-export async function brdSubmit(requirement_set_id: string, actor = "unknown"): Promise<any> {
-  return fetchJson<any>(`/api/agent/api/brd/requirement-sets/${requirement_set_id}/submit`, {
-    method: "POST",
-    body: JSON.stringify({ actor }),
-  });
-}
-
-export async function brdApprove(requirement_set_id: string, actor = "unknown"): Promise<any> {
-  return fetchJson<any>(`/api/agent/api/brd/requirement-sets/${requirement_set_id}/approve`, {
-    method: "POST",
-    body: JSON.stringify({ actor }),
-  });
-}
-
-export async function brdSetConnector(requirement_set_id: string, connector_id: string) {
-  return fetchJson<Record<string, unknown>>(
-    `/api/agent/api/brd/requirement-sets/${requirement_set_id}/connector`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ connector_id }),
-    }
-  );
-}
-
-export async function brdReadRequirementSet(requirement_set_id: string): Promise<RequirementSet> {
-  return fetchJson<RequirementSet>(`/api/agent/api/brd/requirement-sets/${requirement_set_id}`, {
-    method: "GET",
-  });
-}
-
-export async function updateConstraints(requirement_set_id: string, payload: Record<string, unknown>) {
-  return fetchJson<Record<string, unknown>>(`/api/agent/api/brd/constraints/${requirement_set_id}`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-}
-
-/* ---------- Connections ---------- */
-
-export async function connectionsTest(payload: any): Promise<any> {
-  // your proxy already routes /api/agent/connections/test -> backend /connections/test
-  return fetchJson<any>("/api/agent/connections/test", {
+export function createRequirementSet(payload: { name: string; description?: string }): Promise<RequirementSet> {
+  return apiFetch<RequirementSet>(ENDPOINTS.requirementSets, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-/* ---------- Deploy flow ---------- */
-
-export async function deployPlan(req: DeployPlanRequest, idempotencyKey?: string): Promise<DeployPlanResponse> {
-  // backend canonical is requirement_set_id; keep legacy field optional for compatibility
-  return fetchJson<DeployPlanResponse>("/api/agent/api/deploy/plan", {
-    method: "POST",
-    body: JSON.stringify(req),
-    idempotencyKey,
-  });
+export function getRequirementSet(id: string): Promise<RequirementSet> {
+  return apiFetch<RequirementSet>(ENDPOINTS.requirementSet(id), { method: "GET" });
 }
 
-export async function deployApprove(runId: string, idempotencyKey?: string): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/api/agent/api/deploy/${runId}/approve`, {
-    method: "POST",
-    body: JSON.stringify({}),
-    idempotencyKey,
-  });
+export function submitRequirementSet(id: string): Promise<RequirementSet> {
+  return apiFetch<RequirementSet>(`${ENDPOINTS.requirementSet(id)}/submit`, { method: "POST" });
 }
 
-export async function deployApply(runId: string, idempotencyKey?: string): Promise<DeployApplyResponse> {
-  return fetchJson<DeployApplyResponse>(`/api/agent/api/deploy/${runId}/apply`, {
-    method: "POST",
-    body: JSON.stringify({}),
-    idempotencyKey,
-  });
+export function approveRequirementSet(id: string): Promise<RequirementSet> {
+  return apiFetch<RequirementSet>(`${ENDPOINTS.requirementSet(id)}/approve`, { method: "POST" });
 }
 
-export type DeployRefreshResponse = {
-  run_id: string;
-  previous_status: string;
-  current_status: string;
-  changed: boolean;
-  pipeline: {
-    pipeline_id: number;
-    pipeline_run_id: number;
-    state: string;
-    result?: string | null;
-    url?: string | null;
-  };
-};
-
-export async function deployRefresh(runId: string): Promise<DeployRefreshResponse> {
-  return fetchJson<DeployRefreshResponse>(`/api/agent/api/deploy/${runId}/refresh`, { method: "GET" });
+export function listConnectors(): Promise<Connector[]> {
+  return apiFetch<Connector[]>(ENDPOINTS.connectors, { method: "GET" });
 }
 
-/* ---------- Connectors (new) ---------- */
-
-export async function listConnectors(): Promise<Connector[]> {
-  try {
-    return await fetchJson<Connector[]>(`/api/agent/api/connectors`, { method: "GET" });
-  } catch (e: any) {
-    if (e instanceof ApiError && e.status === 404) return [];
-    throw e;
-  }
-}
-
-export async function createConnector(payload: {
-  name: string;
-  type: string;
-  config: Record<string, unknown>;
-}) {
-  return fetchJson<Connector>(`/api/agent/api/connectors`, {
+export function createConnector(payload: Record<string, unknown>): Promise<Connector> {
+  return apiFetch<Connector>(ENDPOINTS.connectors, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export async function getConnector(id: string) {
-  return fetchJson<Connector>(`/api/agent/api/connectors/${encodeURIComponent(id)}`, { method: "GET" });
+export function testConnector(id: string): Promise<ConnectionTestResult> {
+  return apiFetch<ConnectionTestResult>(ENDPOINTS.connectorTest(id), { method: "POST" });
 }
 
-export async function testConnector(id: string, config?: Record<string, unknown>) {
-  return fetchJson<{ status: string; details?: any }>(`/api/agent/api/connectors/${encodeURIComponent(id)}/test`, {
+export function discoverTables(connectorId: string): Promise<{ tables: TableInfo[] }> {
+  return apiFetch<{ tables: TableInfo[] }>(ENDPOINTS.connectorDiscover(connectorId), { method: "POST" });
+}
+
+export function profileTables(connectorId: string, selected: TableInfo[]): Promise<ProfilingSummary> {
+  return apiFetch<ProfilingSummary>(ENDPOINTS.profiling(connectorId), {
     method: "POST",
-    body: JSON.stringify(config ?? {}),
+    body: JSON.stringify({ tables: selected }),
   });
 }
 
-export async function discoverConnector(id: string, config?: Record<string, unknown>) {
-  return fetchJson<{ status: string; schema?: any }>(
-    `/api/agent/api/connectors/${encodeURIComponent(id)}/discover`,
-    {
-      method: "POST",
-      body: JSON.stringify(config ?? {}),
-    }
-  );
-}
-
-export async function profileConnector(id: string, config?: Record<string, unknown>) {
-  return fetchJson<Record<string, any>>(`/api/agent/api/connectors/${encodeURIComponent(id)}/profile`, {
+export function deployPlan(payload: { requirement_set_id: string; connector_id?: string }): Promise<DeployPlanResponse> {
+  return apiFetch<DeployPlanResponse>(ENDPOINTS.deployPlan, {
     method: "POST",
-    body: JSON.stringify(config ?? {}),
+    body: JSON.stringify(payload),
   });
 }
 
-export async function getConstraints(requirement_set_id: string) {
-  return fetchJson<Record<string, unknown>>(`/api/agent/api/brd/constraints/${requirement_set_id}`, { method: "GET" });
-}
-
-/* ---------- Runs + status ---------- */
-
-export async function getRun(runId: string): Promise<RunRow> {
-  return fetchJson<RunRow>(`/api/agent/api/runs/${runId}`, { method: "GET" });
-}
-
-export async function getRunEvents(runId: string, afterId = 0): Promise<RunEvent[]> {
-  const qs = new URLSearchParams();
-  if (afterId > 0) qs.set("after_id", String(afterId));
-  const suffix = qs.toString() ? `?${qs.toString()}` : "";
-  return fetchJson<RunEvent[]>(`/api/agent/api/runs/${runId}/events${suffix}`, { method: "GET" });
-}
-
-export async function getInfraOutputs(runId: string): Promise<InfraOutputsResponse> {
-  return fetchJson<InfraOutputsResponse>(`/api/agent/api/infra/outputs/${runId}`, { method: "GET" });
-}
-
-export async function cancelRun(runId: string): Promise<{ ok: boolean }> {
-  return fetchJson<{ ok: boolean }>(`/api/agent/api/runs/${runId}/cancel`, {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
-}
-
-export async function listRuns(): Promise<RunRow[]> {
-  // Backend does not expose a runs listing endpoint; avoid noisy 404s.
-  return [];
-}
-
-/* ---------- AI Recommend (legacy) ---------- */
-
-export async function recommendStack(req: RecommendRequest): Promise<ArchitectureRecommendation> {
-  return fetchJson<ArchitectureRecommendation>("/api/agent/api/ai/recommend-stack", {
-    method: "POST",
-    body: JSON.stringify(req),
-  });
-}
-
-export async function saveRecommendationSnapshot(snapshot: RecommendationSnapshotCreate): Promise<{ id: string }> {
-  try {
-    return await fetchJson<{ id: string }>("/api/agent/api/recommendations/snapshots", {
-      method: "POST",
-      body: JSON.stringify(snapshot),
-    });
-  } catch (e: any) {
-    if (e instanceof ApiError && e.status === 404) {
-      throw new Error("Snapshots aren’t enabled on the backend yet (/api/recommendations/snapshots not found).");
-    }
-    throw e;
-  }
-}
-
-/* =========================================================
-   Phase C — Top 3 Recommendations (deterministic)
-========================================================= */
-
-export type Top3Option = {
-  id: string;
-  rank: number;
-  title: string;
-  summary: string;
-  terraform: {
-    cloud: string;
-    warehouse: string;
-    etl: string;
-    governance: string;
-    enable_bi: boolean;
-    bi_tool: string;
-    enable_apim: boolean;
-  };
-  estimated_monthly_cost_eur: number;
-  risk_flags: string[];
-  rationale: any;
-};
-
-export type Top3Response = {
-  requirement_set_id: string;
-  generated_at: string;
-  options: Top3Option[];
-};
-
-export async function getTop3Recommendations(requirement_set_id: string): Promise<Top3Response> {
-  const qs = `?requirement_set_id=${encodeURIComponent(requirement_set_id)}`;
-  return tryOr404(
-    () =>
-      fetchJson<Top3Response>(`/api/agent/api/recommendations/top3${qs}`, {
-        method: "GET",
-      }),
-    () =>
-      fetchJson<Top3Response>(`/api/agent/recommendations/top3${qs}`, {
-        method: "GET",
-      })
-  );
-}
-
-export async function selectRecommendation(requirement_set_id: string, option_id: string): Promise<any> {
-  const body = JSON.stringify({ requirement_set_id, option_id });
-  return tryOr404(
-    () =>
-      fetchJson(`/api/agent/api/recommendations/select`, {
-        method: "POST",
-        body,
-      }),
-    () =>
-      fetchJson(`/api/agent/recommendations/select`, {
-        method: "POST",
-        body,
-      })
-  );
-}
-
-/* ---------- Metrics intent (placeholder) ---------- */
-
-export async function getMetricsSuggestions(requirement_set_id: string) {
-  const qs = `?requirement_set_id=${encodeURIComponent(requirement_set_id)}`;
-  return tryOr404(
-    () =>
-      fetchJson<any>(`/api/agent/api/recommendations/metrics${qs}`, {
-        method: "GET",
-      }),
-    () =>
-      fetchJson<any>(`/api/agent/recommendations/metrics${qs}`, {
-        method: "GET",
-      })
-  );
+export function refreshRun(runId: string): Promise<RunStatus> {
+  return apiFetch<RunStatus>(ENDPOINTS.refreshRun(runId), { method: "POST" });
 }
