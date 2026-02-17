@@ -81,6 +81,20 @@ export default function TablesClient() {
       if (discovered && Object.keys(discovered).length) {
         setSchemas(discovered);
         setSelectedSchema(Object.keys(discovered)[0] || null);
+      } else {
+        // lazy discover if none cached
+        try {
+          await discoverConnector(id);
+          const refreshed = await getConnector(id);
+          const d2 = (refreshed as any)?.discovered_schema_json || {};
+          setConnector(refreshed);
+          if (Object.keys(d2).length) {
+            setSchemas(d2);
+            setSelectedSchema(Object.keys(d2)[0] || null);
+          }
+        } catch {
+          /* ignore */
+        }
       }
     } catch (e: any) {
       setError(e?.message || "Failed to load connector");

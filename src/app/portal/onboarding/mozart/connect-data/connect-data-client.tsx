@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
-import { brdReadRequirementSet, brdSetConnector, listConnectors, type Connector } from "@/lib/api";
+import { brdReadRequirementSet, brdSetConnector, discoverConnector, listConnectors, type Connector } from "@/lib/api";
 import { catalog, CatalogItem } from "./catalog";
 import { SetupGuidePanel } from "./SetupGuidePanel";
 import { AlreadyConnectedPanel } from "./AlreadyConnectedPanel";
@@ -82,6 +82,8 @@ export default function ConnectDataClient() {
     setError("");
     try {
       await brdSetConnector(requirementSetId, id);
+      // Discover immediately so tables step has schemas
+      await discoverConnector(id);
       setAttachedId(id);
       setSkip(false);
       await refreshConnectors();
