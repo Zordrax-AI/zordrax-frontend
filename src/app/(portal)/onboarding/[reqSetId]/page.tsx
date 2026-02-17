@@ -172,7 +172,11 @@ export default function RequirementSetPage() {
           <LabeledInput disabled={!isDraft(status)} label="Region" value={constraints.region} onChange={(v) => setConstraints({ ...constraints, region: v })} />
           <LabeledInput disabled={!isDraft(status)} label="Environment" value={constraints.environment} onChange={(v) => setConstraints({ ...constraints, environment: v })} />
         </div>
-        <Button variant="outline" onClick={() => update(`/api/brd/constraints/${id}`, constraints, "constraints")} disabled={loading === "constraints" || !isDraft(status)}>
+        <Button
+          variant="outline"
+          onClick={() => update(`/api/brd/requirement-sets/${id}/constraints`, constraints, "constraints")}
+          disabled={loading === "constraints" || !isDraft(status)}
+        >
           {loading === "constraints" ? "Saving…" : "Save constraints"}
         </Button>
       </Card>

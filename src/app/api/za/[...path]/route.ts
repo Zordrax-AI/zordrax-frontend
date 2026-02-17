@@ -1,22 +1,35 @@
-"use server";
-
 import { NextRequest, NextResponse } from "next/server";
 
-const ALLOWED_METHODS = ["GET", "POST", "PUT"];
+export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest, ctx: { params: { path: string[] } }) {
-  return proxy(req, ctx.params);
+const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
+
+export async function GET(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}
+export async function POST(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  return proxy(req, path);
+}
+export async function OPTIONS(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
+  const { path } = await ctx.params;
+  return proxy(req, path);
 }
 
-export async function POST(req: NextRequest, ctx: { params: { path: string[] } }) {
-  return proxy(req, ctx.params);
-}
-
-export async function PUT(req: NextRequest, ctx: { params: { path: string[] } }) {
-  return proxy(req, ctx.params);
-}
-
-async function proxy(req: NextRequest, params: { path: string[] }) {
+async function proxy(req: NextRequest, pathParts: string[]) {
   const method = req.method.toUpperCase();
   if (!ALLOWED_METHODS.includes(method)) {
     return NextResponse.json({ error: "Method not allowed" }, { status: 405 });
@@ -28,28 +41,28 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
     return NextResponse.json({ error: "Proxy not configured" }, { status: 500 });
   }
 
-  const path = params.path?.join("/") ?? "";
+  const path = (pathParts ?? []).join("/");
   const targetUrl = new URL(`${base.replace(/\/$/, "")}/${path}`);
 
-  // copy query
+  // copy query params
   req.nextUrl.searchParams.forEach((value, key) => {
     targetUrl.searchParams.append(key, value);
   });
 
-  let body: BodyInit | undefined;
-  if (method !== "GET") {
-    const text = await req.text();
-    body = text ? text : undefined;
+  // body (raw bytes)
+  let body: BodyInit | undefined = undefined;
+  if (!["GET", "HEAD"].includes(method)) {
+    const buf = await req.arrayBuffer();
+    body = buf.byteLength ? Buffer.from(buf) : undefined;
   }
 
-  const headers: Record<string, string> = {
-    "X-API-Key": apiKey,
-  };
+  // headers
+  const headers = new Headers();
+  headers.set("X-API-Key", apiKey);
+
+  const passthrough = ["content-type", "accept", "authorization"];
   req.headers.forEach((value, key) => {
-    const lower = key.toLowerCase();
-    if (["content-type", "accept"].includes(lower)) {
-      headers[key] = value;
-    }
+    if (passthrough.includes(key.toLowerCase())) headers.set(key, value);
   });
 
   const res = await fetch(targetUrl.toString(), {
@@ -57,20 +70,14 @@ async function proxy(req: NextRequest, params: { path: string[] }) {
     headers,
     body,
     cache: "no-store",
+    redirect: "follow",
   });
 
-  const contentType = res.headers.get("content-type") || "";
-  const status = res.status;
+  const contentType = res.headers.get("content-type") || "application/octet-stream";
+  const out = await res.arrayBuffer();
 
-  try {
-    if (contentType.includes("application/json")) {
-      const json = await res.json();
-      return NextResponse.json(json, { status });
-    }
-    const text = await res.text();
-    return new NextResponse(text, { status, headers: { "content-type": contentType || "text/plain" } });
-  } catch {
-    const text = await res.text();
-    return new NextResponse(text || "", { status, headers: { "content-type": contentType || "text/plain" } });
-  }
+  return new NextResponse(out, {
+    status: res.status,
+    headers: { "content-type": contentType },
+  });
 }

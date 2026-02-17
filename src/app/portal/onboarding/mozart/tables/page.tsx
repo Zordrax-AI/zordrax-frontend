@@ -99,7 +99,9 @@ function TablesInner() {
 
   const filteredTables = useMemo(() => tables, [tables]);
 
-  const continueHref = `/portal/onboarding/checks${requirementSetId ? `?requirement_set_id=${encodeURIComponent(requirementSetId)}` : ""}`;
+  const continueHref = `/portal/onboarding/mozart/data-checks${
+    requirementSetId ? `?requirement_set_id=${encodeURIComponent(requirementSetId)}` : ""
+  }`;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 text-[color:var(--fg)]">

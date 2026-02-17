@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { brd, deploy } from "@/lib/agent-proxy";
+import {
+  deployPlan,
+  deployApprove,
+  refreshRun,
+  submitRequirementSet,
+  approveRequirementSet,
+} from "@/lib/api";
 import { getRequirementSetId } from "@/lib/wizard";
 
 async function sleep(ms: number) {
@@ -47,7 +53,7 @@ export default function DeployTimelineClient() {
     setError("");
     setNeedsApproval(false);
     try {
-      const p = await deploy.createPlan({
+      const p = await deployPlan({
         requirement_set_id: requirementSetId,
         name_prefix: "zordrax",
         region: "westeurope",
@@ -68,11 +74,11 @@ export default function DeployTimelineClient() {
       const lower = msg.toLowerCase();
       if (msg.includes("409") || lower.includes("requirement_set_not_approved")) {
         try {
-          await brd.submit(requirementSetId, {});
-          await brd.approve(requirementSetId, {});
+          await submitRequirementSet(requirementSetId);
+          await approveRequirementSet(requirementSetId);
           setNeedsApproval(false);
 
-          const p = await deploy.createPlan({
+          const p = await deployPlan({
             requirement_set_id: requirementSetId,
             name_prefix: "zordrax",
             region: "westeurope",
@@ -100,8 +106,8 @@ export default function DeployTimelineClient() {
     setBusy(true);
     setError("");
     try {
-      await brd.submit(requirementSetId, {});
-      await brd.approve(requirementSetId, {});
+      await submitRequirementSet(requirementSetId);
+      await approveRequirementSet(requirementSetId);
       setNeedsApproval(false);
       setBusy(false);
       await doPlan();
@@ -116,7 +122,7 @@ export default function DeployTimelineClient() {
     setBusy(true);
     setError("");
     try {
-      const r = await deploy.approveRun(runId, {});
+      const r = await deployApprove(runId);
       setLast(r);
       setStatus((r as any).status || status || "pipeline_started");
       startPolling();
@@ -133,7 +139,7 @@ export default function DeployTimelineClient() {
     setBusy(true);
     setError("");
     try {
-      const r = await withRetries(() => deploy.refresh(runId), 3);
+      const r = await withRetries(() => refreshRun(runId), 3);
       setLast(r);
       setStatus((r as any).current_status || (r as any).status || status);
     } catch (e: any) {
@@ -154,8 +160,7 @@ export default function DeployTimelineClient() {
     if (!runId) return;
     stopPolling();
     pollRef.current = setInterval(() => {
-      deploy
-        .refresh(runId)
+      refreshRun(runId)
         .then((r) => {
           setLast(r);
           setStatus((r as any).current_status || (r as any).status || status);

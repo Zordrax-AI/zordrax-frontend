@@ -1,5 +1,6 @@
 // src/components/connectors/ConnectorLogo.tsx
 import Image from "next/image";
+import { useState } from "react";
 
 export function ConnectorLogo({
   slug,
@@ -12,14 +13,20 @@ export function ConnectorLogo({
   size?: number;
   className?: string;
 }) {
-  // This will work as soon as the SVG files exist in /public/connectors/
+  const [src, setSrc] = useState(`/connectors/${slug}.svg`);
+
   return (
     <Image
-      src={`/connectors/${slug}.svg`}
+      src={src}
       alt={alt}
       width={size}
       height={size}
       className={className}
+      onError={() => {
+        if (src !== "/connectors/default.svg") {
+          setSrc("/connectors/default.svg");
+        }
+      }}
     />
   );
 }

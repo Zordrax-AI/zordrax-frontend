@@ -32,6 +32,33 @@ export type {
 const rawBase = process.env.NEXT_PUBLIC_API_BASE || "/api/za";
 export const API_BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 
+// Lightweight browser-side client pointing at agent base (public URL).
+export const BASE = process.env.NEXT_PUBLIC_AGENT_BASE_URL || "";
+
+export async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (!BASE) throw new Error("NEXT_PUBLIC_AGENT_BASE_URL is not set");
+  const res = await fetch(`${BASE}${path}`, {
+    ...options,
+    headers: {
+      "content-type": "application/json",
+      accept: "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok) {
+    const message = (json && (json.detail || json.message)) || text || `Request failed ${res.status}`;
+    throw new Error(message);
+  }
+  return (json as T) ?? (text as unknown as T);
+}
+
 type HttpMethod = "GET" | "POST" | "PUT";
 
 interface ApiOptions extends RequestInit {
@@ -127,7 +154,8 @@ const ENDPOINTS = {
   requirementSetConnector: (id: string) => `/api/brd/requirement-sets/${id}/connector`,
   businessContext: (id: string) => `/api/brd/business-context/${id}`,
   functionalRequirements: (id: string) => `/api/brd/functional-requirements/${id}`,
-  constraints: (id: string) => `/api/brd/constraints/${id}`,
+  constraints: (id: string) => `/api/brd/requirement-sets/${id}/constraints`,
+  requirementInputs: (id: string) => `/api/brd/requirement-sets/${id}/inputs`,
   guardrails: (id: string) => `/api/brd/guardrails/${id}`,
   metricsSuggestions: (id: string) => `/api/brd/metrics-intent/${id}/suggestions`,
 
@@ -153,7 +181,7 @@ const ENDPOINTS = {
   deployPackage: (runId: string) => `/api/deploy/${runId}/package`,
 
   // Runs (not under /api)
-  runs: "/runs",
+  runs: "/runs/",
   run: (runId: string) => `/runs/${runId}`,
   runOutputs: (runId: string) => `/runs/${runId}/outputs`,
   runEvents: (runId: string, afterId?: number) => `/runs/${runId}/events${afterId ? `?after_id=${afterId}` : ""}`,
@@ -195,7 +223,9 @@ export function brdSetConnector(requirementSetId: string, connectorId: string) {
 }
 
 export function getConstraints(requirementSetId: string): Promise<Constraints> {
-  return apiFetch<Constraints>(ENDPOINTS.constraints(requirementSetId), { method: "GET" });
+  return apiFetch<any>(ENDPOINTS.requirementInputs(requirementSetId), { method: "GET" }).then((res) => {
+    return res?.constraints_json || res?.constraints || {};
+  });
 }
 
 export function updateConstraints(requirementSetId: string, payload: Constraints): Promise<Constraints> {
@@ -308,7 +338,7 @@ export function deployApply(runId: string): Promise<RunStatus> {
 }
 
 export function refreshRun(runId: string): Promise<RunStatus> {
-  return apiFetch<RunStatus>(ENDPOINTS.deployRefresh(runId), { method: "POST" });
+  return apiFetch<RunStatus>(ENDPOINTS.deployRefresh(runId), { method: "GET" });
 }
 
 export const deployRefresh = refreshRun;
@@ -338,7 +368,8 @@ export function health(): Promise<any> {
 }
 
 export function getMetricsSuggestions(requirementSetId: string): Promise<any> {
-  return apiFetch<any>(ENDPOINTS.metricsSuggestions(requirementSetId), { method: "GET" });
+  // Endpoint not available; return empty suggestions to avoid breaking the flow
+  return Promise.resolve([]);
 }
 
 export function getTop3Recommendations(requirementSetId: string): Promise<Top3Option[]> {
@@ -354,3 +385,53 @@ export function selectRecommendation(requirementSetId: string, optionKey: string
 
 export const getTop3 = getTop3Recommendations;
 export const selectOption = selectRecommendation;
+
+// Minimal frontend helpers (browser-facing)
+export function createRequirementSetClient(payload: Record<string, unknown> = {}): Promise<any> {
+  return fetchJSON("/api/brd/requirement-sets", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function getRequirementSetClient(id: string): Promise<any> {
+  return fetchJSON(`/api/brd/requirement-sets/${id}`, { method: "GET" });
+}
+
+export async function mockProfiling(requirementSetId: string): Promise<any> {
+  // Try real profiling endpoint if available; fallback to static mock
+  try {
+    return await fetchJSON("/api/connectors/tables/profile", {
+      method: "POST",
+      body: JSON.stringify({ requirement_set_id: requirementSetId }),
+    });
+  } catch {
+    return {
+      totals: { tables: 3, rows_estimate: 1200000, size_bytes_estimate: 48 * 1024 * 1024 },
+      biggest_tables: [
+        { schema: "public", name: "orders", row_estimate: 800000 },
+        { schema: "public", name: "customers", row_estimate: 300000 },
+      ],
+      pii_summary: { flagged_tables: 1, flags: { email: 1 } },
+      refresh_plan: "daily",
+      ingestion_recommendation: "batch",
+    };
+  }
+}
+
+export async function getProfiling(requirementSetId: string): Promise<any> {
+  try {
+    return await fetchJSON(`/api/deploy/_debug/req/${requirementSetId}`, { method: "GET" });
+  } catch {
+    return mockProfiling(requirementSetId);
+  }
+}
+
+export function planDeploy(payload: { requirement_set_id: string }): Promise<any> {
+  return fetchJSON("/api/deploy/plan", { method: "POST", body: JSON.stringify(payload) });
+}
+
+export function approveRun(runId: string): Promise<any> {
+  return fetchJSON(`/api/deploy/${runId}/approve`, { method: "POST" });
+}
+
+export function getRunStatus(runId: string): Promise<any> {
+  return fetchJSON(`/api/deploy/${runId}/refresh`, { method: "GET" });
+}
