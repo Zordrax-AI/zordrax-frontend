@@ -1,15 +1,15 @@
-// src/lib/agent.ts
+// C:\Users\Zordr\Desktop\frontend-repo\src\lib\agent.ts
 
 export const AGENT_PROXY_BASE = "/api/agent"; // same-origin proxy (Next route)
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
-  // Accept either /api/... or runs/... and normalize to "/..."
   const p = path.startsWith("/") ? path : `/${path}`;
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 15_000);
+  const timeoutMs = 15_000;
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
   let res: Response;
   try {
@@ -23,7 +23,7 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
   } catch (e: any) {
     const msg =
       e?.name === "AbortError"
-        ? `Agent proxy timeout after 15s calling ${AGENT_PROXY_BASE}${p}`
+        ? `Agent proxy timeout after ${timeoutMs / 1000}s calling ${AGENT_PROXY_BASE}${p}`
         : `Agent proxy network error calling ${AGENT_PROXY_BASE}${p}: ${e?.message || String(e)}`;
     throw new Error(msg);
   } finally {
@@ -35,17 +35,20 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
   if (!res.ok) {
     try {
       const j = JSON.parse(text);
-      throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${j?.detail ?? text}`);
+      throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${j?.detail ?? j?.error ?? text}`);
     } catch {
       throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${text}`);
     }
   }
 
-  // Some endpoints might return empty body
   if (!text) return {} as T;
 
-  // Normal JSON response
-  return JSON.parse(text) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // fallback if upstream returns non-json (rare)
+    return (text as unknown as T);
+  }
 }
 
 /** =========================
@@ -77,7 +80,12 @@ export const brdApi = {
 
   upsertGuardrails: (
     requirementSetId: string,
-    payload: { pii_present?: boolean; gdpr_required?: boolean; private_networking_required?: boolean; budget_eur_month?: number }
+    payload: {
+      pii_present?: boolean;
+      gdpr_required?: boolean;
+      private_networking_required?: boolean;
+      budget_eur_month?: number;
+    }
   ) => request<any>("PUT", `/api/brd/guardrails/${encodeURIComponent(requirementSetId)}`, payload),
 
   submit: (requirementSetId: string, payload: { actor?: string; reason?: string } = {}) =>
@@ -109,7 +117,7 @@ export const deployApi = {
  * Runs API (via proxy)
  * ========================= */
 export type RunEvent = {
-  id: number;          // mapped to event_id
+  id: number; // mapped to event_id
   event_id: number;
   run_id: string;
   level: "info" | "warning" | "error";
@@ -140,15 +148,52 @@ export type RunOutputs = {
   pipeline_url?: string;
 };
 
-export const client = {
-  // Canonical “status” payload
-  getRunOutputs: (runId: string) => request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`),
+export type RunStatusPayload = RunOutputs & { events?: RunEvent[] };
 
-  // Timeline events, incremental
+/** =========================
+ * Client helpers used by UI pages
+ * ========================= */
+export const client = {
+  // ===== Requirement sets (legacy UI expects these) =====
+  createRequirementSet: (payload?: any) =>
+    request<any>("POST", `/api/requirement-sets`, payload || {}),
+
+  getRequirementSet: (id: string) =>
+    request<any>("GET", `/api/requirement-sets/${encodeURIComponent(id)}`),
+
+  // ===== Profiling (data-checks page expects this) =====
+  postProfiling: (id: string, payload: any) =>
+    request<any>("POST", `/api/requirement-sets/${encodeURIComponent(id)}/profiling`, payload),
+
+  getProfiling: (id: string) =>
+    request<any>("GET", `/api/requirement-sets/${encodeURIComponent(id)}/profiling`),
+
+  // ===== Deploy (legacy UI expects these) =====
+  planDeploy: (payload: any) =>
+    request<any>("POST", `/api/deploy/plan`, payload),
+
+  getRecommendations: (runId: string) =>
+    request<any>("GET", `/api/deploy/${encodeURIComponent(runId)}/recommendations`),
+
+  approveRun: (runId: string) =>
+    request<any>("POST", `/api/deploy/${encodeURIComponent(runId)}/approve`),
+
+  // ===== Runs (new stable endpoints) =====
+  getRunOutputs: (runId: string) =>
+    request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`),
+
   getRunEvents: (runId: string, afterId = 0) =>
     request<RunEvent[]>("GET", `/runs/${encodeURIComponent(runId)}/events?after_id=${afterId}`),
 
-  // Keep name for compatibility with your UI code:
-  // return outputs so Run page works without needing a /status endpoint.
-  getRunStatus: (runId: string) => request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`),
+  /**
+   * IMPORTANT:
+   * Your existing Run UI calls client.getRunStatus(runId) and expects:
+   *   { status/current_status, events: [] }
+   * So we return outputs + events in ONE payload to avoid breaking the UI.
+   */
+  getRunStatus: async (runId: string): Promise<RunStatusPayload> => {
+    const outputs = await request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`);
+    const events = await request<RunEvent[]>("GET", `/runs/${encodeURIComponent(runId)}/events?after_id=0`);
+    return { ...outputs, events };
+  },
 };

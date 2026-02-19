@@ -1,124 +1,199 @@
-"use client";
+// C:\Users\Zordr\Desktop\frontend-repo\src\lib\agent.ts
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+export const AGENT_PROXY_BASE = "/api/agent"; // same-origin proxy (Next route)
 
-import { listRuns, type RunRow } from "@/lib/api";
+type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-export default function RunsClient() {
-  const [runs, setRuns] = useState<RunRow[]>([]);
-  const [error, setError] = useState<string>("");
-  const [loading, setLoading] = useState(false);
+async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
+  const p = path.startsWith("/") ? path : `/${path}`;
 
-  const stats = useMemo(() => {
-    const total = runs.length;
-    const running = runs.filter((r) =>
-      String(r.status).toLowerCase().includes("running")
-    ).length;
-    const failed = runs.filter((r) =>
-      String(r.status).toLowerCase().includes("failed")
-    ).length;
-    const completed = total - running - failed;
-    return { total, running, failed, completed };
-  }, [runs]);
+  const ctrl = new AbortController();
+  const timeoutMs = 15_000;
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 
-  async function refresh() {
-    setLoading(true);
-    setError("");
+  let res: Response;
+  try {
+    res = await fetch(`${AGENT_PROXY_BASE}${p}`, {
+      method,
+      headers: { "Content-Type": "application/json", accept: "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      cache: "no-store",
+      signal: ctrl.signal,
+    });
+  } catch (e: any) {
+    const msg =
+      e?.name === "AbortError"
+        ? `Agent proxy timeout after ${timeoutMs / 1000}s calling ${AGENT_PROXY_BASE}${p}`
+        : `Agent proxy network error calling ${AGENT_PROXY_BASE}${p}: ${e?.message || String(e)}`;
+    throw new Error(msg);
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const text = await res.text();
+
+  if (!res.ok) {
     try {
-      const data = await listRuns();
-      setRuns(data);
-    } catch (e: any) {
-      setError(e?.message ?? "Failed to fetch");
-    } finally {
-      setLoading(false);
+      const j = JSON.parse(text);
+      throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${j?.detail ?? j?.error ?? text}`);
+    } catch {
+      throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${text}`);
     }
   }
 
-  useEffect(() => {
-    refresh();
-  }, []);
+  if (!text) return {} as T;
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">Deployment Runs</h1>
-          <div className="text-sm text-slate-400">
-            Terraform execution history
-          </div>
-        </div>
-
-        <button
-          onClick={refresh}
-          className="rounded-md border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-white/5"
-          disabled={loading}
-        >
-          Refresh
-        </button>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-4">
-        <Stat label="Total" value={stats.total} />
-        <Stat label="Running" value={stats.running} />
-        <Stat label="Completed" value={stats.completed} />
-        <Stat label="Failed" value={stats.failed} />
-      </div>
-
-      <div className="rounded-lg border border-slate-800 p-4">
-        <h2 className="mb-3 text-sm font-semibold">Latest Runs</h2>
-
-        {error && <div className="text-sm text-red-300">{error}</div>}
-
-        {!error && runs.length === 0 && (
-          <div className="text-sm text-slate-400">No runs yet.</div>
-        )}
-
-        {runs.length > 0 && (
-          <div className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="text-slate-400">
-                <tr className="border-b border-slate-800">
-                  <th className="py-2 text-left">Run</th>
-                  <th className="py-2 text-left">Mode</th>
-                  <th className="py-2 text-left">Status</th>
-                  <th className="py-2 text-left">Stage</th>
-                  <th className="py-2 text-left">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((r) => (
-                  <tr key={r.run_id} className="border-b border-slate-900">
-                    <td className="py-2 font-mono text-cyan-300">
-                      <Link
-                        className="hover:underline"
-                        href={`/portal/runs/${encodeURIComponent(r.run_id)}`}
-                      >
-                        {r.run_id.slice(0, 8)}…
-                      </Link>
-                    </td>
-                    <td className="py-2">{r.mode}</td>
-                  <td className="py-2">{r.status}</td>
-                  <td className="py-2">{r.stage}</td>
-                  <td className="py-2">
-                      {r.created_at ? new Date(r.created_at).toLocaleString() : "—"}
-                  </td>
-                </tr>
-              ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    // fallback if upstream returns non-json (rare)
+    return (text as unknown as T);
+  }
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-slate-800 p-4">
-      <div className="text-xs text-slate-400">{label}</div>
-      <div className="text-2xl font-semibold">{value}</div>
-    </div>
-  );
-}
+/** =========================
+ * BRD API (via proxy)
+ * ========================= */
+export const brdApi = {
+  createSession: (payload: { created_by: string; title: string }) =>
+    request<{ session_id: string; created_by?: string }>("POST", "/api/brd/sessions", payload),
+
+  createRequirementSet: (payload: { session_id: string; name: string; created_by?: string }) =>
+    request<any>("POST", "/api/brd/requirement-sets", {
+      session_id: payload.session_id,
+      title: payload.name,
+      created_by: payload.created_by || "portal",
+    }),
+
+  upsertBusinessContext: (
+    requirementSetId: string,
+    payload: { industry?: string; business_owner?: string; description?: string; stakeholders?: string[] }
+  ) =>
+    request<any>(
+      "PUT",
+      `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/business-context`,
+      payload
+    ),
+
+  upsertConstraints: (requirementSetId: string, payload: { cloud?: string; region?: string; environment?: string }) =>
+    request<any>("PUT", `/api/brd/constraints/${encodeURIComponent(requirementSetId)}`, payload),
+
+  upsertGuardrails: (
+    requirementSetId: string,
+    payload: {
+      pii_present?: boolean;
+      gdpr_required?: boolean;
+      private_networking_required?: boolean;
+      budget_eur_month?: number;
+    }
+  ) => request<any>("PUT", `/api/brd/guardrails/${encodeURIComponent(requirementSetId)}`, payload),
+
+  submit: (requirementSetId: string, payload: { actor?: string; reason?: string } = {}) =>
+    request<any>("POST", `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/submit`, payload),
+
+  approve: (requirementSetId: string, payload: { actor?: string; reason?: string } = {}) =>
+    request<any>("POST", `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/approve`, payload),
+};
+
+/** =========================
+ * Deploy API (via proxy)
+ * ========================= */
+export const deployApi = {
+  createPlan: (payload: {
+    requirement_set_id: string;
+    name_prefix: string;
+    region: string;
+    environment: string;
+    enable_apim: boolean;
+    backend_app_hostname: string;
+  }) => request<any>("POST", "/api/deploy/plan", payload),
+
+  approveRun: (runId: string) => request<any>("POST", `/api/deploy/${encodeURIComponent(runId)}/approve`),
+
+  refresh: (runId: string) => request<any>("GET", `/api/deploy/${encodeURIComponent(runId)}/refresh`),
+};
+
+/** =========================
+ * Runs API (via proxy)
+ * ========================= */
+export type RunEvent = {
+  id: number; // mapped to event_id
+  event_id: number;
+  run_id: string;
+  level: "info" | "warning" | "error";
+  stage: string;
+  status: string;
+  message: string;
+  created_at?: string | null;
+  data?: Record<string, any>;
+};
+
+export type RunOutputs = {
+  run_id: string;
+  stage?: string;
+  status?: string;
+
+  terraform_vars_json?: any;
+  recommendation_snapshot_json?: any;
+  connector_snapshot_json?: any;
+  constraints_snapshot_json?: any;
+  guardrails_snapshot_json?: any;
+  brd_snapshot_json?: any;
+
+  requirement_set_id?: string;
+  package_id?: string;
+
+  pipeline_id?: string;
+  pipeline_run_id?: string;
+  pipeline_url?: string;
+};
+
+export type RunStatusPayload = RunOutputs & { events?: RunEvent[] };
+
+/** =========================
+ * Client helpers used by UI pages
+ * ========================= */
+export const client = {
+  // ===== Requirement sets (legacy UI expects these) =====
+  createRequirementSet: (payload?: any) =>
+    request<any>("POST", `/api/requirement-sets`, payload || {}),
+
+  getRequirementSet: (id: string) =>
+    request<any>("GET", `/api/requirement-sets/${encodeURIComponent(id)}`),
+
+  // ===== Profiling (data-checks page expects this) =====
+  postProfiling: (id: string, payload: any) =>
+    request<any>("POST", `/api/requirement-sets/${encodeURIComponent(id)}/profiling`, payload),
+
+  getProfiling: (id: string) =>
+    request<any>("GET", `/api/requirement-sets/${encodeURIComponent(id)}/profiling`),
+
+  // ===== Deploy (legacy UI expects these) =====
+  planDeploy: (payload: any) =>
+    request<any>("POST", `/api/deploy/plan`, payload),
+
+  getRecommendations: (runId: string) =>
+    request<any>("GET", `/api/deploy/${encodeURIComponent(runId)}/recommendations`),
+
+  approveRun: (runId: string) =>
+    request<any>("POST", `/api/deploy/${encodeURIComponent(runId)}/approve`),
+
+  // ===== Runs (new stable endpoints) =====
+  getRunOutputs: (runId: string) =>
+    request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`),
+
+  getRunEvents: (runId: string, afterId = 0) =>
+    request<RunEvent[]>("GET", `/runs/${encodeURIComponent(runId)}/events?after_id=${afterId}`),
+
+  /**
+   * IMPORTANT:
+   * Your existing Run UI calls client.getRunStatus(runId) and expects:
+   *   { status/current_status, events: [] }
+   * So we return outputs + events in ONE payload to avoid breaking the UI.
+   */
+  getRunStatus: async (runId: string): Promise<RunStatusPayload> => {
+    const outputs = await request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`);
+    const events = await request<RunEvent[]>("GET", `/runs/${encodeURIComponent(runId)}/events?after_id=0`);
+    return { ...outputs, events };
+  },
+};
