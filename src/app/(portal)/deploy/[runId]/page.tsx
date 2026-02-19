@@ -1,180 +1,149 @@
+// src/app/(portal)/deploy/[runId]/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
-import { zaFetch } from "@/lib/za";
-import StageTimeline from "@/components/StageTimeline";
-import JsonViewer from "@/components/JsonViewer";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { deployApprove, deployGetPackage, deployOutputs, deployRefresh } from "@/lib/deploy";
 
-type Refresh = {
-  previous_status?: string;
-  current_status?: string;
-  pipeline?: { state?: string; result?: string; url?: string };
-};
+export default function DeployRunPage({ params }: { params: { runId: string } }) {
+  const runId = params.runId;
 
-export const dynamic = "force-dynamic";
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
 
-export default function DeployRunPage() {
-  const params = useParams<{ runId: string }>();
-  const runId = params?.runId || "";
+  const [pkgResp, setPkgResp] = useState<any>(null);
+  const [refreshResp, setRefreshResp] = useState<any>(null);
+  const [outputsResp, setOutputsResp] = useState<any>(null);
 
-  const [refresh, setRefresh] = useState<Refresh | null>(null);
-  const [packageData, setPackageData] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loadingAction, setLoadingAction] = useState<string | null>(null);
-  const [applyAcknowledged, setApplyAcknowledged] = useState(false);
-  const [applyBlockedNotApproved, setApplyBlockedNotApproved] = useState(false);
+  const deploy = pkgResp?.deploy;
+  const run = pkgResp?.run;
+  const pkg = pkgResp?.package;
+  const infra = pkgResp?.infra;
+  const events = pkgResp?.events ?? [];
+
+  const canApprove = useMemo(() => {
+    if (!deploy) return false;
+    // backend: deploy.approved boolean + statuses
+    return deploy.approved !== true;
+  }, [deploy]);
+
+  async function loadAll() {
+    try {
+      setErr(null);
+      setLoading(true);
+      const r = await deployGetPackage(runId);
+      setPkgResp(r);
+
+      const out = await deployOutputs(runId);
+      setOutputsResp(out);
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to load deploy run");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onRefresh() {
+    try {
+      setErr(null);
+      const r = await deployRefresh(runId);
+      setRefreshResp(r);
+      // re-fetch package to reflect new status/events/infra
+      const p = await deployGetPackage(runId);
+      setPkgResp(p);
+      const out = await deployOutputs(runId);
+      setOutputsResp(out);
+    } catch (e: any) {
+      setErr(e?.message ?? "Refresh failed");
+    }
+  }
+
+  async function onApprove() {
+    try {
+      setErr(null);
+      const a = await deployApprove(runId);
+      // show approve response briefly + refresh state
+      setRefreshResp(a);
+      await onRefresh();
+    } catch (e: any) {
+      setErr(e?.message ?? "Approve failed");
+    }
+  }
 
   useEffect(() => {
-    poll();
-    const t = setInterval(poll, 8000);
-    return () => clearInterval(t);
+    loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
 
-  async function poll() {
-    if (!runId) return;
-    try {
-      const data = await zaFetch(`/api/deploy/${encodeURIComponent(runId)}/refresh`, { method: "POST" });
-      setRefresh(data);
-    } catch (e: any) {
-      setError(e?.message || "Failed to refresh");
-    }
-  }
-
-  async function approve() {
-    await runAction("approve", `/api/deploy/${encodeURIComponent(runId)}/approve`);
-  }
-  async function apply() {
-    await runAction("apply", `/api/deploy/${encodeURIComponent(runId)}/apply`, { guardNotApproved: true });
-  }
-  async function runAction(key: string, path: string, opts?: { guardNotApproved?: boolean }) {
-    setLoadingAction(key);
-    setError(null);
-    try {
-      await zaFetch(path, { method: "POST" });
-      if (key === "apply") setApplyBlockedNotApproved(false);
-      await poll();
-    } catch (e: any) {
-      const msg = e?.message || `${key} failed`;
-      setError(msg);
-      if (opts?.guardNotApproved && msg.toLowerCase().includes("not approved")) {
-        setApplyBlockedNotApproved(true);
-      }
-    } finally {
-      setLoadingAction(null);
-    }
-  }
-
-  async function loadPackage() {
-    setLoadingAction("package");
-    setError(null);
-    try {
-      const data = await zaFetch(`/api/deploy/${encodeURIComponent(runId)}/package`, { method: "GET" });
-      setPackageData(data);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load package");
-    } finally {
-      setLoadingAction(null);
-    }
-  }
-
-  const status = refresh?.current_status || "unknown";
-  const applyEnvEnabled = process.env.NEXT_PUBLIC_ENABLE_INFRA_APPLY === "true";
-  const isApproved = typeof status === "string" && status.toLowerCase().includes("approve");
-  useEffect(() => {
-    if (isApproved) setApplyBlockedNotApproved(false);
-  }, [isApproved]);
-
-  const applyDisabled =
-    !applyEnvEnabled || !applyAcknowledged || (applyBlockedNotApproved && !isApproved) || loadingAction === "apply";
+  if (loading) return <div className="p-6">Loading deploy run…</div>;
 
   return (
-    <div className="max-w-5xl mx-auto px-6 py-8 space-y-6 text-[color:var(--fg)]">
-      <header className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">Deploy Run</h1>
-            <div className="text-xs text-[color:var(--muted)] break-all">RUN_ID: {runId}</div>
-          </div>
-          <StageTimeline current={status} />
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">Deploy Run</h1>
+          <div className="text-sm opacity-80">Run ID: {runId}</div>
         </div>
-      </header>
 
-      {!applyEnvEnabled && (
-        <div className="rounded-md border border-[color:var(--warning,#f59e0b)] bg-[color:var(--warning-bg,rgba(245,158,11,0.12))] px-3 py-2 text-xs text-[color:var(--warning-text,#b45309)]">
-          Apply is disabled by default. Set NEXT_PUBLIC_ENABLE_INFRA_APPLY=true in .env.local and restart to enable.
-        </div>
-      )}
-
-      {error && (
-        <div className="rounded-md border border-[color:var(--danger)] bg-[color:var(--danger-bg,rgba(244,63,94,0.12))] px-3 py-2 text-sm text-[color:var(--danger)]">
-          {error}
-        </div>
-      )}
-
-      <Card className="p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold">Status</div>
-            <div className="text-xs text-[color:var(--muted)]">Pipeline: {refresh?.pipeline?.state || "n/a"}</div>
-          </div>
-          <Button variant="outline" onClick={poll}>
+        <div className="flex gap-2">
+          <button className="px-3 py-2 rounded border" onClick={onRefresh}>
             Refresh
-          </Button>
+          </button>
+          <button className="px-3 py-2 rounded border" onClick={onApprove} disabled={!canApprove}>
+            Approve (trigger infra)
+          </button>
         </div>
-        <div className="text-sm text-[color:var(--fg)]">Current: {status}</div>
-        {refresh?.pipeline?.url && (
-          <a className="text-xs text-[color:var(--accent)] underline" href={refresh.pipeline.url} target="_blank">
-            View pipeline
-          </a>
-        )}
-      </Card>
+      </div>
 
-      <Card className="p-4 space-y-3">
-        <div className="text-sm font-semibold">Actions</div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={approve} disabled={loadingAction === "approve"}>
-            {loadingAction === "approve" ? "Approving…" : "Approve deploy"}
-          </Button>
-          <Button variant="primary" onClick={apply} disabled={applyDisabled}>
-            {loadingAction === "apply" ? "Applying…" : "Apply deploy"}
-          </Button>
-          <Button variant="outline" onClick={loadPackage} disabled={loadingAction === "package"}>
-            {loadingAction === "package" ? "Loading…" : "Load package"}
-          </Button>
+      {err && <div className="p-3 rounded border border-red-400 text-red-700">{err}</div>}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 rounded border">
+          <h2 className="font-semibold mb-2">Current Status</h2>
+          <div className="text-sm">run.status: {run?.status ?? "n/a"}</div>
+          <div className="text-sm">deploy.status: {deploy?.status ?? "n/a"}</div>
+          <div className="text-sm">deploy.approved: {String(deploy?.approved ?? false)}</div>
+          <div className="text-sm">pipeline_run_id: {run?.pipeline_run_id ?? "n/a"}</div>
         </div>
-        <label className="flex items-center gap-2 text-xs text-[color:var(--muted)]">
-          <input
-            type="checkbox"
-            checked={applyAcknowledged}
-            onChange={(e) => setApplyAcknowledged(e.target.checked)}
-          />
-          I understand this will create/modify Azure resources
-        </label>
-        {applyBlockedNotApproved && (
-          <div className="text-xs text-[color:var(--danger)]">
-            Apply blocked: run not approved yet. Approve first.
-          </div>
-        )}
-      </Card>
 
-      <Card className="p-4 space-y-3">
-        <div className="text-sm font-semibold">Package</div>
-        {packageData ? (
-          <div className="space-y-2">
-            <div className="text-xs text-[color:var(--muted)]">
-              Package: {packageData.package_id || "n/a"} | RS: {packageData.requirement_set_id} v
-              {packageData.requirement_set_version}
-            </div>
-            <JsonViewer data={packageData.manifest_json || packageData} />
+        <div className="p-4 rounded border">
+          <h2 className="font-semibold mb-2">Package</h2>
+          <div className="text-sm">package_id: {pkg?.package_id ?? "n/a"}</div>
+          <div className="text-sm">status: {pkg?.status ?? "n/a"}</div>
+          <div className="text-sm">
+            requirement_set_id:{" "}
+            {pkg?.requirement_set_id ? (
+              <Link className="underline" href={`/onboarding/${pkg.requirement_set_id}`}>
+                {pkg.requirement_set_id}
+              </Link>
+            ) : (
+              "n/a"
+            )}
           </div>
-        ) : (
-          <div className="text-sm text-[color:var(--muted)]">No package loaded.</div>
-        )}
-      </Card>
+        </div>
+      </div>
+
+      <div className="p-4 rounded border">
+        <h2 className="font-semibold mb-2">Infra</h2>
+        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(infra, null, 2)}</pre>
+      </div>
+
+      <div className="p-4 rounded border">
+        <h2 className="font-semibold mb-2">Terraform Outputs</h2>
+        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(outputsResp, null, 2)}</pre>
+      </div>
+
+      <div className="p-4 rounded border">
+        <h2 className="font-semibold mb-2">Events (latest first)</h2>
+        <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(events, null, 2)}</pre>
+      </div>
+
+      {refreshResp && (
+        <div className="p-4 rounded border">
+          <h2 className="font-semibold mb-2">Last Action Response</h2>
+          <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(refreshResp, null, 2)}</pre>
+        </div>
+      )}
     </div>
   );
 }
