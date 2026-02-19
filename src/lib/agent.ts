@@ -1,38 +1,12 @@
 // src/lib/agent.ts
-export const AGENT_PROXY_BASE = "/api/agent"; // ALWAYS same-origin via Next route
-export const BASE = process.env.NEXT_PUBLIC_AGENT_BASE_URL || "";
 
-async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T> {
-  if (!BASE) throw new Error("NEXT_PUBLIC_AGENT_BASE_URL is not set");
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json",
-      ...(options.headers || {}),
-    },
-  });
-  const text = await res.text();
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    /* ignore */
-  }
-  if (!res.ok) {
-    const message = (json && (json.detail || json.message)) || text || `Request failed ${res.status}`;
-    throw new Error(message);
-  }
-  return (json as T) ?? (text as unknown as T);
-}
+export const AGENT_PROXY_BASE = "/api/agent"; // same-origin proxy (Next route)
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
-  // Accept either /api/brd/... or /api/agent/api/brd/... without double-prefixing
-  const p = path.startsWith("/api/agent")
-    ? path.replace(/^\/api\/agent/, "")
-    : path.startsWith("/") ? path : `/${path}`;
+  // Accept either /api/... or runs/... and normalize to "/..."
+  const p = path.startsWith("/") ? path : `/${path}`;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 15_000);
@@ -41,7 +15,7 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
   try {
     res = await fetch(`${AGENT_PROXY_BASE}${p}`, {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", accept: "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
       signal: ctrl.signal,
@@ -67,62 +41,55 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
     }
   }
 
-  return text ? (JSON.parse(text) as T) : ({} as T);
+  // Some endpoints might return empty body
+  if (!text) return {} as T;
+
+  // Normal JSON response
+  return JSON.parse(text) as T;
 }
 
+/** =========================
+ * BRD API (via proxy)
+ * ========================= */
 export const brdApi = {
   createSession: (payload: { created_by: string; title: string }) =>
-    request<{ session_id: string; created_by?: string }>("POST", "/api/agent/api/brd/sessions", payload),
+    request<{ session_id: string; created_by?: string }>("POST", "/api/brd/sessions", payload),
 
-  // Backend expects title/created_by; UI often has name -> map to title
   createRequirementSet: (payload: { session_id: string; name: string; created_by?: string }) =>
-    request<any>("POST", "/api/agent/api/brd/requirement-sets", {
+    request<any>("POST", "/api/brd/requirement-sets", {
       session_id: payload.session_id,
       title: payload.name,
       created_by: payload.created_by || "portal",
     }),
 
-  // ✅ matches backend
   upsertBusinessContext: (
     requirementSetId: string,
-    payload: {
-      industry?: string;
-      business_owner?: string;
-      description?: string;
-      stakeholders?: string[];
-    }
+    payload: { industry?: string; business_owner?: string; description?: string; stakeholders?: string[] }
   ) =>
     request<any>(
       "PUT",
-      `/api/agent/api/brd/requirement-sets/${requirementSetId}/business-context`,
+      `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/business-context`,
       payload
     ),
 
-  // ✅ FIXED PATH: backend is /api/brd/constraints/{id}
-  upsertConstraints: (
-    requirementSetId: string,
-    payload: { cloud?: string; region?: string; environment?: string }
-  ) => request<any>("PUT", `/api/agent/api/brd/constraints/${requirementSetId}`, payload),
+  upsertConstraints: (requirementSetId: string, payload: { cloud?: string; region?: string; environment?: string }) =>
+    request<any>("PUT", `/api/brd/constraints/${encodeURIComponent(requirementSetId)}`, payload),
 
-  // ✅ FIXED PATH: backend is /api/brd/guardrails/{id}
   upsertGuardrails: (
     requirementSetId: string,
-    payload: {
-      pii_present?: boolean;
-      gdpr_required?: boolean;
-      private_networking_required?: boolean;
-      budget_eur_month?: number;
-    }
-  ) => request<any>("PUT", `/api/agent/api/brd/guardrails/${requirementSetId}`, payload),
+    payload: { pii_present?: boolean; gdpr_required?: boolean; private_networking_required?: boolean; budget_eur_month?: number }
+  ) => request<any>("PUT", `/api/brd/guardrails/${encodeURIComponent(requirementSetId)}`, payload),
 
-  // These endpoints require a JSON body — send {} unless you use actor/reason
   submit: (requirementSetId: string, payload: { actor?: string; reason?: string } = {}) =>
-    request<any>("POST", `/api/agent/api/brd/requirement-sets/${requirementSetId}/submit`, payload),
+    request<any>("POST", `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/submit`, payload),
 
   approve: (requirementSetId: string, payload: { actor?: string; reason?: string } = {}) =>
-    request<any>("POST", `/api/agent/api/brd/requirement-sets/${requirementSetId}/approve`, payload),
+    request<any>("POST", `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/approve`, payload),
 };
 
+/** =========================
+ * Deploy API (via proxy)
+ * ========================= */
 export const deployApi = {
   createPlan: (payload: {
     requirement_set_id: string;
@@ -131,23 +98,57 @@ export const deployApi = {
     environment: string;
     enable_apim: boolean;
     backend_app_hostname: string;
-  }) => request<any>("POST", "/api/agent/api/deploy/plan", payload),
+  }) => request<any>("POST", "/api/deploy/plan", payload),
 
-  // ✅ now triggers pipeline in backend
-  approveRun: (runId: string) => request<any>("POST", `/api/agent/api/deploy/${runId}/approve`),
+  approveRun: (runId: string) => request<any>("POST", `/api/deploy/${encodeURIComponent(runId)}/approve`),
 
-  refresh: (runId: string) => request<any>("GET", `/api/agent/api/deploy/${runId}/refresh`),
+  refresh: (runId: string) => request<any>("GET", `/api/deploy/${encodeURIComponent(runId)}/refresh`),
 };
 
-// Lightweight direct client (browser-safe, no secrets)
+/** =========================
+ * Runs API (via proxy)
+ * ========================= */
+export type RunEvent = {
+  id: number;          // mapped to event_id
+  event_id: number;
+  run_id: string;
+  level: "info" | "warning" | "error";
+  stage: string;
+  status: string;
+  message: string;
+  created_at?: string | null;
+  data?: Record<string, any>;
+};
+
+export type RunOutputs = {
+  run_id: string;
+  stage?: string;
+  status?: string;
+
+  terraform_vars_json?: any;
+  recommendation_snapshot_json?: any;
+  connector_snapshot_json?: any;
+  constraints_snapshot_json?: any;
+  guardrails_snapshot_json?: any;
+  brd_snapshot_json?: any;
+
+  requirement_set_id?: string;
+  package_id?: string;
+
+  pipeline_id?: string;
+  pipeline_run_id?: string;
+  pipeline_url?: string;
+};
+
 export const client = {
-  createRequirementSet: (payload?: any) => fetchJSON<any>("/api/requirement-sets", { method: "POST", body: JSON.stringify(payload || {}) }),
-  getRequirementSet: (id: string) => fetchJSON<any>(`/api/requirement-sets/${id}`, { method: "GET" }),
-  postProfiling: (id: string, payload: any) =>
-    fetchJSON<any>(`/api/requirement-sets/${id}/profiling`, { method: "POST", body: JSON.stringify(payload) }),
-  getProfiling: (id: string) => fetchJSON<any>(`/api/requirement-sets/${id}/profiling`, { method: "GET" }),
-  planDeploy: (payload: any) => fetchJSON<any>("/api/deploy/plan", { method: "POST", body: JSON.stringify(payload) }),
-  getRecommendations: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/recommendations`, { method: "GET" }),
-  approveRun: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/approve`, { method: "POST" }),
-  getRunStatus: (runId: string) => fetchJSON<any>(`/api/deploy/${runId}/status`, { method: "GET" }),
+  // Canonical “status” payload
+  getRunOutputs: (runId: string) => request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`),
+
+  // Timeline events, incremental
+  getRunEvents: (runId: string, afterId = 0) =>
+    request<RunEvent[]>("GET", `/runs/${encodeURIComponent(runId)}/events?after_id=${afterId}`),
+
+  // Keep name for compatibility with your UI code:
+  // return outputs so Run page works without needing a /status endpoint.
+  getRunStatus: (runId: string) => request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`),
 };

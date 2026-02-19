@@ -1,47 +1,73 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { client } from "./agent";
+import { client, RunEvent, RunOutputs } from "./agent";
 
-export type RunStatus = {
-  current_status?: string;
-  status?: string;
-  events?: { ts?: string; created_at?: string; stage?: string; status?: string; message?: string }[];
+export type RunStatusState = {
+  outputs: RunOutputs | null;
+  events: RunEvent[];
 };
 
 const TERMINAL = new Set(["infra_succeeded", "infra_failed", "failed", "succeeded"]);
 
 export function useRunStatus(runId?: string | null, intervalMs = 2000) {
-  const [data, setData] = useState<RunStatus | null>(null);
+  const [data, setData] = useState<RunStatusState>({ outputs: null, events: [] });
   const [error, setError] = useState<string | null>(null);
+
   const timer = useRef<NodeJS.Timeout | null>(null);
+  const lastEventId = useRef<number>(0);
 
   useEffect(() => {
     if (!runId) return;
-    const id = runId;
+
     let stop = false;
+    const id = runId;
 
     async function tick() {
       try {
-        const res = await client.getRunStatus(id);
+        // 1) outputs (canonical status)
+        const outputs = await client.getRunOutputs(id);
         if (stop) return;
-        setData(res);
-        const st = res.current_status || res.status;
-        if (st && TERMINAL.has(st.toLowerCase())) {
+
+        // 2) events (incremental)
+        const afterId = lastEventId.current || 0;
+        const newEvents = await client.getRunEvents(id, afterId);
+        if (stop) return;
+
+        if (newEvents.length) {
+          lastEventId.current = newEvents[newEvents.length - 1].id;
+        }
+
+        setData((prev) => ({
+          outputs,
+          events: newEvents.length ? [...prev.events, ...newEvents] : prev.events,
+        }));
+
+        const st = (outputs.status || "").toLowerCase();
+        if (st && TERMINAL.has(st)) {
           if (timer.current) clearInterval(timer.current);
           timer.current = null;
         }
+
+        setError(null);
       } catch (e: any) {
         if (stop) return;
-        setError(e?.message || "Failed to fetch status");
+        setError(e?.message || "Failed to fetch run status");
       }
     }
 
+    // reset when run changes
+    lastEventId.current = 0;
+    setData({ outputs: null, events: [] });
+    setError(null);
+
     tick();
     timer.current = setInterval(tick, intervalMs);
+
     return () => {
       stop = true;
       if (timer.current) clearInterval(timer.current);
+      timer.current = null;
     };
   }, [runId, intervalMs]);
 

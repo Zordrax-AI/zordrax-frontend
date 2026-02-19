@@ -362,8 +362,10 @@ export function getTop3Recommendations(requirementSetId: string): Promise<Top3Op
 export function selectRecommendation(requirementSetId: string, optionKey: string): Promise<any> {
   return apiFetch<any>(ENDPOINTS.recommendationsSelect, {
     method: "POST",
-    body: {
+     body: {
       requirement_set_id: requirementSetId,
+      option_id: optionKey,          // ✅ REQUIRED by backend
+      // keep aliases for safety/back-compat
       option: optionKey,
       option_key: optionKey,
       recommendation_id: optionKey,
