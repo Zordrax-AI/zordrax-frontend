@@ -1,3 +1,5 @@
+// src/lib/api.ts
+
 import {
   RequirementSet,
   Connector,
@@ -14,6 +16,7 @@ import {
   InfraOutputsResponse,
   RunEvent,
 } from "./types";
+
 export type {
   Connector,
   RunRow,
@@ -35,8 +38,12 @@ export const API_BASE = rawBase.endsWith("/") ? rawBase.slice(0, -1) : rawBase;
 // Lightweight browser-side client pointing at agent base (public URL).
 export const BASE = process.env.NEXT_PUBLIC_AGENT_BASE_URL || "";
 
+/**
+ * Browser-side helper (direct call to agent public URL).
+ */
 export async function fetchJSON<T>(path: string, options: RequestInit = {}): Promise<T> {
   if (!BASE) throw new Error("NEXT_PUBLIC_AGENT_BASE_URL is not set");
+
   const res = await fetch(`${BASE}${path}`, {
     ...options,
     headers: {
@@ -45,6 +52,7 @@ export async function fetchJSON<T>(path: string, options: RequestInit = {}): Pro
       ...(options.headers || {}),
     },
   });
+
   const text = await res.text();
   let json: any = null;
   try {
@@ -52,6 +60,7 @@ export async function fetchJSON<T>(path: string, options: RequestInit = {}): Pro
   } catch {
     /* ignore */
   }
+
   if (!res.ok) {
     const message = (json && (json.detail || json.message)) || text || `Request failed ${res.status}`;
     throw new Error(message);
@@ -59,17 +68,22 @@ export async function fetchJSON<T>(path: string, options: RequestInit = {}): Pro
   return (json as T) ?? (text as unknown as T);
 }
 
-type HttpMethod = "GET" | "POST" | "PUT";
-
-interface ApiOptions extends RequestInit {
+/**
+ * IMPORTANT:
+ * RequestInit.body is typed as BodyInit, which rejects plain objects.
+ * We intentionally allow `unknown` and JSON.stringify it at runtime.
+ */
+export type ApiOptions = Omit<RequestInit, "body"> & {
+  body?: unknown;
   timeoutMs?: number;
-}
+};
 
 export class ApiError extends Error {
   status: number;
   url: string;
-  body: string;
-  constructor(args: { status: number; url: string; body: string; message?: string }) {
+  body: unknown;
+
+  constructor(args: { status: number; url: string; body: unknown; message?: string }) {
     super(args.message ?? `Request failed (${args.status})`);
     this.name = "ApiError";
     this.status = args.status;
@@ -78,50 +92,70 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Server-side / same-origin proxy call via /api/za (route.ts attaches x-api-key).
+ * Accepts body as object OR string. Objects get JSON.stringified safely.
+ */
 export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  if (!API_BASE) {
-    throw new Error("NEXT_PUBLIC_ONBOARDING_API_BASE is not set");
-  }
+  if (!API_BASE) throw new Error("NEXT_PUBLIC_API_BASE is not set");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 12000);
 
-  const { timeoutMs, headers, ...rest } = options;
+  const { timeoutMs, headers, body, ...rest } = options;
   const url = `${API_BASE}${path}`;
+
+  // dev-safety: catch accidental /api/api duplication
   if (process.env.NODE_ENV === "development" && url.includes("/api/api/")) {
+    clearTimeout(timeout);
     throw new Error(`Double /api detected in request URL: ${url}`);
   }
 
-  const res = await fetch(url, {
-    ...rest,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(headers || {}),
-    },
-    signal: controller.signal,
-  }).catch((err) => {
-    clearTimeout(timeout);
-    throw err;
-  });
+  // Normalize body: allow objects and stringify them.
+  let normalizedBody: BodyInit | null | undefined = undefined;
 
-  clearTimeout(timeout);
+  if (body !== undefined && body !== null) {
+    const b: any = body;
 
-  const text = await res.text();
-  let json: any;
+    const isBodyInit =
+      typeof b === "string" ||
+      (typeof Blob !== "undefined" && b instanceof Blob) ||
+      (typeof ArrayBuffer !== "undefined" && b instanceof ArrayBuffer) ||
+      (typeof FormData !== "undefined" && b instanceof FormData) ||
+      (typeof URLSearchParams !== "undefined" && b instanceof URLSearchParams);
+
+    normalizedBody = isBodyInit ? (b as BodyInit) : (JSON.stringify(b) as BodyInit);
+  }
+
   try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = text;
-  }
+    const res = await fetch(url, {
+      ...rest,
+      body: normalizedBody,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(headers || {}),
+      },
+      signal: controller.signal,
+    });
 
-  if (!res.ok) {
-    const message = json?.message || json?.detail || text || `Request failed with status ${res.status}`;
-    const error = new Error(message);
-    (error as any).status = res.status;
-    throw error;
+    const text = await res.text();
+    let json: any;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = text;
+    }
+
+    if (!res.ok) {
+      const message = json?.message || json?.detail || text || `Request failed with status ${res.status}`;
+      throw new ApiError({ status: res.status, url, body: json ?? text, message });
+    }
+
+    return json as T;
+  } finally {
+    clearTimeout(timeout);
   }
-  return json as T;
 }
 
 export async function poll<T>(
@@ -133,15 +167,10 @@ export async function poll<T>(
   }: { intervalMs?: number; timeoutMs?: number; until?: (result: T) => boolean } = {}
 ): Promise<T> {
   const start = Date.now();
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const result = await fn();
-    if (!until || until(result)) {
-      return result;
-    }
-    if (Date.now() - start > timeoutMs) {
-      throw new Error("Polling timed out");
-    }
+    if (!until || until(result)) return result;
+    if (Date.now() - start > timeoutMs) throw new Error("Polling timed out");
     await new Promise((r) => setTimeout(r, intervalMs));
   }
 }
@@ -157,7 +186,6 @@ const ENDPOINTS = {
   constraints: (id: string) => `/api/brd/requirement-sets/${id}/constraints`,
   requirementInputs: (id: string) => `/api/brd/requirement-sets/${id}/inputs`,
   guardrails: (id: string) => `/api/brd/guardrails/${id}`,
-  metricsSuggestions: (id: string) => `/api/brd/metrics-intent/${id}/suggestions`,
 
   // Connectors
   connectorTypes: "/api/connectors/types",
@@ -180,9 +208,8 @@ const ENDPOINTS = {
   deployRefresh: (runId: string) => `/api/deploy/${runId}/refresh`,
   deployPackage: (runId: string) => `/api/deploy/${runId}/package`,
 
-  // Runs (not under /api)
-  runs: "/runs/",
-  run: (runId: string) => `/runs/${runId}`,
+  // Runs (NOT under /api)
+  runs: "/runs",
   runOutputs: (runId: string) => `/runs/${runId}/outputs`,
   runEvents: (runId: string, afterId?: number) => `/runs/${runId}/events${afterId ? `?after_id=${afterId}` : ""}`,
   runCancel: (runId: string) => `/runs/${runId}/cancel`,
@@ -190,73 +217,66 @@ const ENDPOINTS = {
   health: "/health",
 };
 
+// -----------------------
+// BRD
+// -----------------------
+
 export function createRequirementSet(payload: { name: string; description?: string }): Promise<RequirementSet> {
-  return apiFetch<RequirementSet>(ENDPOINTS.requirementSets, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  return apiFetch<RequirementSet>(ENDPOINTS.requirementSets, { method: "POST", body: payload });
 }
 
 export function getRequirementSet(id: string): Promise<RequirementSet> {
   return apiFetch<RequirementSet>(ENDPOINTS.requirementSet(id), { method: "GET" });
 }
 
-export const brdReadRequirementSet = getRequirementSet;
-
 export function createSession(): Promise<{ session_id: string }> {
-  return apiFetch<{ session_id: string }>(ENDPOINTS.sessions, { method: "POST" });
+  return apiFetch<{ session_id: string }>(ENDPOINTS.sessions, { method: "POST", body: {} });
 }
 
 export function submitRequirementSet(id: string): Promise<RequirementSet> {
-  return apiFetch<RequirementSet>(`${ENDPOINTS.requirementSet(id)}/submit`, { method: "POST" });
+  return apiFetch<RequirementSet>(`${ENDPOINTS.requirementSet(id)}/submit`, { method: "POST", body: {} });
 }
 
 export function approveRequirementSet(id: string): Promise<RequirementSet> {
-  return apiFetch<RequirementSet>(`${ENDPOINTS.requirementSet(id)}/approve`, { method: "POST" });
+  return apiFetch<RequirementSet>(`${ENDPOINTS.requirementSet(id)}/approve`, { method: "POST", body: {} });
 }
 
+// Logs showed 405 for POST here => use PUT.
 export function brdSetConnector(requirementSetId: string, connectorId: string) {
   return apiFetch<RequirementSet>(ENDPOINTS.requirementSetConnector(requirementSetId), {
-    method: "POST",
-    body: JSON.stringify({ connector_id: connectorId }),
+    method: "PUT",
+    body: { connector_id: connectorId },
   });
 }
 
+// /inputs sometimes 404s => derive from requirement set.
 export function getConstraints(requirementSetId: string): Promise<Constraints> {
-  return apiFetch<any>(ENDPOINTS.requirementInputs(requirementSetId), { method: "GET" }).then((res) => {
-    return res?.constraints_json || res?.constraints || {};
-  });
+  return getRequirementSet(requirementSetId).then((rs: any) => rs?.constraints_json || rs?.constraints || {});
 }
 
 export function updateConstraints(requirementSetId: string, payload: Constraints): Promise<Constraints> {
-  return apiFetch<Constraints>(ENDPOINTS.constraints(requirementSetId), {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  return apiFetch<Constraints>(ENDPOINTS.constraints(requirementSetId), { method: "PUT", body: payload });
 }
 
-export const brdUpsertConstraints = updateConstraints;
-
 export function upsertBusinessContext(requirementSetId: string, payload: Record<string, unknown>): Promise<any> {
-  return apiFetch<any>(ENDPOINTS.businessContext(requirementSetId), {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  return apiFetch<any>(ENDPOINTS.businessContext(requirementSetId), { method: "PUT", body: payload });
 }
 
 export function upsertFunctionalRequirements(requirementSetId: string, payload: Record<string, unknown>): Promise<any> {
-  return apiFetch<any>(ENDPOINTS.functionalRequirements(requirementSetId), {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  return apiFetch<any>(ENDPOINTS.functionalRequirements(requirementSetId), { method: "PUT", body: payload });
 }
 
 export function upsertGuardrails(requirementSetId: string, payload: Record<string, unknown>): Promise<any> {
-  return apiFetch<any>(ENDPOINTS.guardrails(requirementSetId), {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
+  return apiFetch<any>(ENDPOINTS.guardrails(requirementSetId), { method: "PUT", body: payload });
 }
+
+// Compatibility exports (your mozart flow imports these)
+export const brdReadRequirementSet = getRequirementSet;
+export const brdUpsertConstraints = updateConstraints;
+
+// -----------------------
+// CONNECTORS
+// -----------------------
 
 export function listConnectors(): Promise<Connector[]> {
   return apiFetch<Connector[]>(ENDPOINTS.connectors, { method: "GET" });
@@ -270,71 +290,104 @@ export function getConnector(id: string): Promise<Connector> {
   return apiFetch<Connector>(ENDPOINTS.connector(id), { method: "GET" });
 }
 
+// Reduce 422s by sending both common aliases.
 export function createConnector(payload: Record<string, unknown>): Promise<Connector> {
+  const p: any = payload || {};
+  const name = p.name;
+  const type = p.type ?? p.connector_type ?? p.connectorType;
+  const config = p.config ?? p.config_json ?? p.configJson ?? {};
+
   return apiFetch<Connector>(ENDPOINTS.connectors, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: {
+      name,
+      type,
+      connector_type: type,
+      connectorType: type,
+      config,
+      config_json: config,
+      configJson: config,
+    },
   });
 }
 
 export function testConnector(id: string): Promise<ConnectionTestResult> {
-  return apiFetch<ConnectionTestResult>(ENDPOINTS.connectorTest(id), { method: "POST" });
+  return apiFetch<ConnectionTestResult>(ENDPOINTS.connectorTest(id), { method: "POST", body: {} });
 }
 
 export function discoverConnector(id: string, payload?: Record<string, unknown>): Promise<{ tables?: TableInfo[] }> {
   return apiFetch<{ tables?: TableInfo[] }>(ENDPOINTS.connectorDiscover(id), {
     method: "POST",
-    body: payload ? JSON.stringify(payload) : undefined,
+    body: payload ?? {},
   });
 }
 
+// ✅ Compatibility alias used by older onboarding pages
 export const discoverTables = discoverConnector;
 
 export function listTables(connectorId: string): Promise<TableInfo[]> {
   return apiFetch<TableInfo[]>(ENDPOINTS.connectorTables(connectorId), { method: "GET" });
 }
 
-export function profileTable(connectorId: string, table: string): Promise<ProfilingSummary> {
+// ✅ Needed by mozart/data-checks
+export function profileConnector(connectorId: string, payload?: Record<string, unknown>): Promise<ProfilingSummary> {
   return apiFetch<ProfilingSummary>(ENDPOINTS.connectorTableProfile(connectorId), {
     method: "POST",
-    body: JSON.stringify({ tables: [table] }),
-  });
-}
-
-export function sampleTable(connectorId: string, table: string): Promise<any> {
-  return apiFetch<any>(ENDPOINTS.connectorTableSample(connectorId), {
-    method: "POST",
-    body: JSON.stringify({ table }),
-  });
-}
-
-export function profileConnector(id: string, payload?: Record<string, unknown>): Promise<ProfilingSummary> {
-  return apiFetch<ProfilingSummary>(ENDPOINTS.connectorTableProfile(id), {
-    method: "POST",
-    body: payload ? JSON.stringify(payload) : undefined,
+    body: payload ?? {},
   });
 }
 
 export function profileTables(connectorId: string, selected: TableInfo[]): Promise<ProfilingSummary> {
   return apiFetch<ProfilingSummary>(ENDPOINTS.connectorTableProfile(connectorId), {
     method: "POST",
-    body: JSON.stringify({ tables: selected }),
+    body: { tables: selected },
   });
 }
 
-export function deployPlan(payload: DeployPlanRequest): Promise<DeployPlanResponse> {
-  return apiFetch<DeployPlanResponse>(ENDPOINTS.deployPlan, {
+export function sampleTable(connectorId: string, table: string): Promise<any> {
+  return apiFetch<any>(ENDPOINTS.connectorTableSample(connectorId), {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: { table },
   });
+}
+
+// -----------------------
+// RECOMMENDATIONS
+// -----------------------
+
+export function getTop3Recommendations(requirementSetId: string): Promise<Top3Option[]> {
+  return apiFetch<Top3Option[]>(ENDPOINTS.recommendationsTop3(requirementSetId), { method: "GET" });
+}
+
+export function selectRecommendation(requirementSetId: string, optionKey: string): Promise<any> {
+  return apiFetch<any>(ENDPOINTS.recommendationsSelect, {
+    method: "POST",
+    body: {
+      requirement_set_id: requirementSetId,
+      option: optionKey,
+      option_key: optionKey,
+      recommendation_id: optionKey,
+    },
+  });
+}
+
+export const getTop3 = getTop3Recommendations;
+export const selectOption = selectRecommendation;
+
+// -----------------------
+// DEPLOY / RUNS
+// -----------------------
+
+export function deployPlan(payload: DeployPlanRequest): Promise<DeployPlanResponse> {
+  return apiFetch<DeployPlanResponse>(ENDPOINTS.deployPlan, { method: "POST", body: payload });
 }
 
 export function deployApprove(runId: string): Promise<RunStatus> {
-  return apiFetch<RunStatus>(ENDPOINTS.deployApprove(runId), { method: "POST" });
+  return apiFetch<RunStatus>(ENDPOINTS.deployApprove(runId), { method: "POST", body: {} });
 }
 
 export function deployApply(runId: string): Promise<RunStatus> {
-  return apiFetch<RunStatus>(ENDPOINTS.deployApply(runId), { method: "POST" });
+  return apiFetch<RunStatus>(ENDPOINTS.deployApply(runId), { method: "POST", body: {} });
 }
 
 export function refreshRun(runId: string): Promise<RunStatus> {
@@ -356,7 +409,7 @@ export function getRunEvents(runId: string, afterId?: number): Promise<RunEvent[
 }
 
 export function cancelRun(runId: string): Promise<void> {
-  return apiFetch<void>(ENDPOINTS.runCancel(runId), { method: "POST" });
+  return apiFetch<void>(ENDPOINTS.runCancel(runId), { method: "POST", body: {} });
 }
 
 export function getPackage(runId: string): Promise<any> {
@@ -367,71 +420,23 @@ export function health(): Promise<any> {
   return apiFetch<any>(ENDPOINTS.health, { method: "GET" });
 }
 
-export function getMetricsSuggestions(requirementSetId: string): Promise<any> {
-  // Endpoint not available; return empty suggestions to avoid breaking the flow
-  return Promise.resolve([]);
-}
-
-export function getTop3Recommendations(requirementSetId: string): Promise<Top3Option[]> {
-  return apiFetch<Top3Option[]>(ENDPOINTS.recommendationsTop3(requirementSetId), { method: "GET" });
-}
-
-export function selectRecommendation(requirementSetId: string, optionKey: string): Promise<any> {
-  return apiFetch<any>(ENDPOINTS.recommendationsSelect, {
-    method: "POST",
-    body: JSON.stringify({ requirement_set_id: requirementSetId, option: optionKey }),
-  });
-}
-
-export const getTop3 = getTop3Recommendations;
-export const selectOption = selectRecommendation;
-
-// Minimal frontend helpers (browser-facing)
-export function createRequirementSetClient(payload: Record<string, unknown> = {}): Promise<any> {
-  return fetchJSON("/api/brd/requirement-sets", { method: "POST", body: JSON.stringify(payload) });
-}
-
-export function getRequirementSetClient(id: string): Promise<any> {
-  return fetchJSON(`/api/brd/requirement-sets/${id}`, { method: "GET" });
-}
-
-export async function mockProfiling(requirementSetId: string): Promise<any> {
-  // Try real profiling endpoint if available; fallback to static mock
-  try {
-    return await fetchJSON("/api/connectors/tables/profile", {
-      method: "POST",
-      body: JSON.stringify({ requirement_set_id: requirementSetId }),
-    });
-  } catch {
-    return {
-      totals: { tables: 3, rows_estimate: 1200000, size_bytes_estimate: 48 * 1024 * 1024 },
-      biggest_tables: [
-        { schema: "public", name: "orders", row_estimate: 800000 },
-        { schema: "public", name: "customers", row_estimate: 300000 },
-      ],
-      pii_summary: { flagged_tables: 1, flags: { email: 1 } },
-      refresh_plan: "daily",
-      ingestion_recommendation: "batch",
-    };
-  }
-}
-
-export async function getProfiling(requirementSetId: string): Promise<any> {
-  try {
-    return await fetchJSON(`/api/deploy/_debug/req/${requirementSetId}`, { method: "GET" });
-  } catch {
-    return mockProfiling(requirementSetId);
-  }
-}
+// -----------------------
+// Legacy browser-facing helpers (still used by a couple pages)
+// -----------------------
 
 export function planDeploy(payload: { requirement_set_id: string }): Promise<any> {
   return fetchJSON("/api/deploy/plan", { method: "POST", body: JSON.stringify(payload) });
 }
 
 export function approveRun(runId: string): Promise<any> {
-  return fetchJSON(`/api/deploy/${runId}/approve`, { method: "POST" });
+  return fetchJSON(`/api/deploy/${runId}/approve`, { method: "POST", body: "{}" });
 }
 
 export function getRunStatus(runId: string): Promise<any> {
   return fetchJSON(`/api/deploy/${runId}/refresh`, { method: "GET" });
+}
+
+// Stable no-op to keep UI from breaking if metrics endpoint isn't implemented yet
+export function getMetricsSuggestions(_: string): Promise<any> {
+  return Promise.resolve([]);
 }
