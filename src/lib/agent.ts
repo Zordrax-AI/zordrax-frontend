@@ -1,21 +1,33 @@
-// C:\Users\Zordr\Desktop\frontend-repo\src\lib\agent.ts
+// src/lib/agent.ts
 
-export const AGENT_PROXY_BASE = "/api/agent"; // same-origin proxy (Next route)
+export const PROXY_BASE = "/api/za"; // IMPORTANT: matches your logs: /api/za/api/...
 
 type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-async function request<T>(method: HttpMethod, path: string, body?: unknown): Promise<T> {
+type RequestOpts = {
+  headers?: Record<string, string>;
+};
+
+async function request<T>(
+  method: HttpMethod,
+  path: string,
+  body?: unknown,
+  opts: RequestOpts = {}
+): Promise<T> {
   const p = path.startsWith("/") ? path : `/${path}`;
 
   const ctrl = new AbortController();
-  const timeoutMs = 15_000;
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  const timer = setTimeout(() => ctrl.abort(), 30_000);
 
   let res: Response;
   try {
-    res = await fetch(`${AGENT_PROXY_BASE}${p}`, {
+    res = await fetch(`${PROXY_BASE}${p}`, {
       method,
-      headers: { "Content-Type": "application/json", accept: "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        accept: "application/json",
+        ...(opts.headers || {}),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
       signal: ctrl.signal,
@@ -23,8 +35,8 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
   } catch (e: any) {
     const msg =
       e?.name === "AbortError"
-        ? `Agent proxy timeout after ${timeoutMs / 1000}s calling ${AGENT_PROXY_BASE}${p}`
-        : `Agent proxy network error calling ${AGENT_PROXY_BASE}${p}: ${e?.message || String(e)}`;
+        ? `Proxy timeout calling ${PROXY_BASE}${p}`
+        : `Proxy network error calling ${PROXY_BASE}${p}: ${e?.message || String(e)}`;
     throw new Error(msg);
   } finally {
     clearTimeout(timer);
@@ -33,22 +45,18 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
   const text = await res.text();
 
   if (!res.ok) {
+    // Try to show backend detail cleanly
     try {
       const j = JSON.parse(text);
-      throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${j?.detail ?? j?.error ?? text}`);
+      const detail = j?.detail || j?.error || j?.message || text;
+      throw new Error(`${res.status} ${res.statusText}: ${detail}`);
     } catch {
-      throw new Error(`Agent proxy ${res.status} ${res.statusText}: ${text}`);
+      throw new Error(`${res.status} ${res.statusText}: ${text}`);
     }
   }
 
   if (!text) return {} as T;
-
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    // fallback if upstream returns non-json (rare)
-    return (text as unknown as T);
-  }
+  return JSON.parse(text) as T;
 }
 
 /** =========================
@@ -56,7 +64,7 @@ async function request<T>(method: HttpMethod, path: string, body?: unknown): Pro
  * ========================= */
 export const brdApi = {
   createSession: (payload: { created_by: string; title: string }) =>
-    request<{ session_id: string; created_by?: string }>("POST", "/api/brd/sessions", payload),
+    request<{ session_id: string }>("POST", "/api/brd/sessions", payload),
 
   createRequirementSet: (payload: { session_id: string; name: string; created_by?: string }) =>
     request<any>("POST", "/api/brd/requirement-sets", {
@@ -75,18 +83,22 @@ export const brdApi = {
       payload
     ),
 
-  upsertConstraints: (requirementSetId: string, payload: { cloud?: string; region?: string; environment?: string }) =>
-    request<any>("PUT", `/api/brd/constraints/${encodeURIComponent(requirementSetId)}`, payload),
+  // IMPORTANT: your backend has BOTH styles in different places.
+  // Your logs show: PUT /api/za/api/brd/.../constraints 200
+  // So keep this path:
+  upsertConstraints: (requirementSetId: string, payload: any) =>
+    request<any>(
+      "PUT",
+      `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/constraints`,
+      payload
+    ),
 
-  upsertGuardrails: (
-    requirementSetId: string,
-    payload: {
-      pii_present?: boolean;
-      gdpr_required?: boolean;
-      private_networking_required?: boolean;
-      budget_eur_month?: number;
-    }
-  ) => request<any>("PUT", `/api/brd/guardrails/${encodeURIComponent(requirementSetId)}`, payload),
+  upsertGuardrails: (requirementSetId: string, payload: any) =>
+    request<any>(
+      "PUT",
+      `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/guardrails`,
+      payload
+    ),
 
   submit: (requirementSetId: string, payload: { actor?: string; reason?: string } = {}) =>
     request<any>("POST", `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/submit`, payload),
@@ -106,7 +118,11 @@ export const deployApi = {
     environment: string;
     enable_apim: boolean;
     backend_app_hostname: string;
-  }) => request<any>("POST", "/api/deploy/plan", payload),
+  }) =>
+    request<any>("POST", "/api/deploy/plan", payload, {
+      // idempotency: stop double-click creating conflicts
+      headers: { "X-Idempotency-Key": `plan:${payload.requirement_set_id}` },
+    }),
 
   approveRun: (runId: string) => request<any>("POST", `/api/deploy/${encodeURIComponent(runId)}/approve`),
 
@@ -117,7 +133,7 @@ export const deployApi = {
  * Runs API (via proxy)
  * ========================= */
 export type RunEvent = {
-  id: number; // mapped to event_id
+  id: number; // maps to event_id
   event_id: number;
   run_id: string;
   level: "info" | "warning" | "error";
@@ -148,52 +164,25 @@ export type RunOutputs = {
   pipeline_url?: string;
 };
 
-export type RunStatusPayload = RunOutputs & { events?: RunEvent[] };
-
-/** =========================
- * Client helpers used by UI pages
- * ========================= */
 export const client = {
-  // ===== Requirement sets (legacy UI expects these) =====
-  createRequirementSet: (payload?: any) =>
-    request<any>("POST", `/api/requirement-sets`, payload || {}),
-
-  getRequirementSet: (id: string) =>
-    request<any>("GET", `/api/requirement-sets/${encodeURIComponent(id)}`),
-
-  // ===== Profiling (data-checks page expects this) =====
-  postProfiling: (id: string, payload: any) =>
-    request<any>("POST", `/api/requirement-sets/${encodeURIComponent(id)}/profiling`, payload),
-
-  getProfiling: (id: string) =>
-    request<any>("GET", `/api/requirement-sets/${encodeURIComponent(id)}/profiling`),
-
-  // ===== Deploy (legacy UI expects these) =====
-  planDeploy: (payload: any) =>
-    request<any>("POST", `/api/deploy/plan`, payload),
-
-  getRecommendations: (runId: string) =>
-    request<any>("GET", `/api/deploy/${encodeURIComponent(runId)}/recommendations`),
-
-  approveRun: (runId: string) =>
-    request<any>("POST", `/api/deploy/${encodeURIComponent(runId)}/approve`),
-
-  // ===== Runs (new stable endpoints) =====
+  // ✅ Needed by your run timeline
   getRunOutputs: (runId: string) =>
     request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`),
 
   getRunEvents: (runId: string, afterId = 0) =>
-    request<RunEvent[]>("GET", `/runs/${encodeURIComponent(runId)}/events?after_id=${afterId}`),
+    request<RunEvent[]>(
+      "GET",
+      `/runs/${encodeURIComponent(runId)}/events?after_id=${afterId}`
+    ),
 
-  /**
-   * IMPORTANT:
-   * Your existing Run UI calls client.getRunStatus(runId) and expects:
-   *   { status/current_status, events: [] }
-   * So we return outputs + events in ONE payload to avoid breaking the UI.
-   */
-  getRunStatus: async (runId: string): Promise<RunStatusPayload> => {
-    const outputs = await request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`);
-    const events = await request<RunEvent[]>("GET", `/runs/${encodeURIComponent(runId)}/events?after_id=0`);
-    return { ...outputs, events };
-  },
+  // Backwards compatibility
+  getRunStatus: (runId: string) =>
+    request<RunOutputs>("GET", `/runs/${encodeURIComponent(runId)}/outputs`),
+
+  // ✅ THIS FIXES your build error in data-checks/page.tsx if it calls client.getProfiling(...)
+  getProfiling: (requirementSetId: string) =>
+    request<any>(
+      "GET",
+      `/api/brd/requirement-sets/${encodeURIComponent(requirementSetId)}/profiling`
+    ),
 };

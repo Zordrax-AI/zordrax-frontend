@@ -30,13 +30,13 @@ export default function RunPage() {
         </div>
         <Button
           variant="primary"
-          onClick={() => {
+          onClick={() =>
             router.push(
               requirementSetId
                 ? `/portal/onboarding/mozart/deploy?requirement_set_id=${encodeURIComponent(requirementSetId)}`
                 : "/portal/onboarding/mozart/deploy"
-            );
-          }}
+            )
+          }
         >
           Go to Deploy
         </Button>
@@ -44,8 +44,8 @@ export default function RunPage() {
     );
   }
 
-  const outputs = data?.outputs ?? null;
-  const events = data?.events ?? [];
+  const outputs = data.outputs;
+  const events = data.events || [];
 
   const status = outputs?.status || "unknown";
   const stage = outputs?.stage || "unknown";
@@ -55,18 +55,12 @@ export default function RunPage() {
     setRefreshing(true);
     setRefreshError(null);
     try {
-      await deployApi.refresh(runId); // ✅ backend endpoint
+      await deployApi.refresh(runId);
     } catch (e: any) {
       setRefreshError(e?.message || "Refresh failed");
     } finally {
       setRefreshing(false);
     }
-  }
-
-  function openPipeline() {
-    if (!pipelineUrl) return;
-    // ✅ ensure onClick returns void (not Window|null)
-    window.open(pipelineUrl, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -84,20 +78,25 @@ export default function RunPage() {
           {requirementSetId ? (
             <Button
               variant="outline"
-              onClick={() => {
+              onClick={() =>
                 router.push(
                   `/portal/onboarding/mozart/recommendations?requirement_set_id=${encodeURIComponent(
                     requirementSetId
                   )}&run_id=${encodeURIComponent(runId)}`
-                );
-              }}
+                )
+              }
             >
               View Recommendations
             </Button>
           ) : null}
 
           {pipelineUrl ? (
-            <Button variant="outline" onClick={openPipeline}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                window.open(pipelineUrl, "_blank", "noopener,noreferrer");
+              }}
+            >
               Open Pipeline
             </Button>
           ) : null}
