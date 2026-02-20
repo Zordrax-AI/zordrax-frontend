@@ -3,14 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-  "dev": "next dev",
-  "build": "next build",
-  "start": "next start",
-  "lint": "next lint",
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
 
-  "generate:api": "openapi-typescript http://localhost:8000/openapi.json --output src/generated/api.ts"
-}
-,
+    "generate:api": "openapi-typescript http://localhost:8000/openapi.json --output src/generated/api.ts"
+  },
   "dependencies": {
     "clsx": "^2.1.1",
     "framer-motion": "^12.23.26",

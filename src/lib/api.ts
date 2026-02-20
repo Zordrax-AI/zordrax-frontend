@@ -295,19 +295,44 @@ export function createConnector(payload: Record<string, unknown>): Promise<Conne
   const p: any = payload || {};
   const name = p.name;
   const type = p.type ?? p.connector_type ?? p.connectorType;
-  const config = p.config ?? p.config_json ?? p.configJson ?? {};
+  const config_json = p.config_json ?? p.config ?? p.configJson ?? {};
 
-  return apiFetch<Connector>(ENDPOINTS.connectors, {
-    method: "POST",
-    body: {
-      name,
-      type,
-      connector_type: type,
-      connectorType: type,
-      config,
-      config_json: config,
-      configJson: config,
-    },
+  const body = { name, type, config_json };
+
+  const matchExisting = (connectors: Connector[], conflictId?: string) => {
+    const lcName = (name ?? "").toString().toLowerCase();
+    const lcType = (type ?? "").toString().toLowerCase();
+
+    return connectors.find((c: any) => {
+      if (conflictId && c.id === conflictId) return true;
+      const cName = (c.name ?? "").toString().toLowerCase();
+      const cType = (c.type ?? c.connector_type ?? "").toString().toLowerCase();
+      return cName === lcName && cType === lcType;
+    });
+  };
+
+  return apiFetch<Connector>(ENDPOINTS.connectors, { method: "POST", body }).catch(async (err) => {
+    const isApiError = err instanceof ApiError;
+    if (!isApiError || err.status !== 409) throw err;
+
+    // Conflict: look up existing connector and return it to keep flows alive.
+    try {
+      const conflictBody: any = (err as ApiError).body ?? {};
+      const conflictId = conflictBody?.connector_id ?? conflictBody?.id ?? conflictBody?.existing_id;
+      const connectors = await listConnectors();
+      const existing = matchExisting(connectors, conflictId);
+      if (existing) return existing;
+    } catch (lookupErr) {
+      // fall through to throw below with clearer message
+      console.warn("createConnector 409 lookup failed", lookupErr);
+    }
+
+    throw new ApiError({
+      status: 409,
+      url: `${API_BASE}${ENDPOINTS.connectors}`,
+      body: (err as ApiError).body,
+      message: "409 conflict; no matching existing connector found",
+    });
   });
 }
 
@@ -380,8 +405,40 @@ export const selectOption = selectRecommendation;
 // DEPLOY / RUNS
 // -----------------------
 
-export function deployPlan(payload: DeployPlanRequest): Promise<DeployPlanResponse> {
-  return apiFetch<DeployPlanResponse>(ENDPOINTS.deployPlan, { method: "POST", body: payload });
+export async function deployPlan(payload: DeployPlanRequest): Promise<DeployPlanResponse> {
+  try {
+    return await apiFetch<DeployPlanResponse>(ENDPOINTS.deployPlan, { method: "POST", body: payload });
+  } catch (err: any) {
+    // deterministic 409 handling (do NOT invent run_id="conflict")
+    if (err instanceof ApiError && err.status === 409) {
+      const body: any = err.body ?? {};
+
+      // Try common shapes the backend might return on conflict
+      const runId =
+        body?.run_id ??
+        body?.existing_run_id ??
+        body?.runId ??
+        body?.data?.run_id ??
+        body?.detail?.run_id ??
+        body?.detail?.existing_run_id;
+
+      if (typeof runId === "string" && runId.length > 0 && runId !== "conflict") {
+        // Return a valid response shape using the existing run id.
+        return { run_id: runId } as any;
+      }
+
+      // If backend didn't give us a run id, FAIL loudly instead of poisoning the UI
+      throw new ApiError({
+        status: 409,
+        url: `${API_BASE}${ENDPOINTS.deployPlan}`,
+        body,
+        message:
+          "Deploy plan returned 409 conflict (run already exists) but backend did not return an existing run_id to continue.",
+      });
+    }
+
+    throw err;
+  }
 }
 
 export function deployApprove(runId: string): Promise<RunStatus> {
