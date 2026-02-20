@@ -437,6 +437,29 @@ export async function deployPlan(payload: DeployPlanRequest): Promise<DeployPlan
       });
     }
 
+    // 400 guardrails_failed handling: surface reasons from backend
+    if (err instanceof ApiError && err.status === 400) {
+      const body: any = err.body ?? {};
+      const detail = body?.detail ?? body;
+      if (detail?.error === "guardrails_failed") {
+        const reasons: string[] = Array.isArray(detail?.guardrails?.reasons)
+          ? detail.guardrails.reasons
+          : [];
+
+        const pretty =
+          reasons.length > 0
+            ? `Guardrails failed:\n- ${reasons.join("\n- ")}`
+            : "Guardrails failed (missing required fields).";
+
+        throw new ApiError({
+          status: 400,
+          url: `${API_BASE}${ENDPOINTS.deployPlan}`,
+          body,
+          message: pretty,
+        });
+      }
+    }
+
     throw err;
   }
 }

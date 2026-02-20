@@ -95,7 +95,11 @@ export default function ApprovalPage() {
         >
           {loading ? "Generating..." : "Approve & Generate Plan"}
         </button>
-        {message && <div className="text-sm text-[color:var(--muted)]">{message}</div>}
+        {message && (
+          <pre className="text-sm whitespace-pre-wrap text-[color:var(--muted)]">
+            {message}
+          </pre>
+        )}
       </div>
     </div>
   );
