@@ -8,8 +8,7 @@
     "start": "next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-
-    "generate:api": "openapi-typescript http://localhost:8000/openapi.json --output src/generated/api.ts"
+    "generate:api": "node scripts/generate-api.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -25,6 +24,7 @@
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
+    "cross-env": "^10.1.0",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.6",
     "openapi-typescript": "^7.10.1",
