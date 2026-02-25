@@ -377,239 +377,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/brd/_debug/build": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Brd Debug Build */
-        get: operations["brd_debug_build_api_brd__debug_build_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Session
-         * @description Creates a BRD session. Uses UUID (hyphenated) because your DB screenshot shows session_id like that.
-         */
-        post: operations["create_session_api_brd_sessions_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Create Requirement Set
-         * @description Creates a RequirementSet in DRAFT state.
-         */
-        post: operations["create_requirement_set_api_brd_requirement_sets_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets/{requirement_set_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read Requirement Set */
-        get: operations["read_requirement_set_api_brd_requirement_sets__requirement_set_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets/{requirement_set_id}/business-context": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Upsert Business Context */
-        put: operations["upsert_business_context_api_brd_requirement_sets__requirement_set_id__business_context_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets/{requirement_set_id}/functional-requirements": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Upsert Functional Requirements */
-        put: operations["upsert_functional_requirements_api_brd_requirement_sets__requirement_set_id__functional_requirements_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets/{requirement_set_id}/constraints": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Upsert Constraints */
-        put: operations["upsert_constraints_api_brd_requirement_sets__requirement_set_id__constraints_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/constraints/{requirement_set_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Alias Constraints */
-        put: operations["alias_constraints_api_brd_constraints__requirement_set_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets/{requirement_set_id}/connector": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Attach Connector */
-        put: operations["attach_connector_api_brd_requirement_sets__requirement_set_id__connector_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/guardrails/{requirement_set_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Upsert Guardrails */
-        put: operations["upsert_guardrails_api_brd_guardrails__requirement_set_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets/{requirement_set_id}/submit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Submit Requirement Set
-         * @description draft -> submitted
-         */
-        post: operations["submit_requirement_set_api_brd_requirement_sets__requirement_set_id__submit_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets/{requirement_set_id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Approve Requirement Set
-         * @description submitted -> approved
-         */
-        post: operations["approve_requirement_set_api_brd_requirement_sets__requirement_set_id__approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/brd/requirement-sets/{requirement_set_id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reject Requirement Set */
-        post: operations["reject_requirement_set_api_brd_requirement_sets__requirement_set_id__reject_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/infra/callback": {
         parameters: {
             query?: never;
@@ -699,6 +466,107 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/brd/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Session
+         * @description Creates a BRD session. Uses UUID (hyphenated) because your DB screenshot shows session_id like that.
+         */
+        post: operations["create_session_api_brd_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/brd/requirement-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Requirement Set
+         * @description Creates a RequirementSet in DRAFT state.
+         */
+        post: operations["create_requirement_set_api_brd_requirement_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/brd/requirement-sets/{requirement_set_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Requirement Set
+         * @description draft -> submitted
+         */
+        post: operations["submit_requirement_set_api_brd_requirement_sets__requirement_set_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/brd/requirement-sets/{requirement_set_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Requirement Set
+         * @description submitted -> approved
+         */
+        post: operations["approve_requirement_set_api_brd_requirement_sets__requirement_set_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/brd/requirement-sets/{requirement_set_id}/business-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Business Context
+         * @description Persist business context into requirement_sets.business_context_json.
+         *     Deterministic defaults + safe transaction handling.
+         */
+        put: operations["set_business_context_api_brd_requirement_sets__requirement_set_id__business_context_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/recommendations/top3": {
         parameters: {
             query?: never;
@@ -737,27 +605,6 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** ActionBody */
-        ActionBody: {
-            /**
-             * Actor
-             * @default unknown
-             */
-            actor: string;
-            /** Reason */
-            reason?: string | null;
-        };
-        /** ActionResult */
-        ActionResult: {
-            /**
-             * Ok
-             * @default true
-             */
-            ok: boolean;
-            /** Status */
-            status: string;
-            requirement_set: components["schemas"]["RequirementSetOut"];
-        };
         /** ActorIn */
         ActorIn: {
             /**
@@ -782,22 +629,23 @@ export interface components {
         };
         /** BusinessContextIn */
         BusinessContextIn: {
-            /** Industry */
-            industry?: string | null;
-            /** Business Owner */
-            business_owner?: string | null;
-            /** Description */
-            description?: string | null;
-            /** Stakeholders */
-            stakeholders?: string[] | null;
-            /** Pii Present */
-            pii_present?: boolean | null;
-            /** Gdpr Required */
-            gdpr_required?: boolean | null;
-            /** Private Networking Required */
-            private_networking_required?: boolean | null;
             /** Budget Eur Month */
-            budget_eur_month?: number | null;
+            budget_eur_month: number;
+            /**
+             * Pii Present
+             * @default false
+             */
+            pii_present: boolean;
+            /**
+             * Gdpr Required
+             * @default false
+             */
+            gdpr_required: boolean;
+            /**
+             * Private Networking Required
+             * @default false
+             */
+            private_networking_required: boolean;
         };
         /**
          * ConnectionTestIn
@@ -881,11 +729,6 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        /** ConnectorAttachIn */
-        ConnectorAttachIn: {
-            /** Connector Id */
-            connector_id: string;
-        };
         /** ConnectorIn */
         ConnectorIn: {
             /** Type */
@@ -928,36 +771,12 @@ export interface components {
             /** Updated At */
             updated_at?: string | null;
         };
-        /** ConstraintsIn */
-        ConstraintsIn: {
-            /** Region */
-            region?: string | null;
-            /** Environment */
-            environment?: string | null;
-            /** Cloud */
-            cloud?: string | null;
-        };
         /** CreateReqSetIn */
         CreateReqSetIn: {
             /** Session Id */
             session_id: string;
             /** Title */
             title?: string | null;
-        };
-        /** CreateRequirementSet */
-        CreateRequirementSet: {
-            /** Session Id */
-            session_id: string;
-            /**
-             * Title
-             * @default Requirement Set
-             */
-            title: string;
-            /**
-             * Created By
-             * @default unknown
-             */
-            created_by: string;
         };
         /** CreateRunRequest */
         CreateRunRequest: {
@@ -1003,45 +822,11 @@ export interface components {
              */
             backend_app_hostname: string;
         };
-        /** FunctionalRequirementIn */
-        FunctionalRequirementIn: {
-            /** Req Key */
-            req_key: string;
-            /** Title */
-            title: string;
-            /** Description */
-            description?: string | null;
-            /**
-             * Priority
-             * @default must
-             */
-            priority: string;
-            /** Acceptance Criteria */
-            acceptance_criteria?: string[] | null;
-        };
-        /** FunctionalRequirementsUpsert */
-        FunctionalRequirementsUpsert: {
-            /** Requirement Set Id */
-            requirement_set_id: string;
-            /** Items */
-            items: components["schemas"]["FunctionalRequirementIn"][];
-        };
         /** GuardrailsEvaluation */
         GuardrailsEvaluation: {
             intake_spec: components["schemas"]["IntakeSpec"];
             behavior_spec: components["schemas"]["BehaviorSpec"];
             result: components["schemas"]["GuardrailsResult"];
-        };
-        /** GuardrailsIn */
-        GuardrailsIn: {
-            /** Pii Present */
-            pii_present?: boolean | null;
-            /** Gdpr Required */
-            gdpr_required?: boolean | null;
-            /** Private Networking Required */
-            private_networking_required?: boolean | null;
-            /** Budget Eur Month */
-            budget_eur_month?: number | null;
         };
         /** GuardrailsResult */
         GuardrailsResult: {
@@ -1142,23 +927,6 @@ export interface components {
              */
             url?: string | null;
         };
-        /** RequirementSetOut */
-        RequirementSetOut: {
-            /** Id */
-            id: string;
-            /** Session Id */
-            session_id?: string | null;
-            /** Version */
-            version: number;
-            /** Status */
-            status: string;
-            /** Title */
-            title: string;
-            /** Created At */
-            created_at?: string | null;
-            /** Updated At */
-            updated_at?: string | null;
-        };
         /** RunEventIn */
         RunEventIn: {
             /**
@@ -1179,18 +947,6 @@ export interface components {
             requirement_set_id: string;
             /** Option Id */
             option_id: string;
-        };
-        /** SessionOut */
-        SessionOut: {
-            /** Session Id */
-            session_id: string;
-            /** Created By */
-            created_by?: string | null;
-            /**
-             * Persisted
-             * @default false
-             */
-            persisted: boolean;
         };
         /** Top3Option */
         Top3Option: {
@@ -1250,16 +1006,6 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
-        };
-        /** CreateSessionIn */
-        ai_agent__routes__brd_routes__CreateSessionIn: {
-            /**
-             * Created By
-             * @default unknown
-             */
-            created_by: string;
-            /** Title */
-            title?: string | null;
         };
     };
     responses: never;
@@ -1994,446 +1740,6 @@ export interface operations {
             };
         };
     };
-    brd_debug_build_api_brd__debug_build_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    create_session_api_brd_sessions_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateSessionIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_requirement_set_api_brd_requirement_sets_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateReqSetIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    read_requirement_set_api_brd_requirement_sets__requirement_set_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RequirementSetOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_business_context_api_brd_requirement_sets__requirement_set_id__business_context_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["BusinessContextIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_functional_requirements_api_brd_requirement_sets__requirement_set_id__functional_requirements_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["FunctionalRequirementsUpsert"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_constraints_api_brd_requirement_sets__requirement_set_id__constraints_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConstraintsIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    alias_constraints_api_brd_constraints__requirement_set_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConstraintsIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    attach_connector_api_brd_requirement_sets__requirement_set_id__connector_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ConnectorAttachIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    upsert_guardrails_api_brd_guardrails__requirement_set_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GuardrailsIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_requirement_set_api_brd_requirement_sets__requirement_set_id__submit_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ActorIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    approve_requirement_set_api_brd_requirement_sets__requirement_set_id__approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ActorIn"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reject_requirement_set_api_brd_requirement_sets__requirement_set_id__reject_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                requirement_set_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ActionBody"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ActionResult"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     infra_callback_api_infra_callback_post: {
         parameters: {
             query?: never;
@@ -2569,6 +1875,185 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    create_session_api_brd_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_requirement_set_api_brd_requirement_sets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReqSetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_requirement_set_api_brd_requirement_sets__requirement_set_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActorIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_requirement_set_api_brd_requirement_sets__requirement_set_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActorIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_business_context_api_brd_requirement_sets__requirement_set_id__business_context_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirement_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessContextIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
