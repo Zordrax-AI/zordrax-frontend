@@ -17,6 +17,9 @@ import {
   riskScore,
 } from "../../lib/zordrax-orchestrator-client";
 import AIPatchPanel from "./ai-patch-panel";
+import AgentOpsCenterPanel from "./agent-ops-center-panel";
+import PRValidationLoopPanel from "./pr-validation-loop-panel";
+import ExecutionLoopPanel from "./execution-loop-panel";
 type LogItem = {
   timestamp: string;
   level: "INFO" | "SUCCESS" | "ERROR";
@@ -427,8 +430,14 @@ export default function OrchestratorCockpit() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-xl font-bold">Activity Log</h2>
+        <section className="space-y-6">
+  <PRValidationLoopPanel defaultGoal={prompt} />
+  <AgentOpsCenterPanel defaultGoal={prompt} />
+  <ExecutionLoopPanel defaultGoal={prompt} defaultRepo="onboarding-repo" />
+</section>
+
+<section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+  <h2 className="text-xl font-bold">Activity Log</h2>
           <div className="mt-4 space-y-3">
             {logs.map((item, index) => (
               <div key={`${item.timestamp}-${index}`} className="rounded-xl border border-slate-200 p-3">
@@ -445,3 +454,4 @@ export default function OrchestratorCockpit() {
     </main>
   );
 }
+
