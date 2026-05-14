@@ -16,7 +16,7 @@ import {
   getFullRunStatus,
   riskScore,
 } from "@/lib/zordrax-orchestrator-client";
-
+import AIPatchPanel from "./ai-patch-panel";
 type LogItem = {
   timestamp: string;
   level: "INFO" | "SUCCESS" | "ERROR";
@@ -405,6 +405,12 @@ export default function OrchestratorCockpit() {
               <PRLinks proposals={proposals} />
             </div>
           </div>
+
+          <AIPatchPanel
+  runId={runId || ""}
+  defaultGoal={prompt}
+  defaultRepo="onboarding-repo"
+/>
 
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-xl font-bold">Risk Score</h2>

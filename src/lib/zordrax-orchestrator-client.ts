@@ -99,14 +99,42 @@ export type DeployDryRunResponse = {
   actions: string[];
 };
 
-export type AIPRResponse = {
+export type AIPatchFile = {
+  path: string;
+  operation: "create_or_update";
+  content: string;
+  reason: string;
+};
+
+export type AIPatchResponse = {
+  run_id: string;
+  status: string;
+  repo: string;
+  branch_name?: string | null;
+  summary: string;
+  files: AIPatchFile[];
+  tests: string[];
+  risk_notes: string[];
+  safety: Record<string, unknown>;
+};
+
+export type AIPatchValidationResponse = {
+  run_id: string;
+  repo: string;
+  valid: boolean;
+  blocked: boolean;
+  violations: string[];
+  warnings: string[];
+};
+
+export type AIPRAutomationResponse = {
   run_id: string;
   status: string;
   repo: string;
   branch_name: string;
   title: string;
   description: string;
-  files: Array<Record<string, unknown>>;
+  files: AIPatchFile[];
   tests: string[];
   pr_id?: number | null;
   pr_url?: string | null;
@@ -173,16 +201,50 @@ export function deployDryRun(params: { run_id: string; environment: string }) {
   });
 }
 
+export function generateAIPatch(params: {
+  run_id: string;
+  repo: string;
+  goal: string;
+  requested_by?: string;
+  mode?: "deterministic" | "llm_ready";
+  context?: Record<string, unknown>;
+}) {
+  return requestJson<AIPatchResponse>("/orchestrate/ai-codegen/generate-patch", {
+    method: "POST",
+    body: JSON.stringify({
+      requested_by: "founder",
+      mode: "deterministic",
+      context: {},
+      ...params,
+    }),
+  });
+}
+
+export function validateAIPatch(params: {
+  run_id: string;
+  repo: string;
+  files: AIPatchFile[];
+}) {
+  return requestJson<AIPatchValidationResponse>("/orchestrate/ai-codegen/validate-patch", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
 export function createAIPR(params: {
   run_id: string;
   repo: string;
   mode: "proposal_only" | "create_pr";
-  files: Array<Record<string, unknown>>;
+  files: AIPatchFile[];
   tests?: string[];
   created_by?: string;
 }) {
-  return requestJson<AIPRResponse>("/orchestrate/automation/create-ai-pr", {
+  return requestJson<AIPRAutomationResponse>("/orchestrate/automation/create-ai-pr", {
     method: "POST",
-    body: JSON.stringify(params),
+    body: JSON.stringify({
+      tests: [],
+      created_by: "founder",
+      ...params,
+    }),
   });
 }
