@@ -1,4 +1,4 @@
-# Zordrax Frontend Live Polling + PR Links Pack
+# Zordrax Frontend AI Patch -> Real PR Pack
 
 Build location:
 
@@ -6,70 +6,73 @@ Build location:
 frontend-repo
 ```
 
-This pack upgrades `/orchestrator` with:
+This adds browser controls for:
 
 ```text
-- live run-status polling
-- clickable PR links
-- validation/PR status badges
-- better status panel
+Generate AI Patch
+Validate policy
+Create Real PR
+Show PR link
 ```
 
 ## Files included
 
 ```text
 lib/zordrax-orchestrator-client.ts
-app/orchestrator/orchestrator-cockpit.tsx
+app/orchestrator/ai-patch-panel.tsx
+app/orchestrator/orchestrator-cockpit-ai-patch-integration-snippet.tsx
 ```
 
-## Important
+## Apply to active repo layout
 
-Your repo previously used root folders:
+Your active Vercel route has been:
 
 ```text
-app/
-lib/
+src/app/(dashboard)/orchestrator/
+src/lib/
 ```
 
-So copy there first.
-
-If your active app is actually `src/app`, copy to `src/app` and `src/lib` instead.
-
-## Apply from frontend-repo
+Copy:
 
 ```powershell
-Copy-Item C:\Users\Zordr\Desktop\zordrax_frontend_live_polling_pr_links_pack\lib\zordrax-orchestrator-client.ts .\lib\zordrax-orchestrator-client.ts -Force
-Copy-Item C:\Users\Zordr\Desktop\zordrax_frontend_live_polling_pr_links_pack\app\orchestrator\orchestrator-cockpit.tsx .\app\orchestrator\orchestrator-cockpit.tsx -Force
+cd C:\Users\Zordr\Desktop\frontend-repo
+
+Copy-Item `
+  C:\Users\Zordr\Desktop\zordrax_frontend_ai_patch_to_pr_pack\lib\zordrax-orchestrator-client.ts `
+  .\src\lib\zordrax-orchestrator-client.ts `
+  -Force
+
+Copy-Item `
+  C:\Users\Zordr\Desktop\zordrax_frontend_ai_patch_to_pr_pack\app\orchestrator\ai-patch-panel.tsx `
+  ".\src\app\(dashboard)\orchestrator\ai-patch-panel.tsx" `
+  -Force
 ```
 
-If using `src` layout:
+## Update orchestrator-cockpit.tsx
 
-```powershell
-Copy-Item C:\Users\Zordr\Desktop\zordrax_frontend_live_polling_pr_links_pack\lib\zordrax-orchestrator-client.ts .\src\lib\zordrax-orchestrator-client.ts -Force
-Copy-Item C:\Users\Zordr\Desktop\zordrax_frontend_live_polling_pr_links_pack\app\orchestrator\orchestrator-cockpit.tsx .\src\app\orchestrator\orchestrator-cockpit.tsx -Force
+In:
+
+```text
+src/app/(dashboard)/orchestrator/orchestrator-cockpit.tsx
 ```
 
-## Check `page.tsx`
-
-Your page should import the cockpit:
+Add import near the top:
 
 ```tsx
-import OrchestratorCockpit from "./orchestrator-cockpit";
-
-export default function Page() {
-  return <OrchestratorCockpit />;
-}
+import AIPatchPanel from "./ai-patch-panel";
 ```
 
-## Env var
+Then add this section somewhere below PR Links or near the lower panels:
 
-Vercel needs:
-
-```text
-NEXT_PUBLIC_ONBOARDING_API_BASE=https://zordrax-onboarding-agent.greenground-d9556cdb.uksouth.azurecontainerapps.io
+```tsx
+<AIPatchPanel
+  runId={runId || ""}
+  defaultGoal={prompt}
+  defaultRepo="onboarding-repo"
+/>
 ```
 
-## Test locally
+## Test
 
 ```powershell
 npm run build
@@ -86,8 +89,13 @@ http://localhost:3000/orchestrator
 
 ```powershell
 git add .
-git commit -m "Add live orchestrator polling and PR links"
+git commit -m "Add cockpit AI patch to PR controls"
+git pull --rebase origin main
 git push origin main
 ```
 
-If Vercel deploys from GitHub, also push to your GitHub remote.
+If Vercel deploys from GitHub:
+
+```powershell
+git push github main
+```

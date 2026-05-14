@@ -1,69 +1,3 @@
-export type BuildResponse = {
-  run_id: string;
-  status: string;
-  message: string;
-  package_contract: {
-    package_id: string;
-    goal: string;
-    environment: string;
-    approval_required: boolean;
-    target_repos: string[];
-    safety?: Record<string, unknown>;
-  };
-  azure_devops_pipeline_run_id?: number | null;
-  azure_devops_pipeline_url?: string | null;
-};
-
-export type ApprovalResponse = {
-  run_id: string;
-  status: string;
-  approved_by: string;
-  decision: string;
-  comment?: string | null;
-  approved_at: string;
-};
-
-export type CreatePrResponse = {
-  run_id: string;
-  status: string;
-  created_by: string;
-  created_at: string;
-  proposals: Array<{
-    repo: string;
-    branch_name: string;
-    title: string;
-    description: string;
-    proposed_files: string[];
-    pr_id?: number | null;
-    pr_url?: string | null;
-  }>;
-};
-
-export type PrStatusResponse = {
-  run_id: string;
-  pipeline_run_id: number;
-  state: string;
-  result?: string | null;
-  raw?: Record<string, unknown>;
-};
-
-export type RiskScoreResponse = {
-  risk_score: number;
-  risk_level: string;
-  reasons: string[];
-  recommended_action: string;
-};
-
-export type DeployDryRunResponse = {
-  run_id: string;
-  environment: string;
-  status: string;
-  deployment_allowed: boolean;
-  approval_required: boolean;
-  steps: string[];
-  warnings: string[];
-};
-
 const API_BASE =
   process.env.NEXT_PUBLIC_ONBOARDING_API_BASE?.replace(/\/$/, "") ||
   "http://127.0.0.1:8000";
@@ -86,77 +20,231 @@ async function requestJson<T>(path: string, options: RequestInit = {}): Promise<
   return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
+export type BuildResponse = {
+  run_id: string;
+  status: string;
+  message: string;
+  package_contract: {
+    package_id: string;
+    goal: string;
+    environment: string;
+  };
+  azure_devops_pipeline_run_id?: number | null;
+  azure_devops_pipeline_url?: string | null;
+};
+
+export type ApprovalResponse = {
+  run_id: string;
+  status: string;
+  approved_by: string;
+  decision: string;
+  comment?: string | null;
+  approved_at: string;
+};
+
+export type PRProposal = {
+  repo: string;
+  branch_name: string;
+  title: string;
+  description?: string;
+  proposed_files?: string[];
+  pr_id?: number | null;
+  pr_url?: string | null;
+};
+
+export type CreatePRResponse = {
+  run_id: string;
+  status: string;
+  created_by: string;
+  created_at: string;
+  proposals: PRProposal[];
+};
+
+export type FullRunStatus = {
+  run_id: string;
+  status: string;
+  package_id?: string | null;
+  goal?: string | null;
+  environment?: string | null;
+  azure_devops_pipeline_run_id?: number | null;
+  azure_devops_pipeline_url?: string | null;
+  azure_devops_state?: string | null;
+  azure_devops_result?: string | null;
+  approval?: Record<string, unknown> | null;
+  pr?: {
+    run_id?: string;
+    status?: string;
+    created_by?: string;
+    created_at?: string;
+    proposals?: PRProposal[];
+  } | null;
+  package_contract?: Record<string, unknown> | null;
+  raw?: Record<string, unknown>;
+};
+
+export type RiskScoreResponse = {
+  run_id: string;
+  score?: number;
+  level?: string;
+  reasons?: string[];
+  deployment_allowed?: boolean;
+};
+
+export type DeployDryRunResponse = {
+  run_id: string;
+  environment: string;
+  status: string;
+  dry_run: boolean;
+  deployment_allowed: boolean;
+  actions: string[];
+};
+
+export type AIPatchFile = {
+  path: string;
+  operation: "create_or_update";
+  content: string;
+  reason: string;
+};
+
+export type AIPatchResponse = {
+  run_id: string;
+  status: string;
+  repo: string;
+  branch_name?: string | null;
+  summary: string;
+  files: AIPatchFile[];
+  tests: string[];
+  risk_notes: string[];
+  safety: Record<string, unknown>;
+};
+
+export type AIPatchValidationResponse = {
+  run_id: string;
+  repo: string;
+  valid: boolean;
+  blocked: boolean;
+  violations: string[];
+  warnings: string[];
+};
+
+export type AIPRAutomationResponse = {
+  run_id: string;
+  status: string;
+  repo: string;
+  branch_name: string;
+  title: string;
+  description: string;
+  files: AIPatchFile[];
+  tests: string[];
+  pr_id?: number | null;
+  pr_url?: string | null;
+  safety: Record<string, unknown>;
+};
+
 export function buildPlan(params: {
   prompt: string;
   requested_by: string;
   environment: string;
-  triggerPipeline: boolean;
+  trigger_pipeline: boolean;
 }) {
-  return requestJson<BuildResponse>(
-    `/orchestrate/build?trigger_pipeline=${params.triggerPipeline}`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        prompt: params.prompt,
-        requested_by: params.requested_by,
-        environment: params.environment,
-        auto_trigger_pipeline: params.triggerPipeline,
-      }),
-    },
-  );
+  const trigger = params.trigger_pipeline ? "true" : "false";
+
+  return requestJson<BuildResponse>(`/orchestrate/build?trigger_pipeline=${trigger}`, {
+    method: "POST",
+    body: JSON.stringify({
+      prompt: params.prompt,
+      requested_by: params.requested_by,
+      environment: params.environment,
+    }),
+  });
 }
 
 export function approveRun(params: {
   run_id: string;
   approved_by: string;
-  comment: string;
+  decision?: "approved" | "rejected";
+  comment?: string;
 }) {
   return requestJson<ApprovalResponse>("/orchestrate/approve", {
     method: "POST",
     body: JSON.stringify({
       run_id: params.run_id,
       approved_by: params.approved_by,
-      decision: "approved",
-      comment: params.comment,
+      decision: params.decision || "approved",
+      comment: params.comment || "Approved from orchestrator cockpit.",
     }),
   });
 }
 
-export function createPr(params: { run_id: string; created_by: string }) {
-  return requestJson<CreatePrResponse>("/orchestrate/create-pr", {
+export function createPR(params: { run_id: string; created_by: string }) {
+  return requestJson<CreatePRResponse>("/orchestrate/create-pr", {
     method: "POST",
     body: JSON.stringify(params),
   });
 }
 
-export function getPrStatus(params: { run_id: string; pipeline_run_id: number }) {
-  const search = new URLSearchParams({
-    run_id: params.run_id,
-    pipeline_run_id: String(params.pipeline_run_id),
-  });
-  return requestJson<PrStatusResponse>(`/orchestrate/pr-status?${search}`);
+export function getFullRunStatus(runId: string) {
+  return requestJson<FullRunStatus>(`/orchestrate/runs/${runId}/status`);
 }
 
-export function scoreRisk(params: {
-  run_id: string;
-  environment: string;
-  terraform_add: number;
-  terraform_change: number;
-  terraform_destroy: number;
-}) {
+export function riskScore(params: { run_id: string; environment?: string }) {
   return requestJson<RiskScoreResponse>("/orchestrate/risk-score", {
     method: "POST",
     body: JSON.stringify(params),
   });
 }
 
-export function deployDryRun(params: {
-  run_id: string;
-  environment: string;
-  approved_by: string;
-}) {
+export function deployDryRun(params: { run_id: string; environment: string }) {
   return requestJson<DeployDryRunResponse>("/orchestrate/deploy-dry-run", {
     method: "POST",
     body: JSON.stringify(params),
+  });
+}
+
+export function generateAIPatch(params: {
+  run_id: string;
+  repo: string;
+  goal: string;
+  requested_by?: string;
+  mode?: "deterministic" | "llm_ready";
+  context?: Record<string, unknown>;
+}) {
+  return requestJson<AIPatchResponse>("/orchestrate/ai-codegen/generate-patch", {
+    method: "POST",
+    body: JSON.stringify({
+      requested_by: "founder",
+      mode: "deterministic",
+      context: {},
+      ...params,
+    }),
+  });
+}
+
+export function validateAIPatch(params: {
+  run_id: string;
+  repo: string;
+  files: AIPatchFile[];
+}) {
+  return requestJson<AIPatchValidationResponse>("/orchestrate/ai-codegen/validate-patch", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+}
+
+export function createAIPR(params: {
+  run_id: string;
+  repo: string;
+  mode: "proposal_only" | "create_pr";
+  files: AIPatchFile[];
+  tests?: string[];
+  created_by?: string;
+}) {
+  return requestJson<AIPRAutomationResponse>("/orchestrate/automation/create-ai-pr", {
+    method: "POST",
+    body: JSON.stringify({
+      tests: [],
+      created_by: "founder",
+      ...params,
+    }),
   });
 }
