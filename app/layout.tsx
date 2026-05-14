@@ -1,14 +1,18 @@
-import type { ReactNode } from "react";
+import "../src/app/globals.css";
 
 export const metadata = {
-  title: "Zordrax Frontend",
-  description: "Zordrax onboarding and planning portal",
+  title: "Zordrax-Analytica",
+  description: "AI Orchestrator Cockpit",
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body style={{ margin: 0, fontFamily: "Inter, system-ui, sans-serif" }}>{children}</body>
+      <body>{children}</body>
     </html>
   );
 }
