@@ -1,20 +1,15 @@
-/** @type {import('tailwindcss').Config} */
-export default {
+/** @type {import("tailwindcss").Config} */
+const config = {
   content: [
-    "./src/app/**/*.{ts,tsx}",
-    "./src/components/**/*.{ts,tsx}"
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  darkMode: "class",
   theme: {
-    extend: {
-      colors: {
-        background: "#020617"
-      },
-      borderRadius: {
-        xl: "0.75rem",
-        "2xl": "1rem"
-      }
-    }
+    extend: {},
   },
-  plugins: []
+  plugins: [],
 };
+
+export default config;
