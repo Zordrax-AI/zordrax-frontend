@@ -1,324 +1,441 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ApprovalResponse,
+  BuildResponse,
+  CreatePRResponse,
+  DeployDryRunResponse,
+  FullRunStatus,
+  PRProposal,
+  RiskScoreResponse,
   approveRun,
   buildPlan,
-  BuildResponse,
-  createPr,
-  CreatePrResponse,
+  createPR,
   deployDryRun,
-  DeployDryRunResponse,
-  getPrStatus,
-  PrStatusResponse,
-  RiskScoreResponse,
-  scoreRisk,
+  getFullRunStatus,
+  riskScore,
 } from "../../lib/zordrax-orchestrator-client";
 
 type LogItem = {
   timestamp: string;
-  level: "info" | "success" | "error";
+  level: "INFO" | "SUCCESS" | "ERROR";
   message: string;
 };
 
-function nowStamp() {
+function now() {
   return new Date().toLocaleTimeString();
+}
+
+function StatusBadge({ value }: { value?: string | null }) {
+  const text = value || "unknown";
+
+  const cls =
+    text.toLowerCase().includes("succeeded") || text.toLowerCase().includes("created") || text.toLowerCase().includes("approved")
+      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+      : text.toLowerCase().includes("failed") || text.toLowerCase().includes("blocked") || text.toLowerCase().includes("rejected")
+      ? "bg-red-100 text-red-800 border-red-300"
+      : text.toLowerCase().includes("running") || text.toLowerCase().includes("progress") || text.toLowerCase().includes("trigger")
+      ? "bg-blue-100 text-blue-800 border-blue-300"
+      : "bg-slate-100 text-slate-700 border-slate-300";
+
+  return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${cls}`}>{text}</span>;
+}
+
+function JsonPanel({ value }: { value: unknown }) {
+  return (
+    <pre className="max-h-72 overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-4 text-xs text-slate-100">
+      {JSON.stringify(value, null, 2)}
+    </pre>
+  );
+}
+
+function PRLinks({ proposals }: { proposals: PRProposal[] }) {
+  if (!proposals.length) {
+    return <p className="text-sm text-slate-500">No PRs created yet.</p>;
+  }
+
+  return (
+    <div className="grid gap-3">
+      {proposals.map((proposal) => (
+        <div key={`${proposal.repo}-${proposal.branch_name}`} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-slate-900">{proposal.repo}</h3>
+              <p className="mt-1 font-mono text-xs text-slate-500">{proposal.branch_name}</p>
+            </div>
+            <StatusBadge value={proposal.pr_url ? "PR created" : "proposal only"} />
+          </div>
+
+          <p className="mt-3 text-sm text-slate-700">{proposal.title}</p>
+
+          {proposal.pr_url ? (
+            <a
+              href={proposal.pr_url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700"
+            >
+              Open PR #{proposal.pr_id || ""}
+            </a>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">No PR URL returned yet.</p>
+          )}
+
+          {!!proposal.proposed_files?.length && (
+            <details className="mt-3">
+              <summary className="cursor-pointer text-sm font-medium text-slate-700">Proposed files</summary>
+              <ul className="mt-2 list-inside list-disc text-xs text-slate-500">
+                {proposal.proposed_files.map((file) => (
+                  <li key={file}>{file}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function OrchestratorCockpit() {
   const [prompt, setPrompt] = useState("Build onboarding approval FastAPI endpoint");
-  const [environment, setEnvironment] = useState("dev");
   const [requestedBy, setRequestedBy] = useState("founder");
+  const [environment, setEnvironment] = useState("dev");
   const [triggerPipeline, setTriggerPipeline] = useState(false);
 
   const [build, setBuild] = useState<BuildResponse | null>(null);
-  const [approvalStatus, setApprovalStatus] = useState("");
-  const [prResponse, setPrResponse] = useState<CreatePrResponse | null>(null);
-  const [prStatus, setPrStatus] = useState<PrStatusResponse | null>(null);
-  const [risk, setRisk] = useState<RiskScoreResponse | null>(null);
-  const [deploy, setDeploy] = useState<DeployDryRunResponse | null>(null);
-  const [loading, setLoading] = useState("");
-
+  const [approval, setApproval] = useState<ApprovalResponse | null>(null);
+  const [pr, setPr] = useState<CreatePRResponse | null>(null);
+  const [fullStatus, setFullStatus] = useState<FullRunStatus | null>(null);
+  const [risk, setRisk] = useState<RiskScoreResponse | Record<string, string>>({ risk: "not calculated" });
+  const [deploy, setDeploy] = useState<DeployDryRunResponse | Record<string, string>>({ deployment: "not planned" });
+  const [busy, setBusy] = useState<string>("");
+  const [polling, setPolling] = useState(true);
   const [logs, setLogs] = useState<LogItem[]>([
-    { timestamp: nowStamp(), level: "info", message: "Orchestrator cockpit ready." },
+    { timestamp: now(), level: "INFO", message: "Orchestrator cockpit ready." },
   ]);
 
-  const runId = build?.run_id || "";
-  const packageId = build?.package_contract?.package_id || "";
-  const pipelineRunId = build?.azure_devops_pipeline_run_id || null;
+  const runId = build?.run_id;
+  const packageId = build?.package_contract?.package_id;
 
-  const canApprove = Boolean(runId);
-  const canCreatePr = Boolean(runId && approvalStatus);
-  const canPoll = Boolean(runId && pipelineRunId);
-  const canDryRun = Boolean(runId);
+  const proposals = useMemo(() => {
+    return pr?.proposals || fullStatus?.pr?.proposals || [];
+  }, [pr, fullStatus]);
 
-  const primaryPrLinks = useMemo(() => {
-    return prResponse?.proposals?.filter((proposal) => proposal.pr_url) || [];
-  }, [prResponse]);
-
-  function addLog(level: LogItem["level"], message: string) {
-    setLogs((prev) => [{ timestamp: nowStamp(), level, message }, ...prev]);
+  function log(level: LogItem["level"], message: string) {
+    setLogs((items) => [{ timestamp: now(), level, message }, ...items]);
   }
 
-  async function onBuild(trigger: boolean) {
+  async function refreshStatus() {
+    if (!runId) return;
+
     try {
-      setLoading(trigger ? "trigger-validation" : "build-plan");
-      addLog("info", trigger ? "Creating build plan and triggering validation..." : "Creating build plan...");
+      const latest = await getFullRunStatus(runId);
+      setFullStatus(latest);
+    } catch (err) {
+      log("ERROR", err instanceof Error ? err.message : "Failed to refresh run status.");
+    }
+  }
+
+  useEffect(() => {
+    if (!runId || !polling) return;
+
+    refreshStatus();
+    const timer = setInterval(refreshStatus, 10000);
+
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runId, polling]);
+
+  async function onBuild() {
+    setBusy("build");
+    log("INFO", triggerPipeline ? "Creating build plan and triggering validation..." : "Creating build plan...");
+
+    try {
       const response = await buildPlan({
         prompt,
         requested_by: requestedBy,
         environment,
-        triggerPipeline: trigger,
+        trigger_pipeline: triggerPipeline,
       });
+
       setBuild(response);
-      setPrResponse(null);
-      setApprovalStatus("");
-      setPrStatus(null);
-      setDeploy(null);
-      addLog("success", `Build created: ${response.run_id}, package: ${response.package_contract.package_id}`);
-      if (response.azure_devops_pipeline_run_id) {
-        addLog("success", `Validation pipeline triggered: ${response.azure_devops_pipeline_run_id}`);
-      }
-    } catch (error) {
-      addLog("error", error instanceof Error ? error.message : "Build failed.");
+      setApproval(null);
+      setPr(null);
+      setFullStatus(null);
+      setRisk({ risk: "not calculated" });
+      setDeploy({ deployment: "not planned" });
+
+      log("SUCCESS", `Build created: ${response.run_id}, package: ${response.package_contract.package_id}`);
+    } catch (err) {
+      log("ERROR", err instanceof Error ? err.message : "Failed to fetch");
     } finally {
-      setLoading("");
+      setBusy("");
     }
   }
 
   async function onApprove() {
     if (!runId) return;
+
+    setBusy("approve");
+    log("INFO", `Approving run ${runId}...`);
+
     try {
-      setLoading("approve");
-      addLog("info", `Approving run ${runId}...`);
       const response = await approveRun({
         run_id: runId,
         approved_by: requestedBy,
-        comment: "Approved from Orchestrator Cockpit UI.",
+        decision: "approved",
       });
-      setApprovalStatus(response.status);
-      addLog("success", `Approval recorded: ${response.status}`);
-    } catch (error) {
-      addLog("error", error instanceof Error ? error.message : "Approval failed.");
+
+      setApproval(response);
+      log("SUCCESS", `Approval recorded: ${response.status}`);
+      await refreshStatus();
+    } catch (err) {
+      log("ERROR", err instanceof Error ? err.message : "Approval failed");
     } finally {
-      setLoading("");
+      setBusy("");
     }
   }
 
-  async function onCreatePr() {
+  async function onCreatePR() {
     if (!runId) return;
-    try {
-      setLoading("create-pr");
-      addLog("info", `Creating PRs for run ${runId}...`);
-      const response = await createPr({ run_id: runId, created_by: requestedBy });
-      setPrResponse(response);
-      addLog("success", `PR flow complete: ${response.status}`);
-    } catch (error) {
-      addLog("error", error instanceof Error ? error.message : "Create PR failed.");
-    } finally {
-      setLoading("");
-    }
-  }
 
-  async function onPollStatus() {
-    if (!runId || !pipelineRunId) return;
-    try {
-      setLoading("pr-status");
-      addLog("info", `Polling validation pipeline ${pipelineRunId}...`);
-      const response = await getPrStatus({ run_id: runId, pipeline_run_id: pipelineRunId });
-      setPrStatus(response);
-      addLog("success", `Validation status: ${response.state}`);
-    } catch (error) {
-      addLog("error", error instanceof Error ? error.message : "Status poll failed.");
-    } finally {
-      setLoading("");
-    }
-  }
+    setBusy("pr");
+    log("INFO", `Creating PRs for run ${runId}...`);
 
-  async function onRiskScore() {
-    if (!runId) return;
     try {
-      setLoading("risk-score");
-      addLog("info", "Calculating risk score...");
-      const response = await scoreRisk({
+      const response = await createPR({
         run_id: runId,
-        environment,
-        terraform_add: 1,
-        terraform_change: 0,
-        terraform_destroy: 0,
+        created_by: requestedBy,
       });
-      setRisk(response);
-      addLog("success", `Risk score: ${response.risk_score} (${response.risk_level})`);
-    } catch (error) {
-      addLog("error", error instanceof Error ? error.message : "Risk score failed.");
+
+      setPr(response);
+      log("SUCCESS", `PR flow complete: ${response.status}`);
+      await refreshStatus();
+    } catch (err) {
+      log("ERROR", err instanceof Error ? err.message : "PR creation failed");
     } finally {
-      setLoading("");
+      setBusy("");
+    }
+  }
+
+  async function onRisk() {
+    if (!runId) return;
+
+    setBusy("risk");
+    log("INFO", "Calculating risk score...");
+
+    try {
+      const response = await riskScore({ run_id: runId, environment });
+      setRisk(response);
+      log("SUCCESS", `Risk score: ${response.score ?? "n/a"} (${response.level ?? "unknown"})`);
+    } catch (err) {
+      log("ERROR", err instanceof Error ? err.message : "Risk score failed");
+    } finally {
+      setBusy("");
     }
   }
 
   async function onDeployDryRun() {
     if (!runId) return;
+
+    setBusy("deploy");
+    log("INFO", "Planning deployment dry-run...");
+
     try {
-      setLoading("deploy-dry-run");
-      addLog("info", "Planning deployment dry-run...");
-      const response = await deployDryRun({ run_id: runId, environment, approved_by: requestedBy });
+      const response = await deployDryRun({ run_id: runId, environment });
       setDeploy(response);
-      addLog("success", `Deploy dry-run: ${response.status}`);
-    } catch (error) {
-      addLog("error", error instanceof Error ? error.message : "Deploy dry-run failed.");
+      log("SUCCESS", `Deploy dry-run: ${response.status}`);
+    } catch (err) {
+      log("ERROR", err instanceof Error ? err.message : "Deploy dry-run failed");
     } finally {
-      setLoading("");
+      setBusy("");
     }
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        <header className="mb-8">
-          <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Zordrax-Analytica</p>
-          <h1 className="mt-2 text-3xl font-semibold">AI Orchestrator Cockpit</h1>
-          <p className="mt-2 max-w-3xl text-slate-300">
-            Prompt the SaaS build system, trigger validation, approve work, create PRs,
-            review risk, and run controlled deployment dry-runs.
+    <main className="min-h-screen bg-slate-50 p-6 text-slate-900">
+      <div className="mx-auto max-w-6xl space-y-6">
+        <header className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm">
+          <p className="text-sm text-cyan-200">Zordrax-Analytica</p>
+          <h1 className="mt-2 text-3xl font-bold">AI Orchestrator Cockpit</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-300">
+            Prompt the SaaS build system, trigger validation, approve work, create PRs, review risk, and monitor live orchestration status.
           </p>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-            <h2 className="text-xl font-semibold">1. Prompt</h2>
-            <label className="mt-4 block text-sm text-slate-300">Build task</label>
-            <textarea
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              className="mt-2 h-36 w-full rounded-xl border border-slate-700 bg-slate-950 p-4 text-slate-100 outline-none focus:border-cyan-400"
-            />
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold">1. Prompt</h2>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-3">
-              <label className="block text-sm text-slate-300">
-                Requested by
-                <input
-                  value={requestedBy}
-                  onChange={(event) => setRequestedBy(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-slate-100 outline-none focus:border-cyan-400"
-                />
-              </label>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <label className="md:col-span-3">
+              <span className="text-sm font-medium">Build task</span>
+              <textarea
+                className="mt-1 min-h-24 w-full rounded-xl border border-slate-300 p-3"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+              />
+            </label>
 
-              <label className="block text-sm text-slate-300">
-                Environment
-                <select
-                  value={environment}
-                  onChange={(event) => setEnvironment(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 text-slate-100 outline-none focus:border-cyan-400"
-                >
-                  <option value="dev">dev</option>
-                  <option value="uat">uat</option>
-                  <option value="prod">prod</option>
-                </select>
-              </label>
+            <label>
+              <span className="text-sm font-medium">Requested by</span>
+              <input
+                className="mt-1 w-full rounded-xl border border-slate-300 p-3"
+                value={requestedBy}
+                onChange={(event) => setRequestedBy(event.target.value)}
+              />
+            </label>
 
-              <label className="flex items-end gap-3 rounded-xl border border-slate-700 bg-slate-950 p-3 text-sm text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={triggerPipeline}
-                  onChange={(event) => setTriggerPipeline(event.target.checked)}
-                />
-                Trigger validation pipeline
-              </label>
-            </div>
+            <label>
+              <span className="text-sm font-medium">Environment</span>
+              <select
+                className="mt-1 w-full rounded-xl border border-slate-300 p-3"
+                value={environment}
+                onChange={(event) => setEnvironment(event.target.value)}
+              >
+                <option value="dev">dev</option>
+                <option value="uat">uat</option>
+                <option value="prod">prod</option>
+              </select>
+            </label>
 
-            <div className="mt-5 flex flex-wrap gap-3">
-              <button onClick={() => onBuild(false)} disabled={Boolean(loading)} className="rounded-xl bg-cyan-500 px-4 py-3 font-semibold text-slate-950 hover:bg-cyan-400 disabled:opacity-50">
-                {loading === "build-plan" ? "Building..." : "Build Plan"}
-              </button>
-              <button onClick={() => onBuild(true)} disabled={Boolean(loading)} className="rounded-xl bg-indigo-500 px-4 py-3 font-semibold text-white hover:bg-indigo-400 disabled:opacity-50">
-                {loading === "trigger-validation" ? "Triggering..." : "Trigger Validation"}
-              </button>
-              <button onClick={onApprove} disabled={!canApprove || Boolean(loading)} className="rounded-xl bg-emerald-500 px-4 py-3 font-semibold text-slate-950 hover:bg-emerald-400 disabled:opacity-50">
-                {loading === "approve" ? "Approving..." : "Approve"}
-              </button>
-              <button onClick={onCreatePr} disabled={!canCreatePr || Boolean(loading)} className="rounded-xl bg-amber-500 px-4 py-3 font-semibold text-slate-950 hover:bg-amber-400 disabled:opacity-50">
-                {loading === "create-pr" ? "Creating..." : "Create PR"}
-              </button>
-            </div>
+            <label className="flex items-center gap-2 pt-7">
+              <input
+                type="checkbox"
+                checked={triggerPipeline}
+                onChange={(event) => setTriggerPipeline(event.target.checked)}
+              />
+              <span className="text-sm font-medium">Trigger validation pipeline</span>
+            </label>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 shadow-xl">
-            <h2 className="text-xl font-semibold">Run Summary</h2>
-            <dl className="mt-4 space-y-3 text-sm">
-              <div><dt className="text-slate-400">Run ID</dt><dd className="font-mono text-cyan-200">{runId || "Not created yet"}</dd></div>
-              <div><dt className="text-slate-400">Package ID</dt><dd className="font-mono text-cyan-200">{packageId || "Not created yet"}</dd></div>
-              <div><dt className="text-slate-400">Pipeline Run</dt><dd className="font-mono text-cyan-200">{pipelineRunId || "Not triggered"}</dd></div>
-              <div><dt className="text-slate-400">Approval</dt><dd className="text-emerald-300">{approvalStatus || "Pending"}</dd></div>
-            </dl>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={busy === "build"}
+              onClick={onBuild}
+            >
+              {busy === "build" ? "Building..." : "Build Plan"}
+            </button>
 
-            {build?.azure_devops_pipeline_url ? (
-              <a href={build.azure_devops_pipeline_url} target="_blank" rel="noreferrer" className="mt-4 inline-block rounded-xl border border-cyan-500 px-4 py-2 text-cyan-200 hover:bg-cyan-500/10">
-                Open Azure Pipeline
-              </a>
-            ) : null}
+            <button
+              className="rounded-xl bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={!runId || busy === "approve"}
+              onClick={onApprove}
+            >
+              Approve
+            </button>
+
+            <button
+              className="rounded-xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={!runId || !approval || busy === "pr"}
+              onClick={onCreatePR}
+            >
+              Create PR
+            </button>
+
+            <button
+              className="rounded-xl bg-amber-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={!runId || busy === "risk"}
+              onClick={onRisk}
+            >
+              Risk Score
+            </button>
+
+            <button
+              className="rounded-xl bg-purple-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              disabled={!runId || busy === "deploy"}
+              onClick={onDeployDryRun}
+            >
+              Deploy Dry-Run
+            </button>
+
+            <button
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold disabled:opacity-50"
+              disabled={!runId}
+              onClick={refreshStatus}
+            >
+              Refresh Status
+            </button>
+
+            <button
+              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold"
+              onClick={() => setPolling((value) => !value)}
+            >
+              Polling: {polling ? "On" : "Off"}
+            </button>
           </div>
         </section>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-3">
-          <Panel title="6. PR Status" button="Poll" onClick={onPollStatus} disabled={!canPoll || Boolean(loading)} data={prStatus || { state: "not polled" }} />
-          <Panel title="7. Risk Score" button="Score" onClick={onRiskScore} disabled={!runId || Boolean(loading)} data={risk || { risk: "not calculated" }} />
-          <Panel title="8. Deploy Dry-Run" button="Dry Run" onClick={onDeployDryRun} disabled={!canDryRun || Boolean(loading)} data={deploy || { deployment: "not planned" }} />
+        <section className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs text-slate-500">Run ID</p>
+            <p className="mt-1 break-all font-mono text-sm">{runId || "Not created yet"}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs text-slate-500">Package ID</p>
+            <p className="mt-1 break-all font-mono text-sm">{packageId || "Not created yet"}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs text-slate-500">Pipeline</p>
+            <div className="mt-2">
+              <StatusBadge value={fullStatus?.azure_devops_result || fullStatus?.azure_devops_state || (build?.azure_devops_pipeline_run_id ? "triggered" : "not triggered")} />
+            </div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <p className="text-xs text-slate-500">Run Status</p>
+            <div className="mt-2">
+              <StatusBadge value={fullStatus?.status || build?.status || "pending"} />
+            </div>
+          </div>
         </section>
 
-        <section className="mt-6 grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
-            <h2 className="text-lg font-semibold">PR Proposals</h2>
-            <div className="mt-4 space-y-3">
-              {primaryPrLinks.length ? primaryPrLinks.map((proposal) => (
-                <div key={`${proposal.repo}-${proposal.branch_name}`} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-                  <div className="font-semibold">{proposal.repo}</div>
-                  <div className="mt-1 font-mono text-xs text-cyan-200">{proposal.branch_name}</div>
-                  <a href={proposal.pr_url || "#"} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm text-cyan-300 underline">
-                    Open PR #{proposal.pr_id}
-                  </a>
-                </div>
-              )) : <p className="text-sm text-slate-400">No PRs created yet.</p>}
+        <section className="grid gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-bold">Live Run Status</h2>
+            <div className="mt-3">
+              <JsonPanel value={fullStatus || { state: "not polled" }} />
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
-            <h2 className="text-lg font-semibold">9. Activity Log</h2>
-            <div className="mt-4 max-h-96 space-y-2 overflow-auto">
-              {logs.map((log, index) => (
-                <div key={`${log.timestamp}-${index}`} className="rounded-xl border border-slate-800 bg-slate-950 p-3 text-sm">
-                  <span className="font-mono text-xs text-slate-500">{log.timestamp}</span>
-                  <span className={log.level === "success" ? "ml-3 text-emerald-300" : log.level === "error" ? "ml-3 text-red-300" : "ml-3 text-cyan-300"}>
-                    {log.level.toUpperCase()}
-                  </span>
-                  <p className="mt-1 text-slate-300">{log.message}</p>
-                </div>
-              ))}
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-bold">PR Links</h2>
+            <div className="mt-3">
+              <PRLinks proposals={proposals} />
             </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-bold">Risk Score</h2>
+            <div className="mt-3">
+              <JsonPanel value={risk} />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-xl font-bold">Deploy Dry-Run</h2>
+            <div className="mt-3">
+              <JsonPanel value={deploy} />
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-xl font-bold">Activity Log</h2>
+          <div className="mt-4 space-y-3">
+            {logs.map((item, index) => (
+              <div key={`${item.timestamp}-${index}`} className="rounded-xl border border-slate-200 p-3">
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-xs text-slate-500">{item.timestamp}</span>
+                  <StatusBadge value={item.level} />
+                </div>
+                <p className="mt-2 text-sm text-slate-700">{item.message}</p>
+              </div>
+            ))}
           </div>
         </section>
       </div>
     </main>
-  );
-}
-
-function Panel(props: {
-  title: string;
-  button: string;
-  onClick: () => void;
-  disabled: boolean;
-  data: unknown;
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">{props.title}</h2>
-        <button onClick={props.onClick} disabled={props.disabled} className="rounded-lg bg-slate-700 px-3 py-2 text-sm hover:bg-slate-600 disabled:opacity-50">
-          {props.button}
-        </button>
-      </div>
-      <pre className="mt-4 max-h-64 overflow-auto rounded-xl bg-slate-950 p-3 text-xs text-slate-300">
-        {JSON.stringify(props.data, null, 2)}
-      </pre>
-    </div>
   );
 }
