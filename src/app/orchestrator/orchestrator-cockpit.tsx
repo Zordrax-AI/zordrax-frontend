@@ -13,7 +13,7 @@ import {
   PrStatusResponse,
   RiskScoreResponse,
   scoreRisk,
-} from "@/lib/zordrax-orchestrator-client";
+} from "../../lib/zordrax-orchestrator-client";
 
 type LogItem = {
   timestamp: string;
