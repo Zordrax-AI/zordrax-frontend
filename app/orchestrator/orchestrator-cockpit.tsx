@@ -24,6 +24,7 @@ import PRValidationLoopPanel from "./pr-validation-loop-panel";
 import AIPatchPanel from "./ai-patch-panel";
 import AIBuildRunnerPanel from "./ai-build-runner-panel";
 import Phase2SwarmPanel from "./phase2-swarm-panel";
+import TaskIntakePanel from "./task-intake-panel";
 import ProductionAutonomyPanel from "./production-autonomy-panel";
 
 type LogItem = {
@@ -502,6 +503,7 @@ export default function OrchestratorCockpit() {
               <AgentOpsCenterPanel defaultGoal={prompt} />
               <ExecutionLoopPanel defaultGoal={prompt} defaultRepo="onboarding-repo" />
               <AutonomousControlPanel runId={runId || ""} defaultGoal={prompt} environment={environment} />
+              <TaskIntakePanel defaultTask={prompt} />
               <AIBuildRunnerPanel defaultTask={prompt} />
 <Phase2SwarmPanel defaultGoal={prompt} />
 <ProductionAutonomyPanel defaultGoal={prompt} />
