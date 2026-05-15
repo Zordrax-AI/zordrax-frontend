@@ -22,6 +22,7 @@ import ExecutionLoopPanel from "./execution-loop-panel";
 import AgentOpsCenterPanel from "./agent-ops-center-panel";
 import PRValidationLoopPanel from "./pr-validation-loop-panel";
 import AIPatchPanel from "./ai-patch-panel";
+import AIBuildRunnerPanel from "./ai-build-runner-panel";
 import ProductionAutonomyPanel from "./production-autonomy-panel";
 
 type LogItem = {
@@ -500,7 +501,8 @@ export default function OrchestratorCockpit() {
               <AgentOpsCenterPanel defaultGoal={prompt} />
               <ExecutionLoopPanel defaultGoal={prompt} defaultRepo="onboarding-repo" />
               <AutonomousControlPanel runId={runId || ""} defaultGoal={prompt} environment={environment} />
-              <ProductionAutonomyPanel defaultGoal={prompt} />
+              <AIBuildRunnerPanel defaultTask={prompt} />
+<ProductionAutonomyPanel defaultGoal={prompt} />
 <AIPatchPanel runId={runId || ""} defaultGoal={prompt} defaultRepo="onboarding-repo" />
             </section>
 
@@ -531,4 +533,5 @@ export default function OrchestratorCockpit() {
     </main>
   );
 }
+
 
