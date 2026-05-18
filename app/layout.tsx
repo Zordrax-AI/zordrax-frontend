@@ -1,4 +1,5 @@
 import "../src/app/globals.css";
+import ZordraxNav from "./zordrax-nav";
 
 export const metadata = {
   title: "Zordrax-Analytica",
@@ -12,7 +13,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ZordraxNav />
+        {children}
+      </body>
     </html>
   );
 }
