@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getLiveTaskStatus, startLiveTask } from "@/lib/zordrax-live-status-client";
+import { getLiveTaskStatus, startLiveTask } from "../../../lib/zordrax-live-status-client";
 
 type QueueTask = {
   id: string;
@@ -285,3 +285,4 @@ export default function ExecutionQueuePage() {
     </main>
   );
 }
+
