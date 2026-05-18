@@ -25,6 +25,8 @@ import AIPatchPanel from "./ai-patch-panel";
 import AIBuildRunnerPanel from "./ai-build-runner-panel";
 import Phase2SwarmPanel from "./phase2-swarm-panel";
 import TaskIntakePanel from "./task-intake-panel";
+import TaskLoadTablePanel from "./task-load-table-panel";
+
 import ProductionAutonomyPanel from "./production-autonomy-panel";
 
 type LogItem = {
@@ -506,6 +508,7 @@ export default function OrchestratorCockpit() {
               <TaskIntakePanel defaultTask={prompt} />
               <AIBuildRunnerPanel defaultTask={prompt} />
 <Phase2SwarmPanel defaultGoal={prompt} />
+<TaskLoadTablePanel defaultTask={prompt} />
 <ProductionAutonomyPanel defaultGoal={prompt} />
 <AIPatchPanel runId={runId || ""} defaultGoal={prompt} defaultRepo="onboarding-repo" />
             </section>
