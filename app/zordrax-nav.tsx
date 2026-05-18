@@ -8,6 +8,7 @@ const links = [
   { href: "/orchestrator", label: "Orchestrator" },
   { href: "/tasks", label: "Task Loader" },
   { href: "/product-board", label: "Product Board" },
+  { href: "/platform", label: "Platform" },
   { href: "/product-board/load", label: "Bulk Load" },
   { href: "/product-board/status", label: "Progress" },
   { href: "/product-board/approvals", label: "Approvals" },
@@ -54,4 +55,5 @@ export default function ZordraxNav() {
     </nav>
   );
 }
+
 
