@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { ChangeEvent, useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 import Link from "next/link";
@@ -37,7 +37,7 @@ export default function ProductBoardLoadPage() {
     const valid = items.map(validateItem); const selected = valid.filter((x)=>x.selected && x.type==="Task" && x.status==="Ready");
     if(!selected.length){ setItems(valid); return setMessage("No selected valid Task rows to release.");}
     setBusy("ai"); let next = valid;
-    for(const item of selected){ try{ const result = await releaseItemToAI(item); next = next.map((x)=>x.id===item.id ? {...x,status:"ReleasedToAI",ai_build_id:result.build_id,ai_run_id:result.run_id,message:result.status}:x); setItems(next);}catch(e){ next = next.map((x)=>x.id===item.id ? {...x,status:"Blocked",message:e instanceof Error ? e.message : "AI release failed"}:x); setItems(next);}}
+    for(const item of selected){ try{ const result = await releaseItemToAI(item); next = next.map((x)=>x.id===item.id ? {...x,status:"ReleasedToAI",ai_build_id:result.run_id,ai_run_id:result.run_id,pr_url:result.pr_url,message:`${result.status} | branch: ${result.branch} | validation: ${result.validation_status}`}:x); setItems(next);}catch(e){ next = next.map((x)=>x.id===item.id ? {...x,status:"Blocked",message:e instanceof Error ? e.message : "AI release failed"}:x); setItems(next);}}
     setBusy(""); setMessage("AI release completed.");
   }
   return (
@@ -94,3 +94,4 @@ export default function ProductBoardLoadPage() {
     </main>
   );
 }
+

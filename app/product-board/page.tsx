@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ProductWorkItem, exampleProgram, loadBoard, saveBoard } from "../../lib/zordrax-product-board-store";
@@ -24,7 +24,7 @@ export default function ProductBoardPage() {
     try {
       setMessage(`Releasing ${task.id} to AI Orchestrator...`);
       const result = await releaseItemToAI(task);
-      setItems((current)=>current.map((item)=>item.id===task.id ? {...item,status:"ReleasedToAI",ai_build_id:result.build_id,ai_run_id:result.run_id,message:result.status} : item));
+      setItems((current)=>current.map((item)=>item.id===task.id ? {...item,status:"ReleasedToAI",ai_build_id:result.run_id,ai_run_id:result.run_id,pr_url:result.pr_url,message:`${result.status} | branch: ${result.branch} | validation: ${result.validation_status}`} : item));
       setMessage(`Released ${task.id}: ${result.status}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Release failed."); }
   }
@@ -35,7 +35,7 @@ export default function ProductBoardPage() {
         <header className="rounded-3xl bg-slate-950 p-6 text-white">
           <p className="text-sm text-cyan-200">Zordrax-Analytica</p>
           <h1 className="mt-2 text-3xl font-bold">Product Board</h1>
-          <p className="mt-2 text-sm text-slate-300">Epics → Features → Stories → Tasks → AI Orchestrator.</p>
+          <p className="mt-2 text-sm text-slate-300">Epics â†’ Features â†’ Stories â†’ Tasks â†’ AI Orchestrator.</p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Link className="rounded-xl bg-cyan-500 px-4 py-2 text-sm font-bold text-slate-950" href="/product-board/load">Bulk Load</Link>
             <Link className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-slate-950" href="/product-board/status">Status</Link>
@@ -92,3 +92,4 @@ export default function ProductBoardPage() {
     </main>
   );
 }
+
