@@ -1,330 +1,322 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { startAIBuild } from "../../lib/zordrax-ai-build-client";
-import {
-  QueuedBuildTask,
-  clearTaskQueue,
-  loadTaskQueue,
-  parseTaskInput,
-  queueTasks,
-  saveTaskQueue,
-} from "../../lib/zordrax-task-intake-store";
+import { useMemo, useState } from "react";
 
-const EXAMPLE_TASK = {
-  task_id: "ZA-ONBOARDING-001",
-  title: "Build customer requirements capture module",
-  objective:
-    "Create the first customer onboarding module that captures business requirements, source systems, data volume, reporting needs, compliance needs, and preferred cloud platforms.",
-  repo: "onboarding-repo",
-  linked_repos: ["frontend-repo"],
-  priority: "high",
-  dependencies: [],
-  deliverables: [
-    "FastAPI schema for onboarding requirements",
-    "POST /onboarding/requirements endpoint",
-    "GET /onboarding/requirements/{run_id} endpoint",
-    "Frontend requirements form",
-    "Validation rules",
-    "Unit tests",
-    "PR summary"
-  ],
-  acceptance_criteria: [
-    "Customer can submit onboarding requirements",
-    "Requirements are validated before saving",
-    "A run_id is generated",
-    "Frontend form connects to backend",
-    "Tests pass",
-    "PR is created for human approval"
-  ],
-  agent_execution_mode: "proposal_only",
-  human_approval_required: true,
-  requested_by: "founder",
-  environment: "dev"
+type IntakeTask = {
+  task_id: string;
+  title: string;
+  objective?: string;
+  repo?: string;
+  priority?: string;
+  status?: string;
 };
 
-function Badge({ value }: { value?: string | null }) {
-  const text = value || "unknown";
-  const lower = text.toLowerCase();
-  const cls =
-    lower.includes("released") || lower.includes("success") || lower.includes("completed")
-      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-      : lower.includes("failed") || lower.includes("error")
-      ? "bg-red-100 text-red-800 border-red-300"
-      : lower.includes("selected")
-      ? "bg-blue-100 text-blue-800 border-blue-300"
-      : "bg-amber-100 text-amber-800 border-amber-300";
+const EXAMPLE_TASK = `[
+  {
+    "task_id": "ZA-ONBOARDING-001",
+    "title": "Build customer requirements capture module",
+    "objective": "Create onboarding requirements capture flow",
+    "repo": "onboarding-repo",
+    "priority": "high"
+  }
+]`;
 
-  return <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${cls}`}>{text}</span>;
-}
+type Props = {
+  defaultTask?: string;
+};
 
-export default function TaskIntakePanel({ defaultTask }: { defaultTask?: string }) {
-  const [raw, setRaw] = useState(JSON.stringify(EXAMPLE_TASK, null, 2));
-  const [queue, setQueue] = useState<QueuedBuildTask[]>([]);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
+export default function TaskIntakePanel({
+  defaultTask = "",
+}: Props) {
+  const [payload, setPayload] = useState(
+  defaultTask
+    ? JSON.stringify(
+        [
+          {
+            task_id: "ZA-AUTO-001",
+            title: defaultTask,
+            objective: defaultTask,
+            repo: "onboarding-repo",
+            priority: "high",
+          },
+        ],
+        null,
+        2
+      )
+    : EXAMPLE_TASK
+);
+  const [tasks, setTasks] = useState<IntakeTask[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState("Ready to load AI Build Tasks.");
-  const [busy, setBusy] = useState("");
 
-  useEffect(() => {
-    setQueue(loadTaskQueue());
-  }, []);
+  function loadTasks() {
+    try {
+      const parsed = JSON.parse(payload);
 
-  useEffect(() => {
-    saveTaskQueue(queue);
-  }, [queue]);
+      const incoming = Array.isArray(parsed) ? parsed : [parsed];
+
+      const unique = incoming.filter(
+        (task, index, self) =>
+          index === self.findIndex((x) => x.task_id === task.task_id)
+      );
+
+      setTasks(unique);
+
+      setMessage(
+        `Loaded ${unique.length} unique task(s) into holding queue.`
+      );
+    } catch (err) {
+      setMessage("Invalid JSON payload.");
+    }
+  }
+
+  function toggleSelect(taskId: string) {
+    setSelected((current) =>
+      current.includes(taskId)
+        ? current.filter((x) => x !== taskId)
+        : [...current, taskId]
+    );
+  }
+
+  function selectAll() {
+    setSelected(tasks.map((x) => x.task_id));
+  }
+
+  function clearQueue() {
+    setTasks([]);
+    setSelected([]);
+    setMessage("Holding queue cleared.");
+  }
+
+  function releaseSelected() {
+    setMessage(
+      `Released ${selected.length} task(s) to AI Build Runner.`
+    );
+  }
 
   const stats = useMemo(() => {
     return {
-      total: queue.length,
-      held: queue.filter((x) => x.queue_status === "held").length,
-      selected: Object.values(selected).filter(Boolean).length,
-      released: queue.filter((x) => x.queue_status === "released").length,
-      failed: queue.filter((x) => x.queue_status === "failed").length,
+      total: tasks.length,
+      selected: selected.length,
+      released: 0,
     };
-  }, [queue, selected]);
-
-  function addTasks() {
-    try {
-      const tasks = parseTaskInput(raw);
-      if (!tasks.length) {
-        setMessage("No tasks found.");
-        return;
-      }
-      setQueue(queueTasks(queue, tasks));
-      setMessage(`Loaded ${tasks.length} task(s) into holding queue.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not parse task JSON.");
-    }
-  }
-
-  function toggle(queueId: string) {
-    setSelected((items) => ({ ...items, [queueId]: !items[queueId] }));
-  }
-
-  function selectAllHeld() {
-    const next: Record<string, boolean> = {};
-    for (const item of queue) {
-      if (item.queue_status === "held") next[item.queue_id] = true;
-    }
-    setSelected(next);
-  }
-
-  function removeTask(queueId: string) {
-    setQueue((items) => items.filter((item) => item.queue_id !== queueId));
-    setSelected((items) => {
-      const next = { ...items };
-      delete next[queueId];
-      return next;
-    });
-  }
-
-  async function releaseSelected() {
-    const tasks = queue.filter((item) => selected[item.queue_id] && item.queue_status !== "released");
-    if (!tasks.length) {
-      setMessage("Select at least one held task to release.");
-      return;
-    }
-
-    setBusy("release");
-    setMessage(`Releasing ${tasks.length} task(s) sequentially...`);
-
-    let nextQueue = [...queue];
-
-    for (const task of tasks) {
-      try {
-        nextQueue = nextQueue.map((item) =>
-          item.queue_id === task.queue_id ? { ...item, queue_status: "selected" as const } : item
-        );
-        setQueue(nextQueue);
-
-        const result = await startAIBuild({
-          task: `${task.title}\n\nObjective: ${task.objective}\n\nAcceptance Criteria:\n${(task.acceptance_criteria || []).map((x) => `- ${x}`).join("\n")}`,
-          repo: task.repo,
-          requested_by: task.requested_by || "founder",
-          environment: task.environment || "dev",
-          create_real_pr: task.agent_execution_mode === "autonomous_pr",
-          trigger_validation: task.agent_execution_mode !== "proposal_only",
-        });
-
-        nextQueue = nextQueue.map((item) =>
-          item.queue_id === task.queue_id
-            ? {
-                ...item,
-                queue_status: "released" as const,
-                released_at: new Date().toISOString(),
-                build_id: result.build_id,
-                run_id: result.run_id,
-                release_status: result.status,
-              }
-            : item
-        );
-        setQueue(nextQueue);
-      } catch (error) {
-        nextQueue = nextQueue.map((item) =>
-          item.queue_id === task.queue_id
-            ? {
-                ...item,
-                queue_status: "failed" as const,
-                error: error instanceof Error ? error.message : "Release failed",
-              }
-            : item
-        );
-        setQueue(nextQueue);
-      }
-    }
-
-    setSelected({});
-    setBusy("");
-    setMessage("Release run completed.");
-  }
+  }, [tasks, selected]);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-bold text-cyan-700">Task Intake</p>
-          <h3 className="text-xl font-bold">AI Build Task Holding Queue</h3>
-          <p className="mt-1 text-sm text-slate-500">
-            Paste one task or a JSON array of tasks. Hold them here, review, then release selected tasks into the AI Build Runner.
+          <p className="text-sm font-bold uppercase tracking-wide text-cyan-700">
+            Task Intake
+          </p>
+
+          <h2 className="mt-1 text-3xl font-bold text-slate-950">
+            AI Build Task Holding Queue
+          </h2>
+
+          <p className="mt-2 max-w-3xl text-sm text-slate-500">
+            Load implementation tasks before release to the AI execution swarm.
+            Tasks remain staged here until reviewed and approved for execution.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge value={`total ${stats.total}`} />
-          <Badge value={`held ${stats.held}`} />
-          <Badge value={`selected ${stats.selected}`} />
-          <Badge value={`released ${stats.released}`} />
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase text-slate-500">
+              Total
+            </p>
+            <p className="mt-1 text-2xl font-bold">{stats.total}</p>
+          </div>
+
+          <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase text-blue-700">
+              Selected
+            </p>
+            <p className="mt-1 text-2xl font-bold text-blue-900">
+              {stats.selected}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase text-emerald-700">
+              Ready
+            </p>
+            <p className="mt-1 text-2xl font-bold text-emerald-900">
+              {tasks.length}
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
-        <textarea
-          className="min-h-96 rounded-2xl border border-slate-300 bg-slate-50 p-4 font-mono text-xs"
-          value={raw}
-          onChange={(event) => setRaw(event.target.value)}
-        />
+      <div className="mt-6 grid gap-6 lg:grid-cols-[1.5fr_420px]">
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-bold text-slate-900">
+                Task Payload Input
+              </h3>
 
-        <div className="space-y-3">
-          <button className="w-full rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white" onClick={addTasks}>
-            Add / Load Tasks to Holding Queue
-          </button>
+              <button
+                onClick={() => setPayload(EXAMPLE_TASK)}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+              >
+                Load Example
+              </button>
+            </div>
 
-          <button
-            className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold"
-            onClick={() =>
-              setRaw(
-                JSON.stringify(
-                  [
-                    EXAMPLE_TASK,
-                    {
-                      ...EXAMPLE_TASK,
-                      task_id: "ZA-REC-001",
-                      title: "Build architecture recommendation engine",
-                      objective: "Build the first recommendation engine for cloud, warehouse, ETL, BI, and governance selection.",
-                      repo: "onboarding-repo",
-                    },
-                  ],
-                  null,
-                  2
-                )
-              )
-            }
-          >
-            Load Example Bulk Task List
-          </button>
+            <textarea
+              value={payload}
+              onChange={(e) => setPayload(e.target.value)}
+              className="h-[420px] w-full rounded-2xl border border-slate-300 bg-white p-4 font-mono text-sm outline-none"
+            />
+          </div>
 
-          <button className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold" onClick={selectAllHeld}>
-            Select All Held Tasks
-          </button>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <h3 className="font-bold text-slate-900">
+              Queue Status
+            </h3>
 
-          <button className="w-full rounded-xl bg-cyan-700 px-4 py-3 text-sm font-bold text-white disabled:opacity-50" disabled={!!busy} onClick={releaseSelected}>
-            {busy ? "Releasing..." : "Release Selected to AI Build"}
-          </button>
+            <p className="mt-2 text-sm text-slate-600">
+              {message}
+            </p>
+          </div>
+        </div>
 
-          <button
-            className="w-full rounded-xl border border-red-200 px-4 py-3 text-sm font-bold text-red-700"
-            onClick={() => {
-              clearTaskQueue();
-              setQueue([]);
-              setSelected({});
-              setMessage("Queue cleared.");
-            }}
-          >
-            Clear Queue
-          </button>
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <h3 className="text-lg font-bold text-slate-950">
+              Queue Actions
+            </h3>
 
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">{message}</div>
+            <div className="mt-4 grid gap-3">
+              <button
+                onClick={loadTasks}
+                className="rounded-2xl bg-slate-950 px-5 py-4 text-sm font-bold text-white"
+              >
+                Load Tasks Into Queue
+              </button>
 
-          {defaultTask ? (
-            <button
-              className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm font-bold"
-              onClick={() =>
-                setRaw(
-                  JSON.stringify(
-                    {
-                      ...EXAMPLE_TASK,
-                      task_id: `ZA-CUSTOM-${Date.now()}`,
-                      title: defaultTask,
-                      objective: defaultTask,
-                    },
-                    null,
-                    2
-                  )
-                )
-              }
-            >
-              Use Current Cockpit Prompt
-            </button>
-          ) : null}
+              <button
+                onClick={selectAll}
+                className="rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold text-white"
+              >
+                Select All Tasks
+              </button>
+
+              <button
+                onClick={releaseSelected}
+                className="rounded-2xl bg-cyan-700 px-5 py-4 text-sm font-bold text-white"
+              >
+                Release Selected To AI Build
+              </button>
+
+              <button
+                onClick={clearQueue}
+                className="rounded-2xl border border-red-300 bg-white px-5 py-4 text-sm font-bold text-red-700"
+              >
+                Clear Queue
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+            <h3 className="font-bold text-amber-900">
+              Recommended Workflow
+            </h3>
+
+            <ol className="mt-3 space-y-2 text-sm text-amber-800">
+              <li>1. Confirm active project</li>
+              <li>2. Load Product Board tasks</li>
+              <li>3. Push backlog to DevOps</li>
+              <li>4. Stage tasks here</li>
+              <li>5. Release selected tasks to AI</li>
+              <li>6. Review PRs and approve</li>
+            </ol>
+          </div>
         </div>
       </div>
 
-      <div className="mt-5 rounded-2xl border border-slate-200">
-        <div className="border-b border-slate-200 p-4">
-          <h4 className="font-bold">Holding Queue</h4>
+      <div className="mt-8 overflow-hidden rounded-3xl border border-slate-200">
+        <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+          <h3 className="text-lg font-bold text-slate-950">
+            Holding Queue
+          </h3>
         </div>
 
-        <div className="divide-y divide-slate-200">
-          {queue.length ? (
-            queue.map((task) => (
-              <div key={task.queue_id} className="grid gap-3 p-4 lg:grid-cols-[32px_1fr_160px]">
-                <input
-                  type="checkbox"
-                  checked={!!selected[task.queue_id]}
-                  disabled={task.queue_status === "released"}
-                  onChange={() => toggle(task.queue_id)}
-                />
+        {tasks.length === 0 ? (
+          <div className="p-10 text-center text-sm text-slate-500">
+            No tasks currently staged in the holding queue.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full border-collapse">
+              <thead className="bg-slate-950 text-white">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase">
+                    Select
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase">
+                    Task ID
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase">
+                    Title
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase">
+                    Repo
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase">
+                    Priority
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-bold uppercase">
+                    Objective
+                  </th>
+                </tr>
+              </thead>
 
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-bold">{task.title}</p>
-                    <Badge value={task.queue_status} />
-                    <Badge value={task.priority || "medium"} />
-                    <Badge value={task.repo} />
-                  </div>
+              <tbody>
+                {tasks.map((task) => (
+                  <tr
+                    key={task.task_id}
+                    className="border-b border-slate-200 hover:bg-slate-50"
+                  >
+                    <td className="px-4 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(task.task_id)}
+                        onChange={() => toggleSelect(task.task_id)}
+                        className="h-4 w-4"
+                      />
+                    </td>
 
-                  <p className="mt-2 text-sm text-slate-600">{task.objective}</p>
+                    <td className="px-4 py-4 font-mono text-sm font-bold">
+                      {task.task_id}
+                    </td>
 
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                    <span>{task.task_id}</span>
-                    {task.build_id ? <span>build: {task.build_id}</span> : null}
-                    {task.run_id ? <span>run: {task.run_id}</span> : null}
-                    {task.release_status ? <span>status: {task.release_status}</span> : null}
-                  </div>
+                    <td className="px-4 py-4 font-semibold">
+                      {task.title}
+                    </td>
 
-                  {task.error ? <p className="mt-2 text-xs text-red-600">{task.error}</p> : null}
-                </div>
+                    <td className="px-4 py-4">
+                      <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                        {task.repo || "unknown"}
+                      </span>
+                    </td>
 
-                <div className="flex items-start justify-end">
-                  <button className="rounded-xl border border-slate-300 px-3 py-2 text-xs font-bold" onClick={() => removeTask(task.queue_id)}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="p-4 text-sm text-slate-500">No tasks in holding queue yet.</p>
-          )}
-        </div>
+                    <td className="px-4 py-4">
+                      <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+                        {task.priority || "normal"}
+                      </span>
+                    </td>
+
+                    <td className="max-w-[500px] px-4 py-4 text-sm text-slate-600">
+                      {task.objective}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
