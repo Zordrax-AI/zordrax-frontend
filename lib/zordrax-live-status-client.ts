@@ -1,4 +1,4 @@
-export const API_BASE =
+﻿export const API_BASE =
   process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
   process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
@@ -15,20 +15,58 @@ export type LiveRunStatus = {
   logs: string[];
 };
 
-export async function getLiveTaskStatus(runId: string): Promise<LiveRunStatus> {
-  const response = await fetch(`${API_BASE}/orchestrate/live-task/status/${runId}`, {
-    method: "GET",
-    headers: {
-      ...(process.env.NEXT_PUBLIC_ZORDRAX_API_KEY
-        ? { "x-api-key": process.env.NEXT_PUBLIC_ZORDRAX_API_KEY }
-        : {}),
-    },
-  });
+export async function startLiveTask(payload:any) {
+  const response = await fetch(
+    `${API_BASE}/orchestrate/live-task/start`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.NEXT_PUBLIC_ZORDRAX_API_KEY
+          ? { "x-api-key": process.env.NEXT_PUBLIC_ZORDRAX_API_KEY }
+          : {}),
+      },
+      body: JSON.stringify(payload),
+    }
+  );
 
   const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(body?.detail || body?.message || `Live status failed with HTTP ${response.status}`);
+    throw new Error(
+      body?.detail ||
+      body?.message ||
+      `HTTP ${response.status}`
+    );
+  }
+
+  return body;
+}
+
+export async function getLiveTaskStatus(
+  runId:string
+): Promise<LiveRunStatus> {
+
+  const response = await fetch(
+    `${API_BASE}/orchestrate/live-task/status/${runId}`,
+    {
+      method: "GET",
+      headers: {
+        ...(process.env.NEXT_PUBLIC_ZORDRAX_API_KEY
+          ? { "x-api-key": process.env.NEXT_PUBLIC_ZORDRAX_API_KEY }
+          : {}),
+      },
+    }
+  );
+
+  const body = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      body?.detail ||
+      body?.message ||
+      `HTTP ${response.status}`
+    );
   }
 
   return body as LiveRunStatus;
