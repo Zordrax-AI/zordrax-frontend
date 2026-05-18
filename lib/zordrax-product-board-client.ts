@@ -1,4 +1,5 @@
-﻿import { ProductWorkItem, splitList } from "./zordrax-product-board-store";
+﻿import { executeLiveTask } from "./zordrax-live-execution-client";
+import { ProductWorkItem, splitList } from "./zordrax-product-board-store";
 import { startAIBuild } from "./zordrax-ai-build-client";
 
 const API_BASE = process.env.NEXT_PUBLIC_ONBOARDING_API_BASE?.replace(/\/$/, "") || "http://127.0.0.1:8000";
@@ -27,29 +28,7 @@ export async function getPendingApprovals() {
 }
 
 export async function releaseItemToAI(item: ProductWorkItem) {
-  if (item.type !== "Task") {
-    throw new Error("Only Task items can be released to the AI Orchestrator.");
-  }
-
-  return requestJson<{
-    status: string;
-    run_id: string;
-    task_id: string;
-    repo: string;
-    branch: string;
-    validation_status: string;
-    pr_url?: string;
-    logs: string[];
-  }>("/orchestrate/live-task/execute", {
-    method: "POST",
-    body: JSON.stringify({
-      task_id: item.id,
-      title: item.title,
-      description: item.description,
-      repo: item.repo,
-      mode: item.ai_execution_mode === "autonomous_pr" ? "autonomous_pr" : "proposal_only",
-      requested_by: "founder",
-    }),
-  });
+  return executeLiveTask(item);
 }
+
 
