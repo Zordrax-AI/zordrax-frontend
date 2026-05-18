@@ -1,9 +1,9 @@
-import type { ProductWorkItem } from "./zordrax-product-board-store";
+﻿import type { ProductWorkItem } from "./zordrax-product-board-store";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "";
+  "https://zordrax-onboarding-agent.greenground-d9556cdb.uksouth.azurecontainerapps.io";
 
 export type LiveExecutionResult = {
   status: string;
@@ -21,7 +21,7 @@ export async function executeLiveTask(item: ProductWorkItem): Promise<LiveExecut
     throw new Error("Only Task items can be released to AI execution.");
   }
 
-  const response = await fetch(`${API_BASE}/orchestrate/live-task/execute`, {
+  const response = await fetch(`${API_BASE}/orchestrate/live-task/start`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -32,8 +32,8 @@ export async function executeLiveTask(item: ProductWorkItem): Promise<LiveExecut
     body: JSON.stringify({
       task_id: item.id,
       title: item.title,
-      description: item.description,
-      repo: item.repo,
+      description: item.description || item.deliverables || item.acceptance_criteria || "",
+      repo: item.repo || "onboarding-repo",
       mode: item.ai_execution_mode === "proposal_only" ? "proposal_only" : "autonomous_pr",
       requested_by: "founder",
     }),
