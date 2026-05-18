@@ -13,7 +13,7 @@ export type LiveExecutionResult = {
   repo: string;
   branch: string;
   validation_status: string;
-  pr_url?: string;
+  pr_url?: string | null;
   logs: string[];
 };
 
@@ -33,7 +33,11 @@ export async function executeLiveTask(item: ProductWorkItem): Promise<LiveExecut
     body: JSON.stringify({
       task_id: item.id,
       title: item.title,
-      description: item.description || item.deliverables || item.acceptance_criteria || "",
+      description:
+        item.description ||
+        item.deliverables ||
+        item.acceptance_criteria ||
+        item.title,
       repo: item.repo || "onboarding-repo",
       mode: item.ai_execution_mode === "proposal_only" ? "proposal_only" : "autonomous_pr",
       requested_by: "founder",
@@ -48,4 +52,3 @@ export async function executeLiveTask(item: ProductWorkItem): Promise<LiveExecut
 
   return body as LiveExecutionResult;
 }
-

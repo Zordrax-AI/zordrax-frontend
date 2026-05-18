@@ -24,7 +24,7 @@ export default function ProductBoardPage() {
     try {
       setMessage(`Releasing ${task.id} to AI Orchestrator...`);
       const result = await releaseItemToAI(task);
-      setItems((current)=>current.map((item)=>item.id===task.id ? {...item,status:"ReleasedToAI",ai_build_id:result.run_id,ai_run_id:result.run_id,pr_url:result.pr_url,message:`${result.status} | branch: ${result.branch} | validation: ${result.validation_status}`} : item));
+      setItems((current)=>current.map((item)=>item.id===task.id ? {...item,status:"ReleasedToAI",ai_build_id:result.run_id,ai_run_id:result.run_id,pr_url:result.pr_url || undefined,message:`${result.status} | branch: ${result.branch} | validation: ${result.validation_status}`} : item));
       setMessage(`Released ${task.id}: ${result.status}`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "Release failed."); }
   }
@@ -92,4 +92,5 @@ export default function ProductBoardPage() {
     </main>
   );
 }
+
 
