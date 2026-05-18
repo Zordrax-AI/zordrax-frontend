@@ -1,6 +1,7 @@
 ﻿import type { ProductWorkItem } from "./zordrax-product-board-store";
 
 const API_BASE =
+  process.env.NEXT_PUBLIC_AGENT_BASE_URL ||
   process.env.NEXT_PUBLIC_ONBOARDING_API_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   "https://zordrax-onboarding-agent.greenground-d9556cdb.uksouth.azurecontainerapps.io";
@@ -47,3 +48,4 @@ export async function executeLiveTask(item: ProductWorkItem): Promise<LiveExecut
 
   return body as LiveExecutionResult;
 }
+
